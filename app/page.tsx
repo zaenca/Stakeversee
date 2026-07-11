@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+
 
 const features = [
   {
@@ -16,7 +16,9 @@ const features = [
 ];
 
 export default function Home() {
-  const supabaseHost = new URL(supabase.supabaseUrl).host;
+  const supabaseHost = new URL(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.local"
+).host;
 
   return (
     <main className="app-shell">
