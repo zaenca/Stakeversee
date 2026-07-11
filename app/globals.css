@@ -37,6 +37,11 @@ input {
   font: inherit;
 }
 
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;
@@ -180,6 +185,125 @@ h1 {
   color: #d8e2f0;
 }
 
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.auth-panel {
+  padding: 18px;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.auth-tabs button {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #9fb0c6;
+  font-weight: 800;
+}
+
+.auth-tabs button.active {
+  border-color: rgba(0, 229, 255, 0.45);
+  background: rgba(0, 229, 255, 0.1);
+  color: var(--cyan);
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 7px;
+  color: #9fb0c6;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.auth-form input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  outline: none;
+  padding: 0 12px;
+}
+
+.auth-form input:focus {
+  border-color: rgba(0, 229, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.1);
+}
+
+.auth-form button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.auth-message {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #9fb0c6;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.auth-message.ok {
+  border-color: rgba(0, 224, 138, 0.35);
+  background: rgba(0, 224, 138, 0.08);
+  color: var(--green);
+}
+
+.auth-message.error {
+  border-color: rgba(255, 77, 125, 0.38);
+  background: rgba(255, 77, 125, 0.08);
+  color: #ff8faf;
+}
+
+.account-card h2 {
+  margin: 12px 0 0;
+  font-size: 1.35rem;
+}
+
+.account-card p {
+  color: #9fb0c6;
+  line-height: 1.6;
+}
+
+.account-meta {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: 18px;
+  padding: 12px;
+}
+
+.account-meta span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.account-meta strong {
+  overflow-wrap: anywhere;
+}
+
 .metric-grid {
   display: grid;
   gap: 12px;
@@ -267,5 +391,8 @@ h1 {
   .content {
     padding-left: 18px;
     padding-right: 18px;
+  }
+}
+
   }
 }
