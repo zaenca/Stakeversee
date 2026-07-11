@@ -315,7 +315,7 @@ export default function Home() {
             startsAt
           };
         })
-        .filter(match => match.home && match.away);
+        .filter((match: MatchRow) => match.home && match.away);
 
       setLineMatches(normalizedMatches);
       setMatchesStatus(`Автообновлено: ${normalizedMatches.length} матчей`);
