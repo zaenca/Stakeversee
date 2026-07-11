@@ -7,6 +7,26 @@ import { supabase } from "@/lib/supabase";
 type AuthMode = "login" | "register";
 type AuthStatus = "idle" | "loading" | "ok" | "error";
 
+type SourceRow = {
+  id: string;
+  name: string;
+  is_blacklisted: boolean;
+};
+
+type BetRow = {
+  id: string;
+  source_id: string | null;
+  event_name: string;
+  sport: string | null;
+  bookmaker: string | null;
+  market: string;
+  selection: string;
+  odds: number | string;
+  stake: number | string;
+  result: "pending" | "win" | "loss" | "return";
+  created_at: string;
+};
+
 const features = [
   {
     title: "Контроль банка",
@@ -31,9 +51,56 @@ export default function Home() {
   const [status, setStatus] = useState<AuthStatus>("idle");
   const [message, setMessage] = useState("");
 
+  const [sources, setSources] = useState<SourceRow[]>([]);
+  const [bets, setBets] = useState<BetRow[]>([]);
+  const [sourceName, setSourceName] = useState("");
+  const [dataMessage, setDataMessage] = useState("");
+  const [dataLoading, setDataLoading] = useState(false);
+
+  const [betForm, setBetForm] = useState({
+    sourceId: "",
+    eventName: "",
+    sport: "football",
+    bookmaker: "",
+    market: "Победа",
+    selection: "",
+    odds: "",
+    stake: ""
+  });
+
   const supabaseHost = useMemo(() => {
     return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.local").host;
   }, []);
+
+  const sourceById = useMemo(() => {
+    return new Map(sources.map(source => [source.id, source]));
+  }, [sources]);
+
+  const betStats = useMemo(() => {
+    const closed = bets.filter(bet => bet.result !== "pending");
+    const pending = bets.length - closed.length;
+    const avgOdds = bets.length
+      ? bets.reduce((sum, bet) => sum + Number(bet.odds || 0), 0) / bets.length
+      : 0;
+    const totalStake = closed.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
+    const profit = closed.reduce((sum, bet) => {
+      const stake = Number(bet.stake || 0);
+      const odds = Number(bet.odds || 0);
+      if (bet.result === "win") return sum + stake * odds - stake;
+      if (bet.result === "loss") return sum - stake;
+      return sum;
+    }, 0);
+    const roi = totalStake > 0 ? (profit / totalStake) * 100 : 0;
+
+    return {
+      avgOdds,
+      closed: closed.length,
+      pending,
+      profit,
+      roi,
+      total: bets.length
+    };
+  }, [bets]);
 
   useEffect(() => {
     let mounted = true;
@@ -53,14 +120,48 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!user?.email) return;
+    if (!user?.email) {
+      setSources([]);
+      setBets([]);
+      return;
+    }
 
     supabase.from("profiles").upsert({
       id: user.id,
       email: user.email,
       display_name: user.user_metadata?.display_name || user.email.split("@")[0]
     }).then();
+
+    loadWorkspaceData(user.id);
   }, [user]);
+
+  async function loadWorkspaceData(userId: string) {
+    setDataLoading(true);
+    setDataMessage("");
+
+    const [sourcesResult, betsResult] = await Promise.all([
+      supabase
+        .from("sources")
+        .select("id,name,is_blacklisted")
+        .eq("user_id", userId)
+        .order("name", { ascending: true }),
+      supabase
+        .from("bets")
+        .select("id,source_id,event_name,sport,bookmaker,market,selection,odds,stake,result,created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(25)
+    ]);
+
+    if (sourcesResult.error || betsResult.error) {
+      setDataMessage(sourcesResult.error?.message || betsResult.error?.message || "Ошибка загрузки данных.");
+    } else {
+      setSources((sourcesResult.data || []) as SourceRow[]);
+      setBets((betsResult.data || []) as BetRow[]);
+    }
+
+    setDataLoading(false);
+  }
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -128,6 +229,89 @@ export default function Home() {
     setMessage("");
   }
 
+  async function handleSourceSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user) return;
+
+    const name = sourceName.trim();
+    if (!name) return;
+
+    setDataLoading(true);
+    const { error } = await supabase
+      .from("sources")
+      .upsert({ user_id: user.id, name }, { onConflict: "user_id,name" });
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      setSourceName("");
+      await loadWorkspaceData(user.id);
+    }
+    setDataLoading(false);
+  }
+
+  async function toggleSourceBlacklist(source: SourceRow) {
+    if (!user) return;
+
+    setDataLoading(true);
+    const { error } = await supabase
+      .from("sources")
+      .update({ is_blacklisted: !source.is_blacklisted })
+      .eq("id", source.id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      await loadWorkspaceData(user.id);
+    }
+    setDataLoading(false);
+  }
+
+  async function handleBetSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user) return;
+
+    const odds = Number(betForm.odds.replace(",", "."));
+    const stake = Number(betForm.stake.replace(",", "."));
+
+    if (!betForm.sourceId || !betForm.eventName.trim() || !betForm.selection.trim() || !odds || !stake) {
+      setDataMessage("Для ставки нужны источник, матч, исход, коэффициент и сумма.");
+      return;
+    }
+
+    setDataLoading(true);
+    const { error } = await supabase.from("bets").insert({
+      user_id: user.id,
+      source_id: betForm.sourceId,
+      event_name: betForm.eventName.trim(),
+      sport: betForm.sport.trim() || null,
+      bookmaker: betForm.bookmaker.trim() || null,
+      market: betForm.market.trim() || "Исход",
+      selection: betForm.selection.trim(),
+      odds,
+      stake,
+      result: "pending"
+    });
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      setBetForm({
+        sourceId: betForm.sourceId,
+        eventName: "",
+        sport: betForm.sport,
+        bookmaker: betForm.bookmaker,
+        market: "Победа",
+        selection: "",
+        odds: "",
+        stake: ""
+      });
+      await loadWorkspaceData(user.id);
+    }
+    setDataLoading(false);
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -175,7 +359,7 @@ export default function Home() {
                 <div className="account-card">
                   <div className="eyebrow">Аккаунт активен</div>
                   <h2>{user.user_metadata?.display_name || user.email}</h2>
-                  <p>Теперь можно подключать перенос ставок, источников и банка в Supabase.</p>
+                  <p>Теперь данные можно писать в Supabase и переносить старую логику частями.</p>
                   <div className="account-meta">
                     <span>Email</span>
                     <strong>{user.email}</strong>
@@ -251,16 +435,168 @@ export default function Home() {
             </section>
           </section>
 
-          <section className="section-grid">
-            {features.map(feature => (
-              <article className="panel feature" key={feature.title}>
-                <h2>{feature.title}</h2>
-                <p>{feature.text}</p>
+          {user ? (
+            <section className="dashboard-grid">
+              <article className="panel data-section">
+                <div className="section-head">
+                  <div>
+                    <div className="eyebrow">Источники</div>
+                    <h2>Чёрный список и названия</h2>
+                  </div>
+                  <span>{sources.length}</span>
+                </div>
+
+                <form className="inline-form" onSubmit={handleSourceSubmit}>
+                  <input
+                    onChange={event => setSourceName(event.target.value)}
+                    placeholder="Например: Smart Bet"
+                    value={sourceName}
+                  />
+                  <button className="secondary" disabled={dataLoading} type="submit">Добавить</button>
+                </form>
+
+                <div className="source-list">
+                  {sources.length ? sources.map(source => (
+                    <button
+                      className={`source-chip ${source.is_blacklisted ? "blacklisted" : ""}`}
+                      key={source.id}
+                      onClick={() => toggleSourceBlacklist(source)}
+                      type="button"
+                    >
+                      <span>{source.name}</span>
+                      <strong>{source.is_blacklisted ? "blacklist" : "active"}</strong>
+                    </button>
+                  )) : <p className="empty">Источников пока нет.</p>}
+                </div>
               </article>
-            ))}
-          </section>
+
+              <article className="panel data-section">
+                <div className="section-head">
+                  <div>
+                    <div className="eyebrow">Статистика</div>
+                    <h2>Онлайн-пул ставок</h2>
+                  </div>
+                  <span>{betStats.total}</span>
+                </div>
+
+                <div className="stat-grid">
+                  <div><span>Открыто</span><strong>{betStats.pending}</strong></div>
+                  <div><span>Закрыто</span><strong>{betStats.closed}</strong></div>
+                  <div><span>Средний кэф</span><strong>{betStats.avgOdds.toFixed(2)}</strong></div>
+                  <div><span>ROI</span><strong>{betStats.roi.toFixed(1)}%</strong></div>
+                </div>
+              </article>
+
+              <article className="panel data-section wide">
+                <div className="section-head">
+                  <div>
+                    <div className="eyebrow">Новая ставка</div>
+                    <h2>Первая запись в Supabase</h2>
+                  </div>
+                  {dataLoading ? <span>sync</span> : null}
+                </div>
+
+                <form className="bet-form" onSubmit={handleBetSubmit}>
+                  <select
+                    onChange={event => setBetForm(current => ({ ...current, sourceId: event.target.value }))}
+                    value={betForm.sourceId}
+                  >
+                    <option value="">Источник</option>
+                    {sources.filter(source => !source.is_blacklisted).map(source => (
+                      <option key={source.id} value={source.id}>{source.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    onChange={event => setBetForm(current => ({ ...current, eventName: event.target.value }))}
+                    placeholder="Матч"
+                    value={betForm.eventName}
+                  />
+                  <select
+                    onChange={event => setBetForm(current => ({ ...current, sport: event.target.value }))}
+                    value={betForm.sport}
+                  >
+                    <option value="football">Футбол</option>
+                    <option value="tennis">Теннис</option>
+                    <option value="basketball">Баскетбол</option>
+                    <option value="ice-hockey">Хоккей</option>
+                    <option value="volleyball">Волейбол</option>
+                    <option value="esports">Киберспорт</option>
+                    <option value="baseball">Бейсбол</option>
+                  </select>
+                  <input
+                    onChange={event => setBetForm(current => ({ ...current, bookmaker: event.target.value }))}
+                    placeholder="Букмекер"
+                    value={betForm.bookmaker}
+                  />
+                  <input
+                    onChange={event => setBetForm(current => ({ ...current, market: event.target.value }))}
+                    placeholder="Рынок"
+                    value={betForm.market}
+                  />
+                  <input
+                    onChange={event => setBetForm(current => ({ ...current, selection: event.target.value }))}
+                    placeholder="Исход"
+                    value={betForm.selection}
+                  />
+                  <input
+                    inputMode="decimal"
+                    onChange={event => setBetForm(current => ({ ...current, odds: event.target.value }))}
+                    placeholder="Кэф"
+                    value={betForm.odds}
+                  />
+                  <input
+                    inputMode="decimal"
+                    onChange={event => setBetForm(current => ({ ...current, stake: event.target.value }))}
+                    placeholder="Сумма"
+                    value={betForm.stake}
+                  />
+                  <button className="primary" disabled={dataLoading} type="submit">Сохранить ставку</button>
+                </form>
+
+                {dataMessage ? <p className="auth-message error">{dataMessage}</p> : null}
+              </article>
+
+              <article className="panel data-section wide">
+                <div className="section-head">
+                  <div>
+                    <div className="eyebrow">Последние ставки</div>
+                    <h2>Первые 25 записей</h2>
+                  </div>
+                </div>
+
+                <div className="bets-table">
+                  {bets.length ? bets.map(bet => (
+                    <div className="bet-row" key={bet.id}>
+                      <div>
+                        <strong>{bet.event_name}</strong>
+                        <span>
+                          {sourceById.get(bet.source_id || "")?.name || "Без источника"} · {bet.market} · {bet.selection}
+                        </span>
+                      </div>
+                      <div className="bet-row-meta">
+                        <strong>×{Number(bet.odds).toFixed(2)}</strong>
+                        <span>{Number(bet.stake).toFixed(0)} ₽ · {bet.result}</span>
+                      </div>
+                    </div>
+                  )) : <p className="empty">Ставок пока нет.</p>}
+                </div>
+              </article>
+            </section>
+          ) : (
+            <section className="section-grid">
+              {features.map(feature => (
+                <article className="panel feature" key={feature.title}>
+                  <h2>{feature.title}</h2>
+                  <p>{feature.text}</p>
+                </article>
+              ))}
+            </section>
+          )}
         </div>
       </section>
     </main>
+  );
+}
+
   );
 }
