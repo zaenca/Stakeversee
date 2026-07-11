@@ -51,7 +51,7 @@ type MatchRow = {
   startsAt?: string;
 };
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v1";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v2";
 
 const features = [
   {

@@ -66,6 +66,13 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
+const API_VERSION = "bookmakers-v2";
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  Pragma: "no-cache",
+  Expires: "0"
+};
+
 function asArray(value: unknown): PariLikeEvent[] {
   return Array.isArray(value) ? (value as PariLikeEvent[]) : [];
 }
@@ -320,8 +327,8 @@ export async function GET(request: Request) {
 
   if (cached && now - cached.ts < 4 * 60 * 1000) {
     return NextResponse.json(
-      { hours, matches: cached.matches, updatedAt: new Date(cached.ts).toISOString(), cache: "memory", debug: cached.debug },
-      { headers: { "Cache-Control": "public, s-maxage=240, stale-while-revalidate=60" } }
+      { hours, matches: cached.matches, updatedAt: new Date(cached.ts).toISOString(), cache: "memory", version: API_VERSION, debug: cached.debug },
+      { headers: NO_STORE_HEADERS }
     );
   }
 
@@ -334,12 +341,11 @@ export async function GET(request: Request) {
       matches: loaded.matches,
       updatedAt: new Date().toISOString(),
       cache: "fresh",
+      version: API_VERSION,
       debug: loaded.debug
     },
     {
-      headers: {
-        "Cache-Control": "public, s-maxage=240, stale-while-revalidate=60"
-      }
+      headers: NO_STORE_HEADERS
     }
   );
 }
