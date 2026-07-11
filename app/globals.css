@@ -588,5 +588,61 @@ h1 {
   .content {
     padding-left: 18px;
     padding-right: 18px;
+    .settle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.settle-actions button {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #d8e2f0;
+  padding: 0 9px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.settle-actions button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.result-badge {
+  display: inline-flex;
+  margin-top: 8px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.result-badge.win {
+  color: var(--green);
+  background: rgba(0, 224, 138, 0.09);
+  border: 1px solid rgba(0, 224, 138, 0.28);
+}
+
+.result-badge.loss {
+  color: #ff8faf;
+  background: rgba(255, 77, 125, 0.08);
+  border: 1px solid rgba(255, 77, 125, 0.28);
+}
+
+.result-badge.return {
+  color: var(--amber);
+  background: rgba(246, 201, 69, 0.08);
+  border: 1px solid rgba(246, 201, 69, 0.28);
+}
+
+@media (max-width: 920px) {
+  .settle-actions {
+    justify-content: flex-start;
+  }
+}
   }
 }
