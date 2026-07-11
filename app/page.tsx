@@ -164,6 +164,8 @@ export default function Home() {
   const [activeSport, setActiveSport] = useState("all");
   const [matchFilter, setMatchFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [bankEditorOpen, setBankEditorOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const supabaseHost = useMemo(() => {
     return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.local").host;
@@ -835,30 +837,49 @@ export default function Home() {
                 <div><span>Проиграно</span><strong>{bets.filter(bet => bet.result === "loss").length}</strong></div>
               </div>
               <div className="bank-balance">
-                <span>Баланс</span>
-                <strong>{formatMoney(displayedBalance)}</strong>
+                <div>
+                  <span>Баланс</span>
+                  <strong>{formatMoney(displayedBalance)}</strong>
+                </div>
+                <button
+                  aria-label="Пополнить банк"
+                  className="bank-plus"
+                  onClick={() => setBankEditorOpen(current => !current)}
+                  type="button"
+                >
+                  +
+                </button>
                 <em>ROI {betStats.roi >= 0 ? "+" : ""}{betStats.roi.toFixed(1)}%</em>
               </div>
-              <form className="rail-bank-form" onSubmit={handleBankrollSubmit}>
-                <select
-                  onChange={event => setBankrollForm(current => ({ ...current, kind: event.target.value }))}
-                  value={bankrollForm.kind}
-                >
-                  <option value="deposit">Пополнение</option>
-                  <option value="withdrawal">Вывод</option>
-                  <option value="adjustment">Коррекция</option>
-                </select>
-                <input
-                  inputMode="decimal"
-                  onChange={event => setBankrollForm(current => ({ ...current, amount: event.target.value }))}
-                  placeholder="Сумма"
-                  value={bankrollForm.amount}
-                />
-                <button disabled={dataLoading} type="submit">Изменить</button>
-              </form>
+              {bankEditorOpen ? (
+                <form className="rail-bank-form compact-open" onSubmit={handleBankrollSubmit}>
+                  <select
+                    onChange={event => setBankrollForm(current => ({ ...current, kind: event.target.value }))}
+                    value={bankrollForm.kind}
+                  >
+                    <option value="deposit">Пополнение</option>
+                    <option value="withdrawal">Вывод</option>
+                    <option value="adjustment">Коррекция</option>
+                  </select>
+                  <input
+                    inputMode="decimal"
+                    onChange={event => setBankrollForm(current => ({ ...current, amount: event.target.value }))}
+                    placeholder="Сумма"
+                    value={bankrollForm.amount}
+                  />
+                  <button disabled={dataLoading} type="submit">OK</button>
+                </form>
+              ) : null}
+              <button
+                className="bank-stat-button"
+                onClick={() => setStatsOpen(current => !current)}
+                type="button"
+              >
+                📊 Статистика
+              </button>
             </section>
 
-            <section className="rail-panel stats-panel">
+            {statsOpen ? <section className="rail-panel stats-panel">
               <div className="rail-title">Статистика</div>
               <div className="rail-stat-grid">
                 <div><span>Средний кэф</span><strong>{betStats.avgOdds.toFixed(2)}</strong></div>
@@ -886,7 +907,7 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-            </section>
+            </section> : null}
           </aside>
         </section>
       </main>
