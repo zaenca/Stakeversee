@@ -913,9 +913,6 @@ export default function Home() {
             <span className="status-dot" />
             Supabase подключён: {supabaseHost}
           </div>
-          {user ? (
-            <button className="secondary" onClick={handleLogout}>Выйти</button>
-          ) : null}
         </header>
 
         <div className="content">
@@ -936,18 +933,7 @@ export default function Home() {
             </div>
 
             <section className="panel auth-panel" aria-label="Авторизация">
-              {user ? (
-                <div className="account-card">
-                  <div className="eyebrow">Аккаунт активен</div>
-                  <h2>{user.user_metadata?.display_name || user.email}</h2>
-                  <p>Теперь данные можно писать в Supabase и переносить старую логику частями.</p>
-                  <div className="account-meta">
-                    <span>Email</span>
-                    <strong>{user.email}</strong>
-                  </div>
-                </div>
-              ) : (
-                <>
+              <>
                   <div className="auth-tabs">
                     <button
                       className={mode === "login" ? "active" : ""}
