@@ -29,6 +29,15 @@ type BetRow = {
   created_at: string;
 };
 
+type BankrollEventRow = {
+  id: string;
+  bet_id: string | null;
+  amount: number | string;
+  kind: "deposit" | "withdrawal" | "stake" | "win" | "loss" | "return" | "adjustment";
+  note: string | null;
+  created_at: string;
+};
+
 const features = [
   {
     title: "Контроль банка",
@@ -55,6 +64,7 @@ export default function Home() {
 
   const [sources, setSources] = useState<SourceRow[]>([]);
   const [bets, setBets] = useState<BetRow[]>([]);
+  const [bankrollEvents, setBankrollEvents] = useState<BankrollEventRow[]>([]);
   const [sourceName, setSourceName] = useState("");
   const [dataMessage, setDataMessage] = useState("");
   const [dataLoading, setDataLoading] = useState(false);
@@ -68,6 +78,12 @@ export default function Home() {
     selection: "",
     odds: "",
     stake: ""
+  });
+
+  const [bankrollForm, setBankrollForm] = useState({
+    kind: "deposit",
+    amount: "",
+    note: ""
   });
 
   const supabaseHost = useMemo(() => {
@@ -108,6 +124,27 @@ export default function Home() {
     };
   }, [bets]);
 
+  const bankrollStats = useMemo(() => {
+    const balance = bankrollEvents.reduce((sum, event) => sum + Number(event.amount || 0), 0);
+    const deposits = bankrollEvents
+      .filter(event => event.kind === "deposit")
+      .reduce((sum, event) => sum + Number(event.amount || 0), 0);
+    const withdrawals = bankrollEvents
+      .filter(event => event.kind === "withdrawal")
+      .reduce((sum, event) => sum + Math.abs(Number(event.amount || 0)), 0);
+    const bettingProfit = bankrollEvents
+      .filter(event => ["win", "loss", "return"].includes(event.kind))
+      .reduce((sum, event) => sum + Number(event.amount || 0), 0);
+
+    return {
+      balance,
+      bettingProfit,
+      deposits,
+      totalEvents: bankrollEvents.length,
+      withdrawals
+    };
+  }, [bankrollEvents]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -129,6 +166,7 @@ export default function Home() {
     if (!user?.email) {
       setSources([]);
       setBets([]);
+      setBankrollEvents([]);
       return;
     }
 
@@ -145,7 +183,7 @@ export default function Home() {
     setDataLoading(true);
     setDataMessage("");
 
-    const [sourcesResult, betsResult] = await Promise.all([
+    const [sourcesResult, betsResult, bankrollResult] = await Promise.all([
       supabase
         .from("sources")
         .select("id,name,is_blacklisted")
@@ -156,14 +194,26 @@ export default function Home() {
         .select("id,source_id,event_name,sport,bookmaker,market,selection,odds,stake,result,profit,settled_at,created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-        .limit(25)
+        .limit(25),
+      supabase
+        .from("bankroll_events")
+        .select("id,bet_id,amount,kind,note,created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(30)
     ]);
 
-    if (sourcesResult.error || betsResult.error) {
-      setDataMessage(sourcesResult.error?.message || betsResult.error?.message || "Ошибка загрузки данных.");
+    if (sourcesResult.error || betsResult.error || bankrollResult.error) {
+      setDataMessage(
+        sourcesResult.error?.message
+        || betsResult.error?.message
+        || bankrollResult.error?.message
+        || "Ошибка загрузки данных."
+      );
     } else {
       setSources((sourcesResult.data || []) as SourceRow[]);
       setBets((betsResult.data || []) as BetRow[]);
+      setBankrollEvents((bankrollResult.data || []) as BankrollEventRow[]);
     }
 
     setDataLoading(false);
@@ -315,6 +365,40 @@ export default function Home() {
       });
       await loadWorkspaceData(user.id);
     }
+    setDataLoading(false);
+  }
+
+  async function handleBankrollSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user) return;
+
+    const rawAmount = Number(bankrollForm.amount.replace(",", "."));
+    if (!rawAmount) {
+      setDataMessage("Укажи сумму движения банка.");
+      return;
+    }
+
+    const amount = bankrollForm.kind === "withdrawal" ? -Math.abs(rawAmount) : rawAmount;
+
+    setDataLoading(true);
+    const { error } = await supabase.from("bankroll_events").insert({
+      user_id: user.id,
+      amount,
+      kind: bankrollForm.kind,
+      note: bankrollForm.note.trim() || null
+    });
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      setBankrollForm({
+        kind: bankrollForm.kind,
+        amount: "",
+        note: ""
+      });
+      await loadWorkspaceData(user.id);
+    }
+
     setDataLoading(false);
   }
 
@@ -531,6 +615,62 @@ export default function Home() {
                   <div><span>Закрыто</span><strong>{betStats.closed}</strong></div>
                   <div><span>Средний кэф</span><strong>{betStats.avgOdds.toFixed(2)}</strong></div>
                   <div><span>ROI</span><strong>{betStats.roi.toFixed(1)}%</strong></div>
+                </div>
+              </article>
+
+              <article className="panel data-section wide">
+                <div className="section-head">
+                  <div>
+                    <div className="eyebrow">Банкролл</div>
+                    <h2>Баланс и движения денег</h2>
+                  </div>
+                  <span>{bankrollStats.totalEvents}</span>
+                </div>
+
+                <div className="bankroll-layout">
+                  <div className="stat-grid bankroll-stat-grid">
+                    <div><span>Баланс</span><strong>{bankrollStats.balance.toFixed(0)} ₽</strong></div>
+                    <div><span>P&L ставок</span><strong>{bankrollStats.bettingProfit.toFixed(0)} ₽</strong></div>
+                    <div><span>Пополнено</span><strong>{bankrollStats.deposits.toFixed(0)} ₽</strong></div>
+                    <div><span>Выведено</span><strong>{bankrollStats.withdrawals.toFixed(0)} ₽</strong></div>
+                  </div>
+
+                  <form className="bankroll-form" onSubmit={handleBankrollSubmit}>
+                    <select
+                      onChange={event => setBankrollForm(current => ({ ...current, kind: event.target.value }))}
+                      value={bankrollForm.kind}
+                    >
+                      <option value="deposit">Пополнение</option>
+                      <option value="withdrawal">Вывод</option>
+                      <option value="adjustment">Корректировка</option>
+                    </select>
+                    <input
+                      inputMode="decimal"
+                      onChange={event => setBankrollForm(current => ({ ...current, amount: event.target.value }))}
+                      placeholder="Сумма"
+                      value={bankrollForm.amount}
+                    />
+                    <input
+                      onChange={event => setBankrollForm(current => ({ ...current, note: event.target.value }))}
+                      placeholder="Комментарий"
+                      value={bankrollForm.note}
+                    />
+                    <button className="secondary" disabled={dataLoading} type="submit">Записать</button>
+                  </form>
+
+                  <div className="bankroll-events">
+                    {bankrollEvents.length ? bankrollEvents.slice(0, 8).map(event => (
+                      <div className="bankroll-event" key={event.id}>
+                        <div>
+                          <strong>{event.kind}</strong>
+                          <span>{event.note || new Date(event.created_at).toLocaleString("ru-RU")}</span>
+                        </div>
+                        <strong className={Number(event.amount) >= 0 ? "money-positive" : "money-negative"}>
+                          {Number(event.amount) >= 0 ? "+" : ""}{Number(event.amount).toFixed(0)} ₽
+                        </strong>
+                      </div>
+                    )) : <p className="empty">Движений банка пока нет.</p>}
+                  </div>
                 </div>
               </article>
 

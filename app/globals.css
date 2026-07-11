@@ -371,6 +371,12 @@ h1 {
   color: var(--text);
 }
 
+.bankroll-form select,
+.bankroll-form option {
+  background: #0d1420;
+  color: var(--text);
+}
+
 .source-list {
   display: flex;
   flex-wrap: wrap;
@@ -439,6 +445,67 @@ h1 {
 
 .bet-form button {
   grid-column: span 2;
+}
+
+.bankroll-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.bankroll-stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.bankroll-form {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(120px, 0.5fr) minmax(220px, 1.4fr) auto;
+  gap: 10px;
+}
+
+.bankroll-form input,
+.bankroll-form select {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  outline: none;
+  padding: 0 12px;
+}
+
+.bankroll-events {
+  display: grid;
+  gap: 8px;
+}
+
+.bankroll-event {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 11px 12px;
+}
+
+.bankroll-event strong,
+.bankroll-event span {
+  display: block;
+}
+
+.bankroll-event span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 4px;
+}
+
+.money-positive {
+  color: var(--green);
+}
+
+.money-negative {
+  color: #ff8faf;
 }
 
 .bets-table {
@@ -622,6 +689,8 @@ h1 {
 
   .stat-grid,
   .bet-form,
+  .bankroll-form,
+  .bankroll-event,
   .bet-row,
   .inline-form {
     grid-template-columns: 1fr;
