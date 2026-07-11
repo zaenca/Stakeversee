@@ -51,6 +51,8 @@ type MatchRow = {
   startsAt?: string;
 };
 
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v1";
+
 const features = [
   {
     title: "Контроль банка",
@@ -140,6 +142,44 @@ function makeCalendarDays() {
       current: date.toDateString() === today.toDateString()
     };
   });
+}
+
+function getUpcomingMatches(matches: MatchRow[], hours = 72) {
+  const now = Date.now();
+  const horizon = now + hours * 60 * 60 * 1000;
+
+  return matches.filter(match => {
+    if (!match.startsAt) return true;
+
+    const startsAt = new Date(match.startsAt).getTime();
+    return startsAt > now && startsAt <= horizon;
+  });
+}
+
+function readCachedMatches() {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(MATCH_CACHE_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw) as { matches?: MatchRow[] };
+    return getUpcomingMatches(Array.isArray(parsed.matches) ? parsed.matches : []);
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedMatches(matches: MatchRow[]) {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.setItem(
+    MATCH_CACHE_KEY,
+    JSON.stringify({
+      matches: getUpcomingMatches(matches),
+      updatedAt: new Date().toISOString()
+    })
+  );
 }
 
 export default function Home() {
@@ -260,13 +300,10 @@ export default function Home() {
   }, [bets, sources]);
 
   const activeMatches = useMemo(() => {
-    const now = Date.now();
-    const horizon = now + 72 * 60 * 60 * 1000;
     const normalizedSearch = searchQuery.trim().toLowerCase();
+    const upcomingMatches = getUpcomingMatches(lineMatches);
 
-    return lineMatches.filter(match => {
-      const startsAt = match.startsAt ? new Date(match.startsAt).getTime() : null;
-      const timeOk = !startsAt || (startsAt > now && startsAt <= horizon);
+    return upcomingMatches.filter(match => {
       const sportOk = activeSport === "all" || match.sport === activeSport;
       const searchOk =
         !normalizedSearch ||
@@ -274,17 +311,37 @@ export default function Home() {
         match.away.toLowerCase().includes(normalizedSearch) ||
         match.league.toLowerCase().includes(normalizedSearch);
 
-      return timeOk && sportOk && searchOk;
+      return sportOk && searchOk;
     });
   }, [activeSport, lineMatches, searchQuery]);
 
+  const matchCounts = useMemo(() => {
+    const upcomingMatches = getUpcomingMatches(lineMatches);
+    const counts = new Map<string, number>();
+
+    for (const match of upcomingMatches) {
+      counts.set(match.sport, (counts.get(match.sport) || 0) + 1);
+    }
+
+    return {
+      all: upcomingMatches.length,
+      bySport: counts
+    };
+  }, [lineMatches]);
+
   async function refreshMatchesWindow() {
+    const cachedMatches = readCachedMatches();
+    if (cachedMatches.length) {
+      setLineMatches(cachedMatches);
+      setMatchesStatus(`Из кэша: ${cachedMatches.length} матчей`);
+    }
+
     setMatchesLoading(true);
 
     try {
       const response = await fetch("/api/matches?hours=72", { cache: "no-store" });
       if (!response.ok) {
-        setLineMatches([]);
+        if (!cachedMatches.length) setLineMatches([]);
         setMatchesStatus("Линия букмекеров пока не подключена");
         return;
       }
@@ -317,10 +374,11 @@ export default function Home() {
         })
         .filter((match: MatchRow) => match.home && match.away);
 
-      setLineMatches(normalizedMatches);
+      writeCachedMatches(normalizedMatches);
+      setLineMatches(getUpcomingMatches(normalizedMatches));
       setMatchesStatus(`Автообновлено: ${normalizedMatches.length} матчей`);
     } catch {
-      setLineMatches([]);
+      if (!cachedMatches.length) setLineMatches([]);
       setMatchesStatus("Линия букмекеров пока не подключена");
     } finally {
       setMatchesLoading(false);
@@ -660,9 +718,9 @@ export default function Home() {
               <strong>{matchesLoading ? "обновляю..." : matchesStatus}</strong>
             </div>
             <div className="meter-track">
-              <span style={{ width: `${betStats.total ? Math.min(100, Math.round((betStats.closed / betStats.total) * 100)) : 0}%` }} />
+              <span style={{ width: `${matchesLoading ? 42 : matchCounts.all ? 100 : 0}%` }} />
             </div>
-            <b>{betStats.total ? Math.round((betStats.closed / betStats.total) * 100) : 0}%</b>
+            <b>{matchCounts.all} матчей</b>
           </div>
 
           <div className="top-actions">
@@ -679,7 +737,7 @@ export default function Home() {
           <div className="match-board">
             <nav className="sport-tabs" aria-label="Виды спорта">
               {sportTabs.map(tab => {
-                const count = tab.key === "all" ? bets.length : bets.filter(bet => bet.sport === tab.key).length;
+                const count = tab.key === "all" ? matchCounts.all : matchCounts.bySport.get(tab.key) || 0;
                 return (
                   <button
                     className={activeSport === tab.key ? "active" : ""}
