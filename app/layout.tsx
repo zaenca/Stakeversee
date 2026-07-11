@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Stakeverse",
+  title: "Stakeversee",
   description: "A command center for controlled, optimized and profitable betting workflows."
 };
 

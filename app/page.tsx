@@ -53,6 +53,82 @@ const features = [
   }
 ];
 
+const sportTabs = [
+  { key: "all", label: "Все", icon: "⚡" },
+  { key: "volleyball", label: "Волейбол", icon: "🏐" },
+  { key: "tennis", label: "Теннис", icon: "🎾" },
+  { key: "basketball", label: "Баскет", icon: "🏀" },
+  { key: "ice-hockey", label: "Хоккей", icon: "🏒" },
+  { key: "handball", label: "Гандбол", icon: "🤾" },
+  { key: "esports", label: "Кибер", icon: "🎮" },
+  { key: "football", label: "Футбол", icon: "⚽" },
+  { key: "baseball", label: "Бейсбол", icon: "⚾" }
+];
+
+const demoMatches = [
+  {
+    id: "demo-1",
+    sport: "football",
+    country: "INT",
+    league: "Мировые · Футбол",
+    time: "18:30",
+    home: "Arsenal",
+    away: "Chelsea",
+    odds: ["1.92", "3.55", "4.20"],
+    confidence: 64
+  },
+  {
+    id: "demo-2",
+    sport: "tennis",
+    country: "WTA",
+    league: "Теннис · Singles",
+    time: "19:00",
+    home: "Елена Рыбакина",
+    away: "Марта Костюк",
+    odds: ["1.58", "-", "2.46"],
+    confidence: 59
+  },
+  {
+    id: "demo-3",
+    sport: "basketball",
+    country: "US",
+    league: "Баскет · NBA",
+    time: "02:00",
+    home: "Boston Celtics",
+    away: "New York Knicks",
+    odds: ["1.72", "-", "2.12"],
+    confidence: 57
+  }
+];
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("ru-RU", {
+    maximumFractionDigits: 0,
+    style: "currency",
+    currency: "RUB"
+  }).format(value);
+}
+
+function makeCalendarDays() {
+  const today = new Date();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const startOffset = (monthStart.getDay() + 6) % 7;
+  const start = new Date(monthStart);
+  start.setDate(monthStart.getDate() - startOffset);
+
+  return Array.from({ length: 35 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+
+    return {
+      date,
+      day: date.getDate(),
+      muted: date.getMonth() !== today.getMonth(),
+      current: date.toDateString() === today.toDateString()
+    };
+  });
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [mode, setMode] = useState<AuthMode>("login");
@@ -85,6 +161,9 @@ export default function Home() {
     amount: "",
     note: ""
   });
+  const [activeSport, setActiveSport] = useState("all");
+  const [matchFilter, setMatchFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const supabaseHost = useMemo(() => {
     return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.local").host;
@@ -144,6 +223,36 @@ export default function Home() {
       withdrawals
     };
   }, [bankrollEvents]);
+
+  const calendarDays = useMemo(() => makeCalendarDays(), []);
+
+  const sourceStats = useMemo(() => {
+    return sources.map(source => {
+      const sourceBets = bets.filter(bet => bet.source_id === source.id);
+      const closed = sourceBets.filter(bet => bet.result !== "pending");
+      const profit = closed.reduce((sum, bet) => sum + Number(bet.profit || 0), 0);
+      const stake = closed.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
+
+      return {
+        ...source,
+        bets: sourceBets.length,
+        roi: stake > 0 ? (profit / stake) * 100 : 0
+      };
+    });
+  }, [bets, sources]);
+
+  const activeMatches = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    return demoMatches.filter(match => {
+      const sportOk = activeSport === "all" || match.sport === activeSport;
+      const searchOk = !normalizedSearch
+        || match.home.toLowerCase().includes(normalizedSearch)
+        || match.away.toLowerCase().includes(normalizedSearch)
+        || match.league.toLowerCase().includes(normalizedSearch);
+
+      return sportOk && searchOk;
+    });
+  }, [activeSport, searchQuery]);
 
   useEffect(() => {
     let mounted = true;
@@ -441,6 +550,347 @@ export default function Home() {
     }
 
     setDataLoading(false);
+  }
+
+  if (user) {
+    const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Игрок";
+    const shownMatches = activeMatches.length ? activeMatches : demoMatches.filter(match => activeSport === "all" || match.sport === activeSport);
+    const displayedBalance = bankrollStats.balance || 10000;
+
+    return (
+      <main className="workspace-shell">
+        <header className="workspace-topbar">
+          <div className="workspace-brand">Stakeversee</div>
+
+          <div className="profile-pill">
+            <span>{userName.slice(0, 1).toUpperCase()}</span>
+            <div>
+              <strong>{userName}</strong>
+              <small>игрок</small>
+            </div>
+          </div>
+
+          <div className="sync-meter">
+            <div>
+              <span>Ожидание</span>
+              <strong>{betStats.pending} матчей</strong>
+            </div>
+            <div className="meter-track">
+              <span style={{ width: `${betStats.total ? Math.min(100, Math.round((betStats.closed / betStats.total) * 100)) : 0}%` }} />
+            </div>
+            <b>{betStats.total ? Math.round((betStats.closed / betStats.total) * 100) : 0}%</b>
+          </div>
+
+          <div className="top-actions">
+            <button aria-label="Сохранить" className="icon-button" type="button">💾</button>
+            <button aria-label="Открыть" className="icon-button" type="button">📁</button>
+            <button className="assistant-button" type="button">🤖 Ассистент</button>
+            <button className="refresh-button" type="button">↻ Обновить 24ч</button>
+            <button className="lang-button active" type="button">RU</button>
+            <button className="lang-button" type="button">ENG</button>
+            <button className="logout-button" onClick={handleLogout} type="button">Выйти</button>
+          </div>
+        </header>
+
+        <section className="workspace-grid">
+          <div className="match-board">
+            <nav className="sport-tabs" aria-label="Виды спорта">
+              {sportTabs.map(tab => {
+                const count = tab.key === "all" ? bets.length : bets.filter(bet => bet.sport === tab.key).length;
+                return (
+                  <button
+                    className={activeSport === tab.key ? "active" : ""}
+                    key={tab.key}
+                    onClick={() => setActiveSport(tab.key)}
+                    type="button"
+                  >
+                    <span>{tab.icon}</span>
+                    <strong>{tab.label}</strong>
+                    <em>{count}</em>
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className="match-filters">
+              <label>
+                <span>Страна:</span>
+                <select>
+                  <option>🌐 Все страны</option>
+                  <option>🇷🇺 Россия</option>
+                  <option>🇺🇸 США</option>
+                  <option>🇬🇧 Англия</option>
+                </select>
+              </label>
+              <label>
+                <span>Лига:</span>
+                <select>
+                  <option>🏆 Все лиги</option>
+                  <option>Топовые лиги</option>
+                  <option>Избранные</option>
+                </select>
+              </label>
+
+              <div className="filter-buttons">
+                {[
+                  ["all", "Все"],
+                  ["hot", "🔥 Горячие"],
+                  ["good", "✅ Хорошие"],
+                  ["fav", "⭐ Избранные"]
+                ].map(([key, label]) => (
+                  <button
+                    className={matchFilter === key ? "active" : ""}
+                    key={key}
+                    onClick={() => setMatchFilter(key)}
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <input
+                onChange={event => setSearchQuery(event.target.value)}
+                placeholder="🔍 Команда, лига..."
+                value={searchQuery}
+              />
+            </div>
+
+            <div className="matches-area">
+              {shownMatches.length ? (
+                shownMatches.map(match => (
+                  <article className="match-card" key={match.id}>
+                    <div className="match-meta">
+                      <span>{match.country}</span>
+                      <strong>{match.league}</strong>
+                      <time>{match.time}</time>
+                    </div>
+
+                    <div className="odds-strip">
+                      <button type="button">
+                        <strong>{match.odds[0]}</strong>
+                        <span>П1 · лучший</span>
+                      </button>
+                      <button type="button">
+                        <strong>{match.odds[1]}</strong>
+                        <span>Х</span>
+                      </button>
+                      <button type="button">
+                        <strong>{match.odds[2]}</strong>
+                        <span>П2 · лучший</span>
+                      </button>
+                    </div>
+
+                    <div className="match-teams">
+                      <div>
+                        <strong>{match.home}</strong>
+                        <span>форма 5к · вес 3</span>
+                      </div>
+                      <b>VS</b>
+                      <div>
+                        <strong>{match.away}</strong>
+                        <span>форма 5к · вес 3</span>
+                      </div>
+                    </div>
+
+                    <div className="recommendation-card">
+                      <div>
+                        <span>Рекомендация</span>
+                        <strong>Победа {match.home}</strong>
+                      </div>
+                      <div>
+                        <strong>{match.confidence}%</strong>
+                        <span>хорошо</span>
+                      </div>
+                    </div>
+
+                    <div className="match-footer">
+                      <div className="probability-bar">
+                        <span style={{ width: `${match.confidence}%` }} />
+                      </div>
+                      <button type="button">+ Добавить в купон</button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="empty-board">
+                  <strong>Матчи не найдены</strong>
+                  <span>Поменяй фильтр или нажми обновить после подключения линии букмекеров.</span>
+                </div>
+              )}
+            </div>
+
+            <section className="workspace-bottom">
+              <article className="quick-card">
+                <div className="compact-head">
+                  <div>
+                    <span>Быстрая ставка</span>
+                    <strong>Добавить в статистику</strong>
+                  </div>
+                </div>
+                <form className="compact-bet-form" onSubmit={handleBetSubmit}>
+                  <select
+                    onChange={event => setBetForm(current => ({ ...current, sourceId: event.target.value }))}
+                    value={betForm.sourceId}
+                  >
+                    <option value="">Источник</option>
+                    {sources.filter(source => !source.is_blacklisted).map(source => (
+                      <option key={source.id} value={source.id}>{source.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    onChange={event => setBetForm(current => ({ ...current, eventName: event.target.value }))}
+                    placeholder="Матч"
+                    value={betForm.eventName}
+                  />
+                  <input
+                    onChange={event => setBetForm(current => ({ ...current, selection: event.target.value }))}
+                    placeholder="Исход"
+                    value={betForm.selection}
+                  />
+                  <input
+                    inputMode="decimal"
+                    onChange={event => setBetForm(current => ({ ...current, odds: event.target.value }))}
+                    placeholder="Кэф"
+                    value={betForm.odds}
+                  />
+                  <input
+                    inputMode="decimal"
+                    onChange={event => setBetForm(current => ({ ...current, stake: event.target.value }))}
+                    placeholder="Сумма"
+                    value={betForm.stake}
+                  />
+                  <button disabled={dataLoading} type="submit">Добавить</button>
+                </form>
+              </article>
+
+              <article className="quick-card">
+                <div className="compact-head">
+                  <div>
+                    <span>Источники</span>
+                    <strong>Чёрный список и ROI</strong>
+                  </div>
+                </div>
+                <form className="source-form compact-source-form" onSubmit={handleSourceSubmit}>
+                  <input
+                    onChange={event => setSourceName(event.target.value)}
+                    placeholder="Название источника"
+                    value={sourceName}
+                  />
+                  <button disabled={dataLoading} type="submit">Добавить</button>
+                </form>
+                <div className="compact-source-list">
+                  {sourceStats.slice(0, 5).map(source => (
+                    <button
+                      className={source.is_blacklisted ? "blacklisted" : ""}
+                      key={source.id}
+                      onClick={() => toggleSourceBlacklist(source)}
+                      type="button"
+                    >
+                      <span>{source.name}</span>
+                      <strong>{source.roi.toFixed(1)}%</strong>
+                    </button>
+                  ))}
+                  {!sourceStats.length ? <span className="empty">Источники появятся после добавления.</span> : null}
+                </div>
+              </article>
+            </section>
+
+            {dataMessage ? <div className="workspace-message">{dataMessage}</div> : null}
+          </div>
+
+          <aside className="right-rail">
+            <section className="rail-panel calendar-panel">
+              <div className="rail-title">Календарь прогнозов</div>
+              <div className="calendar-head">
+                <button type="button">‹</button>
+                <strong>{new Date().toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}</strong>
+                <button type="button">›</button>
+              </div>
+              <div className="weekdays">
+                {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map(day => <span key={day}>{day}</span>)}
+              </div>
+              <div className="calendar-grid">
+                {calendarDays.map(day => (
+                  <button
+                    className={`${day.muted ? "muted" : ""} ${day.current ? "current" : ""}`}
+                    key={day.date.toISOString()}
+                    type="button"
+                  >
+                    {day.day}
+                    {day.current ? <small>+{Math.max(0, Math.round(betStats.profit))}₽</small> : null}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="rail-panel bank-panel">
+              <div className="bank-head">
+                <strong>💰 Банк</strong>
+                <button type="button">↺ Сброс</button>
+              </div>
+              <div className="bank-stats">
+                <div><span>Ставок</span><strong>{betStats.total}</strong></div>
+                <div><span>Выиграно</span><strong>{bets.filter(bet => bet.result === "win").length}</strong></div>
+                <div><span>Проиграно</span><strong>{bets.filter(bet => bet.result === "loss").length}</strong></div>
+              </div>
+              <div className="bank-balance">
+                <span>Баланс</span>
+                <strong>{formatMoney(displayedBalance)}</strong>
+                <em>ROI {betStats.roi >= 0 ? "+" : ""}{betStats.roi.toFixed(1)}%</em>
+              </div>
+              <form className="rail-bank-form" onSubmit={handleBankrollSubmit}>
+                <select
+                  onChange={event => setBankrollForm(current => ({ ...current, kind: event.target.value }))}
+                  value={bankrollForm.kind}
+                >
+                  <option value="deposit">Пополнение</option>
+                  <option value="withdrawal">Вывод</option>
+                  <option value="adjustment">Коррекция</option>
+                </select>
+                <input
+                  inputMode="decimal"
+                  onChange={event => setBankrollForm(current => ({ ...current, amount: event.target.value }))}
+                  placeholder="Сумма"
+                  value={bankrollForm.amount}
+                />
+                <button disabled={dataLoading} type="submit">Изменить</button>
+              </form>
+            </section>
+
+            <section className="rail-panel stats-panel">
+              <div className="rail-title">Статистика</div>
+              <div className="rail-stat-grid">
+                <div><span>Средний кэф</span><strong>{betStats.avgOdds.toFixed(2)}</strong></div>
+                <div><span>Закрыто</span><strong>{betStats.closed}</strong></div>
+                <div><span>Ожидают</span><strong>{betStats.pending}</strong></div>
+                <div><span>P&L</span><strong>{formatMoney(betStats.profit)}</strong></div>
+              </div>
+              <div className="bets-table rail-bets">
+                {bets.slice(0, 5).map(bet => (
+                  <div className="bet-row" key={bet.id}>
+                    <div>
+                      <strong>{bet.event_name}</strong>
+                      <span>{bet.market} · {bet.selection}</span>
+                    </div>
+                    <div className="bet-row-meta">
+                      <strong>×{Number(bet.odds).toFixed(2)}</strong>
+                      {bet.result === "pending" ? (
+                        <div className="settle-actions compact">
+                          <button disabled={dataLoading} onClick={() => settleBet(bet, "win")} type="button">В</button>
+                          <button disabled={dataLoading} onClick={() => settleBet(bet, "loss")} type="button">П</button>
+                          <button disabled={dataLoading} onClick={() => settleBet(bet, "return")} type="button">↩</button>
+                        </div>
+                      ) : <span>{bet.result}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </aside>
+        </section>
+      </main>
+    );
   }
 
   return (

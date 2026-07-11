@@ -714,3 +714,702 @@ h1 {
     padding-right: 18px;
   }
 }
+
+.workspace-shell {
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(0, 229, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.035) 1px, transparent 1px),
+    #070b10;
+  background-size: 32px 32px;
+  color: var(--text);
+}
+
+.workspace-topbar {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: auto auto minmax(260px, 1fr) auto;
+  padding: 16px 24px;
+}
+
+.workspace-brand {
+  color: var(--cyan);
+  font-size: 1.55rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.profile-pill {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.profile-pill > span {
+  align-items: center;
+  background: #2979ff;
+  border-radius: 999px;
+  color: white;
+  display: grid;
+  font-weight: 900;
+  height: 32px;
+  place-items: center;
+  width: 32px;
+}
+
+.profile-pill strong,
+.profile-pill small,
+.sync-meter span,
+.sync-meter strong {
+  display: block;
+}
+
+.profile-pill small,
+.sync-meter span {
+  color: var(--muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sync-meter {
+  align-items: center;
+  background: rgba(0, 229, 255, 0.04);
+  border: 1px solid rgba(0, 229, 255, 0.16);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 140px minmax(160px, 1fr) auto;
+  padding: 8px 12px;
+}
+
+.sync-meter strong,
+.sync-meter b {
+  color: var(--cyan);
+  font-size: 0.75rem;
+}
+
+.meter-track {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.meter-track span {
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+}
+
+.top-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.icon-button,
+.assistant-button,
+.refresh-button,
+.lang-button,
+.logout-button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  min-height: 42px;
+  padding: 0 12px;
+  text-transform: uppercase;
+}
+
+.icon-button {
+  justify-content: center;
+  width: 44px;
+}
+
+.assistant-button {
+  border-color: rgba(138, 91, 255, 0.5);
+  color: #d8c7ff;
+}
+
+.refresh-button,
+.lang-button.active {
+  border-color: rgba(0, 229, 255, 0.45);
+  color: var(--cyan);
+}
+
+.logout-button {
+  color: var(--muted);
+}
+
+.workspace-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 410px;
+  padding: 16px 24px 32px;
+}
+
+.match-board,
+.right-rail {
+  min-width: 0;
+}
+
+.sport-tabs {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(9, minmax(84px, 1fr));
+}
+
+.sport-tabs button {
+  background: rgba(20, 30, 42, 0.92);
+  border: 1px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  min-height: 74px;
+  padding: 14px 11px;
+  text-align: left;
+}
+
+.sport-tabs button:first-child {
+  border-radius: 8px 0 0 0;
+}
+
+.sport-tabs button:last-child {
+  border-radius: 0 8px 0 0;
+}
+
+.sport-tabs button.active {
+  background: rgba(0, 229, 255, 0.08);
+  border-color: rgba(0, 229, 255, 0.65);
+  color: var(--cyan);
+}
+
+.sport-tabs span,
+.sport-tabs strong,
+.sport-tabs em {
+  display: block;
+}
+
+.sport-tabs strong {
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.sport-tabs em {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  float: right;
+  font-size: 0.7rem;
+  font-style: normal;
+  margin-top: -19px;
+  padding: 2px 6px;
+}
+
+.match-filters {
+  align-items: end;
+  background: rgba(18, 27, 38, 0.95);
+  border: 1px solid var(--line);
+  border-top: 0;
+  display: grid;
+  gap: 13px;
+  grid-template-columns: 190px 190px auto minmax(160px, 1fr);
+  padding: 16px 20px;
+}
+
+.match-filters label {
+  display: grid;
+  gap: 6px;
+}
+
+.match-filters label span {
+  color: var(--muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.match-filters select,
+.match-filters input,
+.compact-bet-form input,
+.compact-bet-form select,
+.compact-source-form input,
+.rail-bank-form input,
+.rail-bank-form select {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  min-height: 41px;
+  outline: none;
+  padding: 0 12px;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 7px;
+}
+
+.filter-buttons button {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  min-height: 41px;
+  padding: 0 13px;
+}
+
+.filter-buttons button.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.matches-area {
+  background: rgba(9, 15, 22, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+  border-top: 0;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 410px;
+  padding: 16px;
+}
+
+.match-card {
+  background: rgba(20, 30, 42, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow: inset 0 2px 0 #ffb300;
+  padding: 15px;
+}
+
+.match-meta {
+  align-items: center;
+  color: var(--muted);
+  display: grid;
+  font-size: 0.7rem;
+  gap: 8px;
+  grid-template-columns: auto 1fr auto;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.match-meta span {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.match-meta time {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 5px;
+  padding: 4px 7px;
+}
+
+.odds-strip {
+  display: flex;
+  gap: 6px;
+  margin: 14px 0;
+}
+
+.odds-strip button {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  flex: 1;
+  padding: 9px;
+}
+
+.odds-strip strong,
+.odds-strip span {
+  display: block;
+}
+
+.odds-strip span {
+  color: var(--muted);
+  font-size: 0.65rem;
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+
+.match-teams {
+  align-items: center;
+  display: grid;
+  gap: 13px;
+  grid-template-columns: 1fr auto 1fr;
+  padding: 13px 0;
+  text-align: center;
+}
+
+.match-teams b {
+  color: #e6f0ff;
+  font-size: 1.85rem;
+}
+
+.match-teams strong,
+.match-teams span {
+  display: block;
+}
+
+.match-teams span {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.recommendation-card {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.recommendation-card span {
+  color: var(--muted);
+  display: block;
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.recommendation-card strong {
+  color: var(--cyan);
+}
+
+.match-footer {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr auto;
+  margin-top: 14px;
+}
+
+.probability-bar {
+  background: linear-gradient(90deg, rgba(0, 229, 255, 0.18), rgba(255, 43, 128, 0.18));
+  border-radius: 999px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.probability-bar span {
+  background: var(--cyan);
+  display: block;
+  height: 100%;
+}
+
+.match-footer button,
+.compact-bet-form button,
+.compact-source-form button,
+.rail-bank-form button {
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 6px;
+  color: var(--cyan);
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 39px;
+  padding: 0 12px;
+  text-transform: uppercase;
+}
+
+.empty-board {
+  align-items: center;
+  color: var(--muted);
+  display: grid;
+  grid-column: 1 / -1;
+  justify-items: center;
+  min-height: 280px;
+  text-align: center;
+}
+
+.empty-board strong {
+  color: var(--text);
+}
+
+.workspace-bottom {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1.35fr 1fr;
+  margin-top: 16px;
+}
+
+.quick-card,
+.rail-panel {
+  background: rgba(15, 23, 34, 0.96);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.compact-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 13px;
+}
+
+.compact-head span {
+  color: var(--muted);
+  display: block;
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.compact-bet-form {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 1fr 1.5fr 1fr 0.75fr 0.75fr auto;
+}
+
+.compact-source-form {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 1fr auto;
+}
+
+.compact-source-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.compact-source-list button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 11px;
+}
+
+.compact-source-list button.blacklisted {
+  border-color: rgba(255, 43, 128, 0.45);
+  color: #ff8db8;
+}
+
+.workspace-message {
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 8px;
+  color: var(--cyan);
+  margin-top: 16px;
+  padding: 14px 16px;
+}
+
+.right-rail {
+  display: grid;
+  gap: 16px;
+}
+
+.rail-title {
+  color: var(--cyan);
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  margin-bottom: 16px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.calendar-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.calendar-head button {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  height: 35px;
+  width: 35px;
+}
+
+.calendar-head strong {
+  font-size: 1.35rem;
+  letter-spacing: 0.12em;
+  text-transform: capitalize;
+}
+
+.weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+}
+
+.weekdays {
+  color: var(--muted);
+  font-size: 0.7rem;
+  margin: 19px 0 8px;
+}
+
+.calendar-grid button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #b8c6d8;
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 51px;
+}
+
+.calendar-grid button.current {
+  background: var(--cyan);
+  color: #041015;
+}
+
+.calendar-grid button.muted {
+  color: rgba(184, 198, 216, 0.26);
+}
+
+.calendar-grid small {
+  display: block;
+  font-size: 0.62rem;
+}
+
+.bank-head,
+.bank-stats,
+.bank-balance,
+.rail-bank-form,
+.rail-stat-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.bank-head {
+  align-items: center;
+  grid-template-columns: 1fr auto;
+}
+
+.bank-head strong {
+  color: var(--cyan);
+  font-size: 1.2rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.bank-head button {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.bank-stats,
+.rail-stat-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.bank-stats div,
+.rail-stat-grid div {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px;
+}
+
+.bank-stats span,
+.rail-stat-grid span,
+.bank-balance span {
+  color: var(--muted);
+  display: block;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.bank-balance {
+  background: rgba(0, 229, 255, 0.04);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: 8px;
+  margin-top: 13px;
+  padding: 14px;
+}
+
+.bank-balance strong {
+  color: var(--green);
+  font-size: 1.55rem;
+}
+
+.bank-balance em {
+  color: var(--cyan);
+  font-style: normal;
+}
+
+.rail-bank-form {
+  grid-template-columns: 1fr 1fr auto;
+  margin-top: 13px;
+}
+
+.stats-panel .rail-title {
+  text-align: left;
+}
+
+.rail-stat-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.rail-bets {
+  margin-top: 14px;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.settle-actions.compact {
+  grid-template-columns: repeat(3, 1fr);
+  min-width: 110px;
+}
+
+.settle-actions.compact button {
+  min-height: 30px;
+  padding: 0 6px;
+}
+
+@media (max-width: 1180px) {
+  .workspace-topbar,
+  .workspace-grid,
+  .matches-area,
+  .workspace-bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .top-actions,
+  .filter-buttons {
+    flex-wrap: wrap;
+  }
+
+  .sport-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .match-filters,
+  .compact-bet-form {
+    grid-template-columns: 1fr;
+  }
+}
