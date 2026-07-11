@@ -244,16 +244,7 @@ export default function Home() {
   }, [bets, sources]);
 
   const activeMatches = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-    return demoMatches.filter(match => {
-      const sportOk = activeSport === "all" || match.sport === activeSport;
-      const searchOk = !normalizedSearch
-        || match.home.toLowerCase().includes(normalizedSearch)
-        || match.away.toLowerCase().includes(normalizedSearch)
-        || match.league.toLowerCase().includes(normalizedSearch);
-
-      return sportOk && searchOk;
-    });
+    return [] as typeof demoMatches;
   }, [activeSport, searchQuery]);
 
   useEffect(() => {
@@ -556,7 +547,7 @@ export default function Home() {
 
   if (user) {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Игрок";
-    const shownMatches = activeMatches.length ? activeMatches : demoMatches.filter(match => activeSport === "all" || match.sport === activeSport);
+    const shownMatches = activeMatches;
     const displayedBalance = bankrollStats.balance || 10000;
 
     return (
