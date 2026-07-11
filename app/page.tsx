@@ -24,6 +24,8 @@ type BetRow = {
   odds: number | string;
   stake: number | string;
   result: "pending" | "win" | "loss" | "return";
+  profit: number | string | null;
+  settled_at: string | null;
   created_at: string;
 };
 
@@ -84,6 +86,10 @@ export default function Home() {
       : 0;
     const totalStake = closed.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
     const profit = closed.reduce((sum, bet) => {
+      if (bet.profit !== null && bet.profit !== undefined) {
+        return sum + Number(bet.profit || 0);
+      }
+
       const stake = Number(bet.stake || 0);
       const odds = Number(bet.odds || 0);
       if (bet.result === "win") return sum + stake * odds - stake;
@@ -147,7 +153,7 @@ export default function Home() {
         .order("name", { ascending: true }),
       supabase
         .from("bets")
-        .select("id,source_id,event_name,sport,bookmaker,market,selection,odds,stake,result,created_at")
+        .select("id,source_id,event_name,sport,bookmaker,market,selection,odds,stake,result,profit,settled_at,created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(25)
@@ -309,6 +315,47 @@ export default function Home() {
       });
       await loadWorkspaceData(user.id);
     }
+    setDataLoading(false);
+  }
+
+  async function settleBet(bet: BetRow, result: "win" | "loss" | "return") {
+    if (!user) return;
+
+    const stake = Number(bet.stake || 0);
+    const odds = Number(bet.odds || 0);
+    const profit = result === "win" ? stake * odds - stake : result === "loss" ? -stake : 0;
+
+    setDataLoading(true);
+    const { error } = await supabase
+      .from("bets")
+      .update({
+        result,
+        profit,
+        settled_at: new Date().toISOString()
+      })
+      .eq("id", bet.id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      const { error: bankrollError } = await supabase.from("bankroll_events").insert({
+        user_id: user.id,
+        bet_id: bet.id,
+        amount: profit,
+        kind: result,
+        note: `${bet.event_name} · ${bet.market} · ${bet.selection}`
+      });
+
+      if (bankrollError) {
+        setDataMessage(bankrollError.message);
+      } else {
+        setDataMessage("");
+      }
+
+      await loadWorkspaceData(user.id);
+    }
+
     setDataLoading(false);
   }
 
@@ -576,6 +623,18 @@ export default function Home() {
                       <div className="bet-row-meta">
                         <strong>×{Number(bet.odds).toFixed(2)}</strong>
                         <span>{Number(bet.stake).toFixed(0)} ₽ · {bet.result}</span>
+                        {bet.result === "pending" ? (
+                          <div className="settle-actions">
+                            <button disabled={dataLoading} type="button" onClick={() => settleBet(bet, "win")}>Выигрыш</button>
+                            <button disabled={dataLoading} type="button" onClick={() => settleBet(bet, "loss")}>Проигрыш</button>
+                            <button disabled={dataLoading} type="button" onClick={() => settleBet(bet, "return")}>Возврат</button>
+                          </div>
+                        ) : (
+                          <span className={`result-badge ${bet.result}`}>
+                            {bet.result === "win" ? "Выигрыш" : bet.result === "loss" ? "Проигрыш" : "Возврат"}
+                            {bet.profit !== null && bet.profit !== undefined ? ` · ${Number(bet.profit).toFixed(0)} ₽` : ""}
+                          </span>
+                        )}
                       </div>
                     </div>
                   )) : <p className="empty">Ставок пока нет.</p>}
