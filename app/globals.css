@@ -796,6 +796,12 @@ h1 {
   font-size: 0.75rem;
 }
 
+.sync-meter strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .meter-track {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
@@ -1418,6 +1424,8 @@ h1 {
 
 .right-rail {
   align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   min-height: 0;
   overflow: auto;
@@ -1528,6 +1536,14 @@ h1 {
   min-height: 42px;
   text-transform: uppercase;
   width: 100%;
+}
+
+.stats-entry-panel {
+  margin-top: auto;
+}
+
+.stats-entry-panel .bank-stat-button {
+  margin-top: 0;
 }
 
 .stats-panel {

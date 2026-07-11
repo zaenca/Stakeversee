@@ -38,6 +38,19 @@ type BankrollEventRow = {
   created_at: string;
 };
 
+type MatchRow = {
+  id: string;
+  sport: string;
+  country: string;
+  league: string;
+  time: string;
+  home: string;
+  away: string;
+  odds: string[];
+  confidence: number;
+  startsAt?: string;
+};
+
 const features = [
   {
     title: "Контроль банка",
@@ -65,7 +78,7 @@ const sportTabs = [
   { key: "baseball", label: "Бейсбол", icon: "⚾" }
 ];
 
-const demoMatches = [
+const demoMatches: MatchRow[] = [
   {
     id: "demo-1",
     sport: "football",
@@ -166,6 +179,9 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [bankEditorOpen, setBankEditorOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchesStatus, setMatchesStatus] = useState("Автообновление каждые 5 минут");
 
   const supabaseHost = useMemo(() => {
     return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.local").host;
@@ -244,8 +260,72 @@ export default function Home() {
   }, [bets, sources]);
 
   const activeMatches = useMemo(() => {
-    return [] as typeof demoMatches;
-  }, [activeSport, searchQuery]);
+    const now = Date.now();
+    const horizon = now + 72 * 60 * 60 * 1000;
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+
+    return lineMatches.filter(match => {
+      const startsAt = match.startsAt ? new Date(match.startsAt).getTime() : null;
+      const timeOk = !startsAt || (startsAt > now && startsAt <= horizon);
+      const sportOk = activeSport === "all" || match.sport === activeSport;
+      const searchOk =
+        !normalizedSearch ||
+        match.home.toLowerCase().includes(normalizedSearch) ||
+        match.away.toLowerCase().includes(normalizedSearch) ||
+        match.league.toLowerCase().includes(normalizedSearch);
+
+      return timeOk && sportOk && searchOk;
+    });
+  }, [activeSport, lineMatches, searchQuery]);
+
+  async function refreshMatchesWindow() {
+    setMatchesLoading(true);
+
+    try {
+      const response = await fetch("/api/matches?hours=72", { cache: "no-store" });
+      if (!response.ok) {
+        setLineMatches([]);
+        setMatchesStatus("Линия букмекеров пока не подключена");
+        return;
+      }
+
+      const payload = await response.json();
+      const rawMatches = Array.isArray(payload) ? payload : Array.isArray(payload?.matches) ? payload.matches : [];
+      const normalizedMatches: MatchRow[] = rawMatches
+        .map((match: Partial<MatchRow> & Record<string, unknown>, index: number) => {
+          const startsAt = typeof match.startsAt === "string" ? match.startsAt : undefined;
+          const startsAtTime = startsAt ? new Date(startsAt) : null;
+          const odds = Array.isArray(match.odds) ? match.odds.map(String) : ["-", "-", "-"];
+
+          return {
+            id: String(match.id || `line-${index}`),
+            sport: String(match.sport || "football"),
+            country: String(match.country || "INT"),
+            league: String(match.league || "Линия букмекеров"),
+            time:
+              typeof match.time === "string"
+                ? match.time
+                : startsAtTime
+                  ? startsAtTime.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
+                  : "--:--",
+            home: String(match.home || ""),
+            away: String(match.away || ""),
+            odds: [odds[0] || "-", odds[1] || "-", odds[2] || "-"],
+            confidence: Number(match.confidence || 0),
+            startsAt
+          };
+        })
+        .filter(match => match.home && match.away);
+
+      setLineMatches(normalizedMatches);
+      setMatchesStatus(`Автообновлено: ${normalizedMatches.length} матчей`);
+    } catch {
+      setLineMatches([]);
+      setMatchesStatus("Линия букмекеров пока не подключена");
+    } finally {
+      setMatchesLoading(false);
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -263,6 +343,17 @@ export default function Home() {
       data.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    refreshMatchesWindow();
+    const timer = window.setInterval(refreshMatchesWindow, 5 * 60 * 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [user]);
 
   useEffect(() => {
     if (!user?.email) {
@@ -565,8 +656,8 @@ export default function Home() {
 
           <div className="sync-meter">
             <div>
-              <span>Ожидание</span>
-              <strong>{betStats.pending} матчей</strong>
+              <span>Линия</span>
+              <strong>{matchesLoading ? "обновляю..." : matchesStatus}</strong>
             </div>
             <div className="meter-track">
               <span style={{ width: `${betStats.total ? Math.min(100, Math.round((betStats.closed / betStats.total) * 100)) : 0}%` }} />
@@ -578,7 +669,6 @@ export default function Home() {
             <button aria-label="Сохранить" className="icon-button" type="button">💾</button>
             <button aria-label="Открыть" className="icon-button" type="button">📁</button>
             <button className="assistant-button" type="button">🤖 Ассистент</button>
-            <button className="refresh-button" type="button">↻ Обновить 24ч</button>
             <button className="lang-button active" type="button">RU</button>
             <button className="lang-button" type="button">ENG</button>
             <button className="logout-button" onClick={handleLogout} type="button">Выйти</button>
@@ -707,8 +797,7 @@ export default function Home() {
                 ))
               ) : (
                 <div className="empty-board">
-                  <strong>Матчи не найдены</strong>
-                  <span>Поменяй фильтр или нажми обновить после подключения линии букмекеров.</span>
+                  <strong>{matchesLoading ? "Загружаю матчи" : "Матчи не найдены"}</strong>
                 </div>
               )}
             </div>
@@ -861,6 +950,9 @@ export default function Home() {
                   <button disabled={dataLoading} type="submit">OK</button>
                 </form>
               ) : null}
+            </section>
+
+            <section className="rail-panel stats-entry-panel">
               <button
                 className="bank-stat-button"
                 onClick={() => setStatsOpen(current => !current)}
