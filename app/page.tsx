@@ -647,6 +647,7 @@ export default function Home() {
         amount: "",
         note: ""
       });
+      setBankEditorOpen(false);
       await loadWorkspaceData(user.id);
     }
 
@@ -979,34 +980,58 @@ export default function Home() {
                   <span>Баланс</span>
                   <strong>{formatMoney(displayedBalance)}</strong>
                 </div>
-                <button
-                  aria-label="Пополнить банк"
-                  className="bank-plus"
-                  onClick={() => setBankEditorOpen(current => !current)}
-                  type="button"
-                >
-                  +
-                </button>
+                <div className="bank-actions">
+                  <button
+                    aria-label="Пополнить банк"
+                    className="bank-action bank-plus"
+                    onClick={() => {
+                      setBankrollForm(current => ({ ...current, amount: "", kind: "deposit", note: "Пополнение букмекера" }));
+                      setBankEditorOpen(true);
+                    }}
+                    type="button"
+                  >
+                    +
+                  </button>
+                  <button
+                    aria-label="Вывести из банка"
+                    className="bank-action bank-minus"
+                    onClick={() => {
+                      setBankrollForm(current => ({ ...current, amount: "", kind: "withdrawal", note: "Вывод от букмекера" }));
+                      setBankEditorOpen(true);
+                    }}
+                    type="button"
+                  >
+                    -
+                  </button>
+                </div>
                 <em>ROI {betStats.roi >= 0 ? "+" : ""}{betStats.roi.toFixed(1)}%</em>
               </div>
               {bankEditorOpen ? (
-                <form className="rail-bank-form compact-open" onSubmit={handleBankrollSubmit}>
-                  <select
-                    onChange={event => setBankrollForm(current => ({ ...current, kind: event.target.value }))}
-                    value={bankrollForm.kind}
-                  >
-                    <option value="deposit">Пополнение</option>
-                    <option value="withdrawal">Вывод</option>
-                    <option value="adjustment">Коррекция</option>
-                  </select>
-                  <input
-                    inputMode="decimal"
-                    onChange={event => setBankrollForm(current => ({ ...current, amount: event.target.value }))}
-                    placeholder="Сумма"
-                    value={bankrollForm.amount}
-                  />
-                  <button disabled={dataLoading} type="submit">OK</button>
-                </form>
+                <div className="bank-modal-backdrop" role="presentation">
+                  <form className="bank-modal" onSubmit={handleBankrollSubmit}>
+                    <div className="bank-modal-head">
+                      <strong>{bankrollForm.kind === "withdrawal" ? "Вывод от букмекера" : "Пополнение букмекера"}</strong>
+                      <button
+                        aria-label="Закрыть"
+                        onClick={() => setBankEditorOpen(false)}
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <input
+                      autoFocus
+                      inputMode="decimal"
+                      onChange={event => setBankrollForm(current => ({ ...current, amount: event.target.value }))}
+                      placeholder="Сумма"
+                      value={bankrollForm.amount}
+                    />
+                    <div className="bank-modal-actions">
+                      <button onClick={() => setBankEditorOpen(false)} type="button">Отмена</button>
+                      <button disabled={dataLoading} type="submit">Сохранить</button>
+                    </div>
+                  </form>
+                </div>
               ) : null}
             </section>
 

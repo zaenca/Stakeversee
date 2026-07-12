@@ -1504,7 +1504,12 @@ h1 {
   justify-self: end;
 }
 
-.bank-plus {
+.bank-actions {
+  display: inline-flex;
+  gap: 7px;
+}
+
+.bank-action {
   align-items: center;
   background: rgba(0, 229, 255, 0.12);
   border: 1px solid rgba(0, 229, 255, 0.55);
@@ -1517,6 +1522,69 @@ h1 {
   height: 34px;
   place-items: center;
   width: 34px;
+}
+
+.bank-minus {
+  background: rgba(255, 55, 126, 0.1);
+  border-color: rgba(255, 55, 126, 0.48);
+  color: var(--pink);
+}
+
+.bank-modal-backdrop {
+  align-items: center;
+  background: rgba(2, 8, 14, 0.72);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 60;
+}
+
+.bank-modal {
+  background: #101924;
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-radius: 10px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.52);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  width: min(360px, calc(100vw - 32px));
+}
+
+.bank-modal-head,
+.bank-modal-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.bank-modal-head button,
+.bank-modal-actions button {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.bank-modal input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 1.15rem;
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.bank-modal-actions button[type="submit"] {
+  background: rgba(0, 229, 255, 0.11);
+  border-color: rgba(0, 229, 255, 0.42);
+  color: var(--cyan);
 }
 
 .rail-bank-form.compact-open {
