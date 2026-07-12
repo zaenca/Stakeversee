@@ -239,6 +239,7 @@ export default function Home() {
     stake: "",
     freebet: ""
   });
+  const [sourcePopupOpen, setSourcePopupOpen] = useState(false);
   const [bankrollForm, setBankrollForm] = useState({
     kind: "deposit",
     amount: "",
@@ -762,6 +763,33 @@ export default function Home() {
 
     setDataLoading(false);
   }
+
+  async function handleCouponSourceSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user) return;
+
+    const name = sourceName.trim();
+    if (!name) return;
+
+    setDataLoading(true);
+    const { data, error } = await supabase
+      .from("sources")
+      .upsert({ user_id: user.id, name }, { onConflict: "user_id,name" })
+      .select("id")
+      .single();
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      setSourceName("");
+      setSourcePopupOpen(false);
+      if (data?.id) {
+        setCouponDraft(current => ({ ...current, sourceId: data.id }));
+      }
+      await loadWorkspaceData(user.id);
+    }
+    setDataLoading(false);
+  }
   async function handleBankrollSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!user) return;
@@ -1004,97 +1032,6 @@ export default function Home() {
               )}
             </div>
 
-            <section className={`quick-coupon-card ${couponOpen || couponItems.length ? "open" : ""}`}>
-              <button className="coupon-head" onClick={() => setCouponOpen(current => !current)} type="button">
-                <span>🎫 Купон</span>
-                <strong>{couponItems.length} / {MAX_COUPON_ITEMS}</strong>
-              </button>
-
-              {couponOpen || couponItems.length ? (
-                <div className="coupon-body">
-                  {couponItems.length ? couponItems.map((item, index) => (
-                    <div className="coupon-item" key={item.id}>
-                      <div className="coupon-item-head">
-                        <span>{index + 1}.</span>
-                        <strong>{item.eventName}</strong>
-                        <button onClick={() => setCouponItems(current => current.filter(row => row.id !== item.id))} type="button">×</button>
-                      </div>
-                      <div className="coupon-item-grid">
-                        <select
-                          onChange={event => updateCouponItem(item.id, { market: event.target.value })}
-                          value={item.market}
-                        >
-                          <option value="Победа">Победа</option>
-                          <option value="Фора">Фора</option>
-                          <option value="Тотал">Тотал</option>
-                          <option value="Обе забьют">Обе забьют</option>
-                          <option value="Точный счёт">Точный счёт</option>
-                          <option value="Инд. тотал">Инд. тотал</option>
-                        </select>
-                        <input
-                          onChange={event => updateCouponItem(item.id, { selection: event.target.value })}
-                          placeholder="Исход"
-                          value={item.selection}
-                        />
-                        <input
-                          inputMode="decimal"
-                          onChange={event => updateCouponItem(item.id, { odds: event.target.value })}
-                          placeholder="Кэф"
-                          value={item.odds}
-                        />
-                      </div>
-                    </div>
-                  )) : <div className="coupon-empty">Нажми на карточку матча, чтобы добавить его в купон.</div>}
-
-                  <div className="coupon-controls">
-                    <select
-                      onChange={event => setCouponDraft(current => ({ ...current, bookmaker: event.target.value }))}
-                      value={couponDraft.bookmaker}
-                    >
-                      <option value="">— выберите букмекера —</option>
-                      {bookmakerOptions.map(bookmaker => <option key={bookmaker} value={bookmaker}>{bookmaker}</option>)}
-                    </select>
-                    <select
-                      onChange={event => setCouponDraft(current => ({ ...current, sourceId: event.target.value }))}
-                      value={couponDraft.sourceId}
-                    >
-                      <option value="">— выберите источник —</option>
-                      {sources.filter(source => !source.is_blacklisted).map(source => (
-                        <option key={source.id} value={source.id}>{source.name}</option>
-                      ))}
-                    </select>
-                    <input
-                      inputMode="decimal"
-                      onChange={event => setCouponDraft(current => ({ ...current, stake: event.target.value }))}
-                      placeholder="Ставка ₽"
-                      value={couponDraft.stake}
-                    />
-                    <input
-                      inputMode="decimal"
-                      onChange={event => setCouponDraft(current => ({ ...current, freebet: event.target.value }))}
-                      placeholder="Фрибет"
-                      value={couponDraft.freebet}
-                    />
-                  </div>
-
-                  <div className="coupon-summary">
-                    <div>
-                      <span>{couponItems.length === 1 ? "Одиночная ставка" : `Экспресс · ${couponItems.length} события`}</span>
-                      <strong>{couponTotalOdds > 1 ? `× ${couponTotalOdds.toFixed(2)}` : "—"}</strong>
-                    </div>
-                    <div>
-                      <span>Возможный выигрыш</span>
-                      <strong>{couponPotentialWin > 0 ? formatMoney(couponPotentialWin) : "—"}</strong>
-                    </div>
-                  </div>
-
-                  <div className="coupon-actions">
-                    <button onClick={() => setCouponItems([])} type="button">Очистить</button>
-                    <button disabled={dataLoading} onClick={saveCoupon} type="button">Сохранить прогноз</button>
-                  </div>
-                </div>
-              ) : null}
-            </section>
             <section className="workspace-bottom">
               <article className="quick-card">
                 <div className="compact-head">
@@ -1197,6 +1134,132 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+            </section>
+
+            <section className={`quick-coupon-card ${couponOpen || couponItems.length ? "open" : ""}`}>
+              <button className="coupon-head" onClick={() => setCouponOpen(current => !current)} type="button">
+                <span>🎫 Купон</span>
+                <strong>{couponItems.length} / {MAX_COUPON_ITEMS}</strong>
+              </button>
+
+              {couponOpen || couponItems.length ? (
+                <div className="coupon-body">
+                  {couponItems.length ? couponItems.map((item, index) => (
+                    <div className="coupon-item" key={item.id}>
+                      <div className="coupon-item-head">
+                        <span>{index + 1}.</span>
+                        <strong>{item.eventName}</strong>
+                        <button onClick={() => setCouponItems(current => current.filter(row => row.id !== item.id))} type="button">×</button>
+                      </div>
+                      <div className="coupon-item-grid">
+                        <select
+                          onChange={event => updateCouponItem(item.id, { market: event.target.value })}
+                          value={item.market}
+                        >
+                          <option value="Победа">Победа</option>
+                          <option value="Фора">Фора</option>
+                          <option value="Тотал">Тотал</option>
+                          <option value="Обе забьют">Обе забьют</option>
+                          <option value="Точный счёт">Точный счёт</option>
+                          <option value="Инд. тотал">Инд. тотал</option>
+                        </select>
+                        <input
+                          onChange={event => updateCouponItem(item.id, { selection: event.target.value })}
+                          placeholder="Исход"
+                          value={item.selection}
+                        />
+                        <input
+                          inputMode="decimal"
+                          onChange={event => updateCouponItem(item.id, { odds: event.target.value })}
+                          placeholder="Кэф"
+                          value={item.odds}
+                        />
+                      </div>
+                    </div>
+                  )) : <div className="coupon-empty">Нажми на карточку матча, чтобы добавить его в купон.</div>}
+
+                  <div className="coupon-controls">
+                    <select
+                      onChange={event => setCouponDraft(current => ({ ...current, bookmaker: event.target.value }))}
+                      value={couponDraft.bookmaker}
+                    >
+                      <option value="">— выберите букмекера —</option>
+                      {bookmakerOptions.map(bookmaker => <option key={bookmaker} value={bookmaker}>{bookmaker}</option>)}
+                    </select>
+                    <select
+                      onChange={event => {
+                        if (event.target.value === "__add_source__") {
+                          setSourcePopupOpen(true);
+                          return;
+                        }
+                        setCouponDraft(current => ({ ...current, sourceId: event.target.value }));
+                      }}
+                      value={couponDraft.sourceId}
+                    >
+                      <option value="">— выберите источник —</option>
+                      <option value="__add_source__">+ Добавить источник</option>
+                      {sources.filter(source => !source.is_blacklisted).map(source => (
+                        <option key={source.id} value={source.id}>{source.name}</option>
+                      ))}
+                    </select>
+                    <input
+                      inputMode="decimal"
+                      onChange={event => setCouponDraft(current => ({ ...current, stake: event.target.value }))}
+                      placeholder="Ставка ₽"
+                      value={couponDraft.stake}
+                    />
+                    <input
+                      inputMode="decimal"
+                      onChange={event => setCouponDraft(current => ({ ...current, freebet: event.target.value }))}
+                      placeholder="Фрибет"
+                      value={couponDraft.freebet}
+                    />
+                  </div>
+
+                  <div className="coupon-summary">
+                    <div>
+                      <span>{couponItems.length === 1 ? "Одиночная ставка" : `Экспресс · ${couponItems.length} события`}</span>
+                      <strong>{couponTotalOdds > 1 ? `× ${couponTotalOdds.toFixed(2)}` : "—"}</strong>
+                    </div>
+                    <div>
+                      <span>Возможный выигрыш</span>
+                      <strong>{couponPotentialWin > 0 ? formatMoney(couponPotentialWin) : "—"}</strong>
+                    </div>
+                  </div>
+
+                  <div className="coupon-actions">
+                    <button onClick={() => setCouponItems([])} type="button">Очистить</button>
+                    <button disabled={dataLoading} onClick={saveCoupon} type="button">Сохранить прогноз</button>
+                  </div>
+
+                  {sourcePopupOpen ? (
+                    <div className="coupon-source-popover" role="dialog" aria-label="Добавить источник">
+                      <form className="coupon-source-form" onSubmit={handleCouponSourceSubmit}>
+                        <div className="bank-modal-head">
+                          <strong>Добавить источник</strong>
+                          <button
+                            aria-label="Закрыть"
+                            onClick={() => setSourcePopupOpen(false)}
+                            type="button"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <input
+                          autoFocus
+                          onChange={event => setSourceName(event.target.value)}
+                          placeholder="Название источника"
+                          value={sourceName}
+                        />
+                        <div className="bank-modal-actions">
+                          <button onClick={() => setSourcePopupOpen(false)} type="button">Отмена</button>
+                          <button disabled={dataLoading} type="submit">Добавить</button>
+                        </div>
+                      </form>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </section>
 
             <section className="rail-panel bank-panel">

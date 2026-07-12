@@ -41,6 +41,11 @@ select {
   font: inherit;
 }
 
+select option {
+  background: #0d1420;
+  color: #eaf6ff;
+}
+
 button,
 a {
   -webkit-tap-highlight-color: transparent;
@@ -1702,8 +1707,23 @@ h1 {
   background: rgba(16, 25, 36, 0.96);
   border: 1px solid rgba(0, 229, 255, 0.18);
   border-radius: 8px;
-  grid-column: 1 / -1;
   overflow: hidden;
+  position: relative;
+  z-index: 12;
+}
+
+.right-rail .quick-coupon-card {
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34), 0 0 24px rgba(0, 229, 255, 0.08);
+  order: 2;
+}
+
+.right-rail .bank-panel {
+  order: 3;
+}
+
+.right-rail .stats-entry-panel,
+.right-rail .stats-panel {
+  order: 4;
 }
 
 .coupon-head {
@@ -1798,17 +1818,29 @@ h1 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.right-rail .coupon-item-grid,
+.right-rail .coupon-controls,
+.right-rail .coupon-summary {
+  grid-template-columns: 1fr;
+}
+
 .coupon-item-grid input,
 .coupon-item-grid select,
 .coupon-controls input,
 .coupon-controls select {
-  background: rgba(255, 255, 255, 0.045);
+  background: #111b28;
   border: 1px solid var(--line);
   border-radius: 6px;
-  color: var(--text);
+  color: #eaf6ff;
   min-height: 38px;
   min-width: 0;
   padding: 0 10px;
+}
+
+.coupon-item-grid select option,
+.coupon-controls select option {
+  background: #0b111b;
+  color: #eaf6ff;
 }
 
 .coupon-summary {
@@ -1850,6 +1882,34 @@ h1 {
   border-color: rgba(0, 229, 255, 0.38);
   color: var(--cyan);
   font-weight: 900;
+}
+
+.coupon-source-popover {
+  background: rgba(6, 12, 20, 0.76);
+  border-radius: 8px;
+  inset: 0;
+  padding: 12px;
+  position: absolute;
+  z-index: 20;
+}
+
+.coupon-source-form {
+  background: #101925;
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: 8px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.coupon-source-form input {
+  background: #111b28;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: #eaf6ff;
+  min-height: 40px;
+  padding: 0 10px;
 }
 
 @media (max-width: 1180px) {
