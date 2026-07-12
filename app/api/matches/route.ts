@@ -281,7 +281,7 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
       }
     });
   }
-  return [...byKey.values()].sort((a, b) => a.startMs - b.startMs);
+  return Array.from(byKey.values()).sort((a, b) => a.startMs - b.startMs);
 }
 
 function toApiMatch(match: RawMatch): ApiMatch {
