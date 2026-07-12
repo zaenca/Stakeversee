@@ -1713,18 +1713,18 @@ h1 {
 }
 
 .right-rail .quick-coupon-card.open {
-  max-height: min(72vh, 620px);
+  max-height: min(58vh, 520px);
   overflow: auto;
-  position: fixed;
-  right: 28px;
-  top: 210px;
-  width: min(380px, calc(100vw - 32px));
-  z-index: 80;
+  position: relative;
+  width: 100%;
+  z-index: 14;
 }
 
 .right-rail .quick-coupon-card {
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34), 0 0 24px rgba(0, 229, 255, 0.08);
+  min-width: 0;
   order: 2;
+  width: 100%;
 }
 
 .right-rail .bank-panel {
@@ -1831,7 +1831,11 @@ h1 {
 .right-rail .coupon-item-grid,
 .right-rail .coupon-controls,
 .right-rail .coupon-summary {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.right-rail .coupon-item-grid {
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 72px;
 }
 
 .coupon-item-grid input,

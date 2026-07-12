@@ -75,6 +75,74 @@ const bookmakerOptions = [
   "Марафон",
   "Тестовая ставка"
 ];
+const RU_TO_LAT: Record<string, string> = {
+  "а": "a",
+  "б": "b",
+  "в": "v",
+  "г": "g",
+  "д": "d",
+  "е": "e",
+  "ё": "e",
+  "ж": "zh",
+  "з": "z",
+  "и": "i",
+  "й": "y",
+  "к": "k",
+  "л": "l",
+  "м": "m",
+  "н": "n",
+  "о": "o",
+  "п": "p",
+  "р": "r",
+  "с": "s",
+  "т": "t",
+  "у": "u",
+  "ф": "f",
+  "х": "h",
+  "ц": "ts",
+  "ч": "ch",
+  "ш": "sh",
+  "щ": "sch",
+  "ъ": "",
+  "ы": "y",
+  "ь": "",
+  "э": "e",
+  "ю": "yu",
+  "я": "ya"
+};
+
+function normalizeSearchValue(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ё/g, "е")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function transliterateRu(value: string): string {
+  return normalizeSearchValue(value)
+    .split("")
+    .map(char => RU_TO_LAT[char] ?? char)
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function searchTokenGroups(query: string): string[][] {
+  return normalizeSearchValue(query)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(token => Array.from(new Set([token, transliterateRu(token)].filter(Boolean))));
+}
+
+function searchHaystack(...parts: string[]): string {
+  const normalized = normalizeSearchValue(parts.join(" "));
+  const transliterated = transliterateRu(normalized);
+  return `${normalized} ${transliterated}`;
+}
+
 const features = [
   {
     title: "Контроль банка",
@@ -345,16 +413,15 @@ export default function Home() {
   }, [bets, sources]);
 
   const activeMatches = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const queryGroups = searchTokenGroups(searchQuery);
     const upcomingMatches = getUpcomingMatches(lineMatches);
 
     return upcomingMatches.filter(match => {
       const sportOk = activeSport === "all" || match.sport === activeSport;
+      const haystack = searchHaystack(match.home, match.away, match.league, match.country);
       const searchOk =
-        !normalizedSearch ||
-        match.home.toLowerCase().includes(normalizedSearch) ||
-        match.away.toLowerCase().includes(normalizedSearch) ||
-        match.league.toLowerCase().includes(normalizedSearch);
+        !queryGroups.length ||
+        queryGroups.every(group => group.some(token => haystack.includes(token)));
 
       return sportOk && searchOk;
     });
@@ -965,6 +1032,7 @@ export default function Home() {
               <input
                 onChange={event => setSearchQuery(event.target.value)}
                 placeholder="🔍 Команда, лига..."
+                spellCheck={false}
                 value={searchQuery}
               />
             </div>
