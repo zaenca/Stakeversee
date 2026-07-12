@@ -51,8 +51,30 @@ type MatchRow = {
   startsAt?: string;
 };
 
+type CouponItem = {
+  id: string;
+  matchId: string;
+  eventName: string;
+  sport: string;
+  market: string;
+  selection: string;
+  odds: string;
+};
 const MATCH_CACHE_KEY = "stakeversee:line-matches:v2";
 
+const MAX_COUPON_ITEMS = 5;
+
+const bookmakerOptions = [
+  "PARI",
+  "Fonbet",
+  "TENNISI",
+  "Мелбет",
+  "BetBoom",
+  "Winline",
+  "Лига Ставок",
+  "Марафон",
+  "Тестовая ставка"
+];
 const features = [
   {
     title: "Контроль банка",
@@ -209,6 +231,14 @@ export default function Home() {
     stake: ""
   });
 
+  const [couponItems, setCouponItems] = useState<CouponItem[]>([]);
+  const [couponOpen, setCouponOpen] = useState(false);
+  const [couponDraft, setCouponDraft] = useState({
+    bookmaker: "",
+    sourceId: "",
+    stake: "",
+    freebet: ""
+  });
   const [bankrollForm, setBankrollForm] = useState({
     kind: "deposit",
     amount: "",
@@ -261,6 +291,20 @@ export default function Home() {
     };
   }, [bets]);
 
+  const couponTotalOdds = useMemo(() => {
+    if (!couponItems.length) return 0;
+
+    return couponItems.reduce((total, item) => {
+      const odds = Number(item.odds.replace(",", "."));
+      return odds > 1 ? total * odds : total;
+    }, 1);
+  }, [couponItems]);
+
+  const couponRealStake = Number(couponDraft.stake.replace(",", ".")) || 0;
+  const couponFreebet = Number(couponDraft.freebet.replace(",", ".")) || 0;
+  const couponPotentialWin = couponTotalOdds > 1
+    ? couponRealStake * couponTotalOdds + couponFreebet * (couponTotalOdds - 1)
+    : 0;
   const bankrollStats = useMemo(() => {
     const balance = bankrollEvents.reduce((sum, event) => sum + Number(event.amount || 0), 0);
     const deposits = bankrollEvents
@@ -619,6 +663,105 @@ export default function Home() {
     setDataLoading(false);
   }
 
+  function buildCouponItem(match: MatchRow): CouponItem {
+    return {
+      id: `${match.id}-${Date.now()}`,
+      matchId: match.id,
+      eventName: `${match.home} vs ${match.away}`,
+      sport: match.sport,
+      market: "Победа",
+      selection: match.home,
+      odds: match.odds[0] && match.odds[0] !== "-" ? match.odds[0] : ""
+    };
+  }
+
+  function toggleCouponMatch(match: MatchRow) {
+    setCouponItems(current => {
+      if (current.some(item => item.matchId === match.id)) {
+        return current.filter(item => item.matchId !== match.id);
+      }
+
+      if (current.length >= MAX_COUPON_ITEMS) {
+        setDataMessage(`В купоне максимум ${MAX_COUPON_ITEMS} матчей.`);
+        return current;
+      }
+
+      setCouponOpen(true);
+      setDataMessage("");
+      return [...current, buildCouponItem(match)];
+    });
+  }
+
+  function updateCouponItem(id: string, patch: Partial<CouponItem>) {
+    setCouponItems(current => current.map(item => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  async function saveCoupon() {
+    if (!user) return;
+
+    const stake = Number(couponDraft.stake.replace(",", ".")) || 0;
+    const freebet = Number(couponDraft.freebet.replace(",", ".")) || 0;
+    const activeStake = stake > 0 ? stake : freebet;
+
+    if (!couponItems.length) {
+      setDataMessage("Добавь хотя бы один матч в купон.");
+      return;
+    }
+
+    if (!couponDraft.bookmaker || !couponDraft.sourceId || activeStake <= 0) {
+      setDataMessage("Для купона нужны букмекер, источник и сумма ставки или фрибета.");
+      return;
+    }
+
+    const invalid = couponItems.some(item => {
+      const odds = Number(item.odds.replace(",", "."));
+      return !item.selection.trim() || !odds || odds < 1.01;
+    });
+
+    if (invalid) {
+      setDataMessage("Проверь исходы и коэффициенты в купоне.");
+      return;
+    }
+
+    const bookmaker = freebet > 0 && stake <= 0 ? `${couponDraft.bookmaker} · Фрибет` : couponDraft.bookmaker;
+    const payload = couponItems.length === 1
+      ? {
+          event_name: couponItems[0].eventName,
+          sport: couponItems[0].sport,
+          market: couponItems[0].market || "Исход",
+          selection: couponItems[0].selection,
+          odds: Number(couponItems[0].odds.replace(",", "."))
+        }
+      : {
+          event_name: couponItems.map(item => item.eventName).join(" + "),
+          sport: "express",
+          market: `Экспресс · ${couponItems.length} события`,
+          selection: couponItems.map(item => `${item.market}: ${item.selection}`).join(" | "),
+          odds: Number(couponTotalOdds.toFixed(2))
+        };
+
+    setDataLoading(true);
+    const { error } = await supabase.from("bets").insert({
+      user_id: user.id,
+      source_id: couponDraft.sourceId,
+      bookmaker,
+      stake: activeStake,
+      result: "pending",
+      ...payload
+    });
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      setCouponItems([]);
+      setCouponDraft(current => ({ ...current, stake: "", freebet: "" }));
+      setCouponOpen(false);
+      setDataMessage("Купон сохранён в ставки.");
+      await loadWorkspaceData(user.id);
+    }
+
+    setDataLoading(false);
+  }
   async function handleBankrollSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!user) return;
@@ -801,7 +944,7 @@ export default function Home() {
             <div className="matches-area">
               {shownMatches.length ? (
                 shownMatches.map(match => (
-                  <article className="match-card" key={match.id}>
+                  <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
                     <div className="match-meta">
                       <span>{match.country}</span>
                       <strong>{match.league}</strong>
@@ -850,7 +993,7 @@ export default function Home() {
                       <div className="probability-bar">
                         <span style={{ width: `${match.confidence}%` }} />
                       </div>
-                      <button type="button">+ Добавить в купон</button>
+                      <button onClick={() => toggleCouponMatch(match)} type="button">{couponItems.some(item => item.matchId === match.id) ? "✓ В купоне" : "+ Добавить в купон"}</button>
                     </div>
                   </article>
                 ))
@@ -861,6 +1004,97 @@ export default function Home() {
               )}
             </div>
 
+            <section className={`quick-coupon-card ${couponOpen || couponItems.length ? "open" : ""}`}>
+              <button className="coupon-head" onClick={() => setCouponOpen(current => !current)} type="button">
+                <span>🎫 Купон</span>
+                <strong>{couponItems.length} / {MAX_COUPON_ITEMS}</strong>
+              </button>
+
+              {couponOpen || couponItems.length ? (
+                <div className="coupon-body">
+                  {couponItems.length ? couponItems.map((item, index) => (
+                    <div className="coupon-item" key={item.id}>
+                      <div className="coupon-item-head">
+                        <span>{index + 1}.</span>
+                        <strong>{item.eventName}</strong>
+                        <button onClick={() => setCouponItems(current => current.filter(row => row.id !== item.id))} type="button">×</button>
+                      </div>
+                      <div className="coupon-item-grid">
+                        <select
+                          onChange={event => updateCouponItem(item.id, { market: event.target.value })}
+                          value={item.market}
+                        >
+                          <option value="Победа">Победа</option>
+                          <option value="Фора">Фора</option>
+                          <option value="Тотал">Тотал</option>
+                          <option value="Обе забьют">Обе забьют</option>
+                          <option value="Точный счёт">Точный счёт</option>
+                          <option value="Инд. тотал">Инд. тотал</option>
+                        </select>
+                        <input
+                          onChange={event => updateCouponItem(item.id, { selection: event.target.value })}
+                          placeholder="Исход"
+                          value={item.selection}
+                        />
+                        <input
+                          inputMode="decimal"
+                          onChange={event => updateCouponItem(item.id, { odds: event.target.value })}
+                          placeholder="Кэф"
+                          value={item.odds}
+                        />
+                      </div>
+                    </div>
+                  )) : <div className="coupon-empty">Нажми на карточку матча, чтобы добавить его в купон.</div>}
+
+                  <div className="coupon-controls">
+                    <select
+                      onChange={event => setCouponDraft(current => ({ ...current, bookmaker: event.target.value }))}
+                      value={couponDraft.bookmaker}
+                    >
+                      <option value="">— выберите букмекера —</option>
+                      {bookmakerOptions.map(bookmaker => <option key={bookmaker} value={bookmaker}>{bookmaker}</option>)}
+                    </select>
+                    <select
+                      onChange={event => setCouponDraft(current => ({ ...current, sourceId: event.target.value }))}
+                      value={couponDraft.sourceId}
+                    >
+                      <option value="">— выберите источник —</option>
+                      {sources.filter(source => !source.is_blacklisted).map(source => (
+                        <option key={source.id} value={source.id}>{source.name}</option>
+                      ))}
+                    </select>
+                    <input
+                      inputMode="decimal"
+                      onChange={event => setCouponDraft(current => ({ ...current, stake: event.target.value }))}
+                      placeholder="Ставка ₽"
+                      value={couponDraft.stake}
+                    />
+                    <input
+                      inputMode="decimal"
+                      onChange={event => setCouponDraft(current => ({ ...current, freebet: event.target.value }))}
+                      placeholder="Фрибет"
+                      value={couponDraft.freebet}
+                    />
+                  </div>
+
+                  <div className="coupon-summary">
+                    <div>
+                      <span>{couponItems.length === 1 ? "Одиночная ставка" : `Экспресс · ${couponItems.length} события`}</span>
+                      <strong>{couponTotalOdds > 1 ? `× ${couponTotalOdds.toFixed(2)}` : "—"}</strong>
+                    </div>
+                    <div>
+                      <span>Возможный выигрыш</span>
+                      <strong>{couponPotentialWin > 0 ? formatMoney(couponPotentialWin) : "—"}</strong>
+                    </div>
+                  </div>
+
+                  <div className="coupon-actions">
+                    <button onClick={() => setCouponItems([])} type="button">Очистить</button>
+                    <button disabled={dataLoading} onClick={saveCoupon} type="button">Сохранить прогноз</button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
             <section className="workspace-bottom">
               <article className="quick-card">
                 <div className="compact-head">
