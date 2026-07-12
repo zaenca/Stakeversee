@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { BankBetMirror } from "./bank-bet-mirror";
 import "./globals.css";
 import "./coupon-force.css";
+import "./bank-bet-mirror.css";
 
 export const metadata: Metadata = {
   title: "Stakeversee",
@@ -14,7 +16,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body>{children}</body>
+      <body>
+        {children}
+        <BankBetMirror />
+      </body>
     </html>
   );
 }
