@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 type BookmakerOdds = {
   home: number;
@@ -104,14 +104,14 @@ function startMsFrom(...values: unknown[]): number {
 function normalizeSport(raw: unknown): string {
   const value = asString(raw).toLowerCase();
   const compact = value.replace(/[\s_-]+/g, "");
-  if (value === "football" || value.includes("футбол")) return "football";
-  if (value === "basketball" || value.includes("баскет")) return "basketball";
-  if (value === "baseball" || value.includes("бейсбол")) return "baseball";
-  if (value === "volleyball" || value.includes("волей")) return "volleyball";
-  if (value === "tennis" || value.includes("теннис")) return "tennis";
-  if (value === "handball" || value.includes("гандбол")) return "handball";
-  if (value === "ice-hockey" || compact === "icehockey" || compact === "hockey" || value.includes("хоккей")) return "ice-hockey";
-  if (value.includes("cyber") || value.includes("esport") || value.includes("кибер")) return "esports";
+  if (value === "football" || value.includes("Ñ„ÑƒÑ‚Ð±Ð¾Ð»")) return "football";
+  if (value === "basketball" || value.includes("Ð±Ð°ÑÐºÐµÑ‚")) return "basketball";
+  if (value === "baseball" || value.includes("Ð±ÐµÐ¹ÑÐ±Ð¾Ð»")) return "baseball";
+  if (value === "volleyball" || value.includes("Ð²Ð¾Ð»ÐµÐ¹")) return "volleyball";
+  if (value === "tennis" || value.includes("Ñ‚ÐµÐ½Ð½Ð¸Ñ")) return "tennis";
+  if (value === "handball" || value.includes("Ð³Ð°Ð½Ð´Ð±Ð¾Ð»")) return "handball";
+  if (value === "ice-hockey" || compact === "icehockey" || compact === "hockey" || value.includes("Ñ…Ð¾ÐºÐºÐµÐ¹")) return "ice-hockey";
+  if (value.includes("cyber") || value.includes("esport") || value.includes("ÐºÐ¸Ð±ÐµÑ€")) return "esports";
   return value;
 }
 
@@ -143,8 +143,8 @@ function leagueName(data: PariLikeData, item: PariLikeEvent): string {
 }
 
 function splitCountryLeague(league: string): { country: string; league: string } {
-  const parts = league.split(/[·:]/).map((part) => part.trim()).filter(Boolean);
-  if (parts.length >= 2) return { country: parts[0], league: parts.slice(1).join(" · ") };
+  const parts = league.split(/[Â·:]/).map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 2) return { country: parts[0], league: parts.slice(1).join(" Â· ") };
   return { country: "World", league: league || "World" };
 }
 
@@ -184,9 +184,9 @@ function fromBookmakerEvent(data: PariLikeData, item: PariLikeEvent, factorMap: 
   const home = asString(item.team1 || item.teamHome || (item.homeTeam as PariLikeEvent | undefined)?.name).trim();
   const away = asString(item.team2 || item.teamAway || (item.awayTeam as PariLikeEvent | undefined)?.name).trim();
   if (!home || !away) return null;
-  if (/^(хозяева|гости|home|away)$/i.test(home) || /^(хозяева|гости|home|away)$/i.test(away)) return null;
+  if (/^(Ñ…Ð¾Ð·ÑÐµÐ²Ð°|Ð³Ð¾ÑÑ‚Ð¸|home|away)$/i.test(home) || /^(Ñ…Ð¾Ð·ÑÐµÐ²Ð°|Ð³Ð¾ÑÑ‚Ð¸|home|away)$/i.test(away)) return null;
   const factors = asArray(factorMap.get(asString(item.id))?.factors);
-  const odds = mainOdds(factors, sport, source === "pari" ? "PARI" : "Фонбет");
+  const odds = mainOdds(factors, sport, source === "pari" ? "PARI" : "Ð¤Ð¾Ð½Ð±ÐµÑ‚");
   if (!odds) return null;
   const startMs = startMsFrom(item.startTime, item.startTimestamp, item.timestamp);
   if (!startMs) return null;
@@ -231,9 +231,9 @@ function normalizedName(value: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[ё]/g, "е")
+    .replace(/[Ñ‘]/g, "Ðµ")
     .replace(/\b(fc|fk|bc|hc|cf|sc|club|w|women|u\d+)\b/g, "")
-    .replace(/[^a-zа-я0-9]+/gi, " ")
+    .replace(/[^a-zÐ°-Ñ0-9]+/gi, " ")
     .trim();
 }
 
@@ -245,11 +245,12 @@ function dedupeKey(match: RawMatch): string {
 
 function shouldDropMatch(match: RawMatch): boolean {
   const full = `${match.country} ${match.league} ${match.home} ${match.away}`.toLowerCase();
-  if (match.sport === "volleyball" && /(belarus|russia|беларус|росси).*(liga pro|лига про|pro league)/i.test(full)) return true;
-  if (match.sport === "ice-hockey" && /(magnitka|магнитка|cyber|esport|virtual|simulation|3x3|3x4|4x4|3 на 3|3 на 4|4 на 4|nhl \d|лига про|liga pro)/i.test(full)) return true;
-  if (match.sport === "esports" && /\bh2h\b/i.test(full)) return true;
-  if (match.sport === "tennis" && /(double faults|aces|statistics|stats|двойн.*ошиб|эйс|статист)/i.test(full)) return true;
-  if (match.sport === "baseball" && /(basketball|баскет|nba|euroleague|баскетбол)/i.test(full)) return true;
+  if (match.sport !== "esports" && /(fc\s*\d{2}|fifa|efootball|h2h|cyber|virtual|simulation|simulator|2x4|2\s*x\s*4|mins?|liga-?\d|division-?\d|nhl\s*\d|nba\s*\d)/i.test(full)) return true;
+  if (match.sport === "volleyball" && /(belarus|russia|Ð±ÐµÐ»Ð°Ñ€ÑƒÑ|Ñ€Ð¾ÑÑÐ¸).*(liga pro|Ð»Ð¸Ð³Ð° Ð¿Ñ€Ð¾|pro league)/i.test(full)) return true;
+  if (match.sport === "ice-hockey" && /(magnitka|Ð¼Ð°Ð³Ð½Ð¸Ñ‚ÐºÐ°|cyber|esport|virtual|simulation|3x3|3x4|4x4|3 Ð½Ð° 3|3 Ð½Ð° 4|4 Ð½Ð° 4|nhl \d|Ð»Ð¸Ð³Ð° Ð¿Ñ€Ð¾|liga pro)/i.test(full)) return true;
+  if (match.sport === "esports" && /(fc\s*\d{2}|fifa|efootball|nhl\s*\d|nba\s*\d|2x4|2\s*x\s*4)/i.test(full)) return true;
+  if (match.sport === "tennis" && /(double faults|aces|statistics|stats|Ð´Ð²Ð¾Ð¹Ð½.*Ð¾ÑˆÐ¸Ð±|ÑÐ¹Ñ|ÑÑ‚Ð°Ñ‚Ð¸ÑÑ‚)/i.test(full)) return true;
+  if (match.sport === "baseball" && /(basketball|Ð±Ð°ÑÐºÐµÑ‚|nba|euroleague|Ð±Ð°ÑÐºÐµÑ‚Ð±Ð¾Ð»)/i.test(full)) return true;
   return false;
 }
 
@@ -271,8 +272,8 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
       id: `${current.id}+${match.id}`,
       country: current.country !== "World" ? current.country : match.country,
       league: current.league !== "World" ? current.league : match.league,
-      home: /[а-яё]/i.test(current.home) ? current.home : match.home,
-      away: /[а-яё]/i.test(current.away) ? current.away : match.away,
+      home: /[Ð°-ÑÑ‘]/i.test(current.home) ? current.home : match.home,
+      away: /[Ð°-ÑÑ‘]/i.test(current.away) ? current.away : match.away,
       odds: {
         bookmaker: home === match.odds.home || away === match.odds.away || draw === match.odds.draw ? match.odds.bookmaker : current.odds.bookmaker,
         home,
