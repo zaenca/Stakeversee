@@ -1713,12 +1713,16 @@ h1 {
 }
 
 .right-rail .quick-coupon-card.open {
-  max-height: min(58vh, 520px);
+  background: rgba(16, 25, 36, 0.98);
+  border-color: rgba(0, 229, 255, 0.42);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), 0 0 28px rgba(0, 229, 255, 0.14);
+  max-height: calc(100vh - 220px);
   overflow: auto;
-  position: sticky;
-  top: 0;
-  width: 100%;
-  z-index: 30;
+  position: fixed;
+  right: 24px;
+  top: 192px;
+  width: min(372px, calc(100vw - 32px));
+  z-index: 1000;
 }
 
 .right-rail .quick-coupon-card {
@@ -1939,121 +1943,11 @@ h1 {
   }
 }
 
-.right-rail .quick-coupon-card:not(.open) {
-  display: none;
-}
-
-.stats-block { display: grid; gap: 10px; margin-top: 14px; }
-.stats-block-head { align-items: center; color: var(--muted); display: flex; font-size: 0.72rem; justify-content: space-between; letter-spacing: 0.12em; text-transform: uppercase; }
-.stats-block-head strong { color: var(--text); }
-.stats-block-head span { background: rgba(0, 229, 255, 0.12); border: 1px solid rgba(0, 229, 255, 0.24); border-radius: 999px; color: var(--cyan); padding: 2px 8px; }
-.source-stat-list { display: grid; gap: 8px; }
-.source-stat-card, .rail-bet-card { background: rgba(255, 255, 255, 0.035); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
-.source-stat-card.blacklisted { border-color: rgba(255, 55, 133, 0.32); opacity: 0.58; }
-.source-stat-top { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-bottom: 8px; }
-.source-stat-top strong { color: var(--text); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.source-stat-top span { color: var(--cyan); font-size: 0.72rem; font-weight: 900; white-space: nowrap; }
-.source-stat-grid { display: grid; gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.source-stat-grid div { background: rgba(9, 15, 24, 0.58); border: 1px solid rgba(130, 158, 190, 0.12); border-radius: 6px; padding: 7px; }
-.source-stat-grid span, .rail-bet-main span { color: var(--muted); font-size: 0.66rem; }
-.source-stat-grid strong { color: var(--text); display: block; font-size: 0.78rem; margin-top: 3px; }
-.rail-bet-card { display: grid; gap: 8px; }
-.rail-bet-main { display: grid; gap: 4px; min-width: 0; }
-.rail-bet-main strong { color: var(--text); font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rail-bet-meta { align-items: center; display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
-.rail-bet-meta span, .rail-bet-meta em, .result-pill { border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 999px; color: var(--cyan); font-size: 0.62rem; font-style: normal; font-weight: 900; overflow: hidden; padding: 4px 7px; text-overflow: ellipsis; white-space: nowrap; }
-.rail-bet-meta em { border-color: rgba(139, 92, 246, 0.32); color: #d9c8ff; }
-.result-pill { border-color: rgba(130, 158, 190, 0.22); color: var(--muted); }
-.result-pill.win { border-color: rgba(0, 224, 138, 0.36); color: var(--green); }
-.result-pill.loss { border-color: rgba(255, 55, 133, 0.38); color: var(--red); }
-.result-pill.return { border-color: rgba(255, 193, 7, 0.45); color: var(--amber); }
-
-.calendar-grid button.has-profit.positive {
-  background: rgba(0, 224, 138, 0.16);
-  border-color: rgba(0, 224, 138, 0.55);
-  color: var(--green);
-}
-
-.calendar-grid button.has-profit.negative {
-  background: rgba(255, 55, 126, 0.15);
-  border-color: rgba(255, 55, 126, 0.55);
-  color: var(--red);
-}
-
-.calendar-grid button.has-profit small {
-  color: currentColor;
-  font-weight: 900;
-}
-
-.rail-bet-meta em {
-  max-width: none;
-  overflow: visible;
-  text-overflow: clip;
-}
-
-
-/* Stakeversee pending bank cleanup */
-.calendar-grid button small + small {
-  display: none !important;
-}
-
-.bank-pending-list {
-  display: grid;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.bank-pending-card {
-  background: rgba(15, 23, 34, 0.88);
-  border: 1px solid rgba(0, 229, 255, 0.18);
-  border-radius: 8px;
-  display: grid;
-  gap: 7px;
-  padding: 9px 10px;
-}
-
-.bank-pending-card strong {
-  color: #f7fbff;
-  font-size: 0.72rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bank-pending-meta {
-  align-items: center;
-  display: grid;
-  gap: 6px;
-  grid-template-columns: max-content minmax(0, 1fr);
-}
-
-.bank-pending-meta span,
-.bank-pending-meta em {
-  border: 1px solid rgba(0, 229, 255, 0.24);
-  border-radius: 999px;
-  color: var(--cyan);
-  font-size: 0.58rem;
-  font-style: normal;
-  font-weight: 900;
-  line-height: 1.1;
-  min-width: 0;
-  overflow: hidden;
-  padding: 4px 7px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bank-pending-meta em {
-  border-color: rgba(139, 92, 246, 0.4);
-  color: #d9c8ff;
-  max-width: none;
-  overflow: visible;
-  text-overflow: clip;
-}
-
-.bank-panel .rail-bet-meta em,
-.bank-panel .bank-pending-meta em {
-  max-width: none !important;
-  overflow: visible !important;
-  text-overflow: clip !important;
+@media (max-width: 980px) {
+  .right-rail .quick-coupon-card.open {
+    left: 12px;
+    right: 12px;
+    top: 96px;
+    width: auto;
+  }
 }
