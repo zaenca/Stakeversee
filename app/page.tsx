@@ -1441,6 +1441,21 @@ export default function Home() {
                 </div>
                 <em>ROI {betStats.roi >= 0 ? "+" : ""}{betStats.roi.toFixed(1)}%</em>
               </div>
+              {bets.length ? (
+                <div className="bank-bet-list">
+                  {bets.slice(0, 5).map(bet => {
+                    const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";
+
+                    return (
+                      <div className="bank-bet-row" key={bet.id}>
+                        <strong>{bet.event_name}</strong>
+                        <span>{bet.bookmaker || "—"}</span>
+                        <em>{sourceName || "—"}</em>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
               {bankEditorOpen ? (
                 <div className="bank-modal-backdrop" role="presentation">
                   <form className="bank-modal" onSubmit={handleBankrollSubmit}>
