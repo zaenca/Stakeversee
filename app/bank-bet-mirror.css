@@ -1,0 +1,50 @@
+.bank-bet-mirror-host {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bank-bet-mirror-list {
+  display: grid;
+  gap: 8px;
+}
+
+.bank-bet-mirror-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  min-height: 38px;
+  padding: 8px 9px;
+}
+
+.bank-bet-mirror-row strong {
+  color: var(--text);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-bet-mirror-row span,
+.bank-bet-mirror-row em {
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: 999px;
+  color: var(--cyan);
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 800;
+  max-width: 82px;
+  overflow: hidden;
+  padding: 3px 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-bet-mirror-row em {
+  border-color: rgba(139, 92, 246, 0.32);
+  color: #d9c8ff;
+}
