@@ -1967,3 +1967,26 @@ h1 {
 .result-pill.win { border-color: rgba(0, 224, 138, 0.36); color: var(--green); }
 .result-pill.loss { border-color: rgba(255, 55, 133, 0.38); color: var(--red); }
 .result-pill.return { border-color: rgba(255, 193, 7, 0.45); color: var(--amber); }
+
+.calendar-grid button.has-profit.positive {
+  background: rgba(0, 224, 138, 0.16);
+  border-color: rgba(0, 224, 138, 0.55);
+  color: var(--green);
+}
+
+.calendar-grid button.has-profit.negative {
+  background: rgba(255, 55, 126, 0.15);
+  border-color: rgba(255, 55, 126, 0.55);
+  color: var(--red);
+}
+
+.calendar-grid button.has-profit small {
+  color: currentColor;
+  font-weight: 900;
+}
+
+.rail-bet-meta em {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+}

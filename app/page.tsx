@@ -164,6 +164,26 @@ function resultLabel(result: BetRow["result"]): string {
   if (result === "return") return "Возврат";
   return "Ожидает";
 }
+function dateKeyFromDate(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return year + "-" + month + "-" + day;
+}
+
+function dateKeyFromIso(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return dateKeyFromDate(date);
+}
+
+function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
+  const key = dateKeyFromDate(day);
+  return settledBets
+    .filter(bet => dateKeyFromIso(bet.settled_at) === key)
+    .reduce((sum, bet) => sum + betProfitValue(bet), 0);
+}
 
 const features = [
   {
@@ -970,6 +990,8 @@ export default function Home() {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Игрок";
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
+    const pendingBets = bets.filter(bet => bet.result === "pending");
+    const settledBets = bets.filter(bet => bet.result !== "pending" && bet.settled_at);
 
     return (
       <main className="workspace-shell">
@@ -1224,16 +1246,25 @@ export default function Home() {
                 {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map(day => <span key={day}>{day}</span>)}
               </div>
               <div className="calendar-grid">
-                {calendarDays.map(day => (
-                  <button
-                    className={`${day.muted ? "muted" : ""} ${day.current ? "current" : ""}`}
-                    key={day.date.toISOString()}
-                    type="button"
-                  >
-                    {day.day}
-                    {day.current ? <small>+{Math.max(0, Math.round(betStats.profit))}₽</small> : null}
-                  </button>
-                ))}
+                {calendarDays.map(day => {
+                  const dayProfit = Math.round(calendarProfitForDate(day.date, settledBets));
+                  const profitClass = dayProfit > 0 ? "positive" : dayProfit < 0 ? "negative" : "";
+
+                  return (
+                    <button
+                      className={[
+                        day.muted ? "muted" : "",
+                        day.current ? "current" : "",
+                        profitClass ? "has-profit " + profitClass : ""
+                      ].filter(Boolean).join(" ")}
+                      key={day.date.toISOString()}
+                      type="button"
+                    >
+                      {day.day}
+                      {dayProfit !== 0 ? <small>{dayProfit > 0 ? "+" : ""}{dayProfit}₽</small> : null}
+                    </button>
+                  );
+                })}
               </div>
             </section>
 
