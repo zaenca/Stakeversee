@@ -6,116 +6,62 @@ const cssPath = path.join(process.cwd(), "app", "globals.css");
 let page = fs.readFileSync(pagePath, "utf8");
 let css = fs.existsSync(cssPath) ? fs.readFileSync(cssPath, "utf8") : "";
 
-function replaceRequired(source, target, replacement, label) {
-  if (!source.includes(target)) {
-    console.log(`[prebuild-fix] skip ${label}: target not found`);
-    return source;
-  }
-  console.log(`[prebuild-fix] apply ${label}`);
-  return source.replace(target, replacement);
+function log(label, changed) {
+  console.log(`[prebuild-fix] ${changed ? "apply" : "skip"} ${label}`);
 }
 
-function replacePattern(source, pattern, replacement, label) {
-  if (!pattern.test(source)) {
-    console.log(`[prebuild-fix] skip ${label}: pattern not found`);
-    return source;
-  }
-  console.log(`[prebuild-fix] apply ${label}`);
-  return source.replace(pattern, replacement);
+function replaceAll(pattern, replacement, label) {
+  const next = page.replace(pattern, replacement);
+  log(label, next !== page);
+  page = next;
 }
 
-const oldBankrollStats = `  const bankrollStats = useMemo(() => {
-    const balance = bankrollEvents.reduce((sum, event) => sum + Number(event.amount || 0), 0);
-    const deposits = bankrollEvents
-      .filter(event => event.kind === "deposit")
-      .reduce((sum, event) => sum + Number(event.amount || 0), 0);
-    const withdrawals = bankrollEvents
-      .filter(event => event.kind === "withdrawal")
-      .reduce((sum, event) => sum + Math.abs(Number(event.amount || 0)), 0);
-    const bettingProfit = bankrollEvents
-      .filter(event => ["win", "loss", "return"].includes(event.kind))
-      .reduce((sum, event) => sum + Number(event.amount || 0), 0);
+function replaceCss(pattern, replacement, label) {
+  if (!css) return;
+  const next = css.replace(pattern, replacement);
+  log(label, next !== css);
+  css = next;
+}
 
-    return {
-      balance,
-      bettingProfit,
-      deposits,
-      totalEvents: bankrollEvents.length,
-      withdrawals
-    };
-  }, [bankrollEvents]);`;
+// Keep older generated builds from failing on the bankroll event type.
+replaceAll(/new Map<string, BankrollEvent>\(\)/g, "new Map<string, BankrollEventRow>()", "bankroll event row type");
 
-const newBankrollStats = `  const bankrollStats = useMemo(() => {
-    const normalizedEvents = Array.from(bankrollEvents.reduce((map, event) => {
-      const isBetSettlement = Boolean(event.bet_id) && ["win", "loss", "return"].includes(event.kind);
-      map.set(isBetSettlement ? \`bet:\${event.bet_id}\` : \`event:\${event.id}\`, event);
-      return map;
-    }, new Map<string, BankrollEventRow>()).values());
+// Source names in the right rail must never render the stored/visual ellipsis.
+replaceAll(
+  /function sourceDisplayName\(value\?: string \| null\): string \{[\s\S]*?\n\}/,
+  `function sourceDisplayName(value?: string | null): string {
+  const name = (value || "Источник —")
+    .replace(/\\s*(?:\\.{2,}|…|â€¦)\\s*$/g, "")
+    .replace(/\\s+$/g, "")
+    .trim();
+  return name || "Источник —";
+}`,
+  "source name without ellipsis"
+);
 
-    const balance = normalizedEvents.reduce((sum, event) => sum + Number(event.amount || 0), 0);
-    const deposits = normalizedEvents
-      .filter(event => event.kind === "deposit")
-      .reduce((sum, event) => sum + Number(event.amount || 0), 0);
-    const withdrawals = normalizedEvents
-      .filter(event => event.kind === "withdrawal")
-      .reduce((sum, event) => sum + Math.abs(Number(event.amount || 0)), 0);
-    const bettingProfit = normalizedEvents
-      .filter(event => ["win", "loss", "return"].includes(event.kind))
-      .reduce((sum, event) => sum + Number(event.amount || 0), 0);
+// Use normalized event names for all bet dedupe keys.
+replaceAll(/\[\s*\n\s*bet\.event_name,\s*\n\s*bet\.market,/g, "[\n    formatEventName(bet.event_name),\n    bet.market,", "normalized bet signature");
 
-    return {
-      balance,
-      bettingProfit,
-      deposits,
-      totalEvents: normalizedEvents.length,
-      withdrawals
-    };
-  }, [bankrollEvents]);`;
+if (!page.includes("function betLooseSignature(bet: BetRow): string")) {
+  replaceAll(
+    /function uniqueBetsBySignature\(bets: BetRow\[\]\): BetRow\[\] \{[\s\S]*?\n\}/,
+    match => `${match}
 
-page = replaceRequired(page, oldBankrollStats, newBankrollStats, "dedupe bankroll settlement events");
-
-const oldSettleInsert = `    } else {
-      const { error: bankrollError } = await supabase.from("bankroll_events").insert({`;
-const newSettleInsert = `    } else {
-      const { error: cleanupError } = await supabase
-        .from("bankroll_events")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("bet_id", bet.id);
-
-      if (cleanupError) {
-        setDataMessage(cleanupError.message);
-        setDataLoading(false);
-        return;
-      }
-
-      const { error: bankrollError } = await supabase.from("bankroll_events").insert({`;
-page = replaceRequired(page, oldSettleInsert, newSettleInsert, "prevent duplicate bankroll event per bet");
-
-const helpersTarget = `function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
-  return settledBets
-    .filter(bet => isSameLocalDate(bet.created_at, day))
-    .reduce((sum, bet) => sum + betProfitValue(bet), 0);
-}`;
-const helpersReplacement = `${helpersTarget}
-
-function betSignature(bet: BetRow): string {
+function betLooseSignature(bet: BetRow): string {
   return [
     formatEventName(bet.event_name),
     bet.market,
     bet.selection,
     bet.bookmaker,
-    bet.source_id,
-    bet.stake,
-    bet.odds
+    bet.source_id
   ].join("|").toLowerCase();
 }
 
-function uniqueBetsBySignature(bets: BetRow[]): BetRow[] {
+function uniqueBetsByLooseSignature(bets: BetRow[]): BetRow[] {
   const bySignature = new Map<string, BetRow>();
 
   bets.forEach(bet => {
-    const signature = betSignature(bet);
+    const signature = betLooseSignature(bet);
     const current = bySignature.get(signature);
 
     if (!current || new Date(bet.created_at).getTime() < new Date(current.created_at).getTime()) {
@@ -124,76 +70,85 @@ function uniqueBetsBySignature(bets: BetRow[]): BetRow[] {
   });
 
   return Array.from(bySignature.values());
-}`;
-if (!page.includes("function betSignature(bet: BetRow): string")) {
-  page = replaceRequired(page, helpersTarget, helpersReplacement, "add bet signature helpers");
-} else {
-  page = page.replace("    bet.event_name,\n    bet.market,", "    formatEventName(bet.event_name),\n    bet.market,");
-  console.log("[prebuild-fix] refresh bet signature helper");
+}`,
+    "loose bet dedupe helpers"
+  );
 }
 
-const pendingVarsPattern = /    const pendingBets = bets\.filter\(bet => bet\.result === "pending"\);\s*\n    const settledBets = bets\.filter\(bet => bet\.result !== "pending" && bet\.settled_at\);\s*\n    const pendingRailBets = pendingBets\.slice\(0, 5\);/;
-const pendingVarsReplacement = `    const settledBets = uniqueBetsBySignature(bets.filter(bet => bet.result !== "pending" && bet.settled_at));
-    const settledSignatures = new Set(settledBets.map(bet => betSignature(bet)));
-    const pendingBets = uniqueBetsBySignature(
-      bets.filter(bet => bet.result === "pending" && !settledSignatures.has(betSignature(bet)))
+// Calendar profit should not count the same settled bet twice on different days.
+replaceAll(
+  /function calendarProfitForDate\(day: Date, settledBets: BetRow\[\]\): number \{[\s\S]*?\n\}/,
+  `function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
+  return uniqueBetsByLooseSignature(settledBets)
+    .filter(bet => isSameLocalDate(bet.created_at, day))
+    .reduce((sum, bet) => sum + betProfitValue(bet), 0);
+}`,
+  "calendar unique settled profit"
+);
+
+// The bank rail must show only pending bets. If the same bet was settled, hide the old pending clone.
+replaceAll(
+  /\s*const settledBets = [^;]+;\s*\n\s*const settledSignatures = [^;]+;\s*\n\s*const pendingBets = uniqueBetsBySignature\([\s\S]*?\n\s*\);\s*\n\s*const pendingRailBets = pendingBets\.slice\(0, 5\);/,
+  `    const settledBets = uniqueBetsByLooseSignature(bets.filter(bet => bet.result !== "pending" && bet.settled_at));
+    const settledSignatures = new Set(settledBets.map(bet => betLooseSignature(bet)));
+    const pendingBets = uniqueBetsByLooseSignature(
+      bets.filter(bet => bet.result === "pending" && !settledSignatures.has(betLooseSignature(bet)))
     );
-    const pendingRailBets = pendingBets.slice(0, 5);`;
-page = replacePattern(page, pendingVarsPattern, pendingVarsReplacement, "hide settled duplicate bets from bank rail");
+    const pendingRailBets = pendingBets.slice(0, 5);`,
+  "pending rail excludes settled bets"
+);
 
-const oldSourceName = `function sourceDisplayName(value?: string | null): string {
-  const name = (value || "Источник —").replace(/\\s*(?:\\.{3}|…)\\s*$/, "").trim();
-  return name || "Источник —";
-}`;
-const newSourceName = `function sourceDisplayName(value?: string | null): string {
-  const name = (value || "Источник —")
-    .replace(/\\s*(?:\\.{3}|…)\\s*$/, "")
-    .replace(/\\s+$/, "")
-    .trim();
-  return name || "Источник —";
-}`;
-page = replaceRequired(page, oldSourceName, newSourceName, "trim source display name");
+replaceAll(
+  /\s*const pendingBets = bets\.filter\(bet => bet\.result === "pending"\);\s*\n\s*const pendingRailBets = pendingBets\.slice\(0, 5\);/,
+  `    const settledBets = uniqueBetsByLooseSignature(bets.filter(bet => bet.result !== "pending" && bet.settled_at));
+    const settledSignatures = new Set(settledBets.map(bet => betLooseSignature(bet)));
+    const pendingBets = uniqueBetsByLooseSignature(
+      bets.filter(bet => bet.result === "pending" && !settledSignatures.has(betLooseSignature(bet)))
+    );
+    const pendingRailBets = pendingBets.slice(0, 5);`,
+  "pending rail legacy variables"
+);
 
-const pendingBlockPattern = /\n\s*\{pendingRailBets\.length \? \(\s*\n\s*<div className="bank-pending-list"[\s\S]*?\n\s*\) : null\}\s*(?=\n\s*<\/section>)/;
-if (pendingBlockPattern.test(page)) {
-  page = page.replace(pendingBlockPattern, "");
-  console.log("[prebuild-fix] remove duplicate pending rail block");
-} else {
-  console.log("[prebuild-fix] skip duplicate pending rail block: target not found");
-}
+// Bank balance should dedupe repeated settlement events for the same bet.
+replaceAll(
+  /const normalizedEvents = Array\.from\(bankrollEvents\.reduce\(\(map, event\) => \{[\s\S]*?new Map<string, BankrollEventRow>\(\)\)\.values\(\)\);/,
+  `const normalizedEvents = Array.from(bankrollEvents.reduce((map, event) => {
+      const isBetSettlement = Boolean(event.bet_id) && ["win", "loss", "return"].includes(event.kind);
+      map.set(isBetSettlement ? \`bet:\${event.bet_id}\` : \`event:\${event.id}\`, event);
+      return map;
+    }, new Map<string, BankrollEventRow>()).values());`,
+  "dedupe bankroll settlement events"
+);
 
-if (css) {
-  css = replacePattern(
-    css,
-    /\.bank-bet-row \{[\s\S]*?\n\}/,
-    `.bank-bet-row {
+replaceCss(
+  /\.bank-bet-row \{[\s\S]*?\n\}/,
+  `.bank-bet-row {
   align-items: center;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--line);
   border-radius: 7px;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   min-height: 38px;
   padding: 8px 9px;
 }`,
-    "bank rail columns"
-  );
+  "bank rail compact row"
+);
 
-  css = replacePattern(
-    css,
-    /\.bank-bet-row em \{[\s\S]*?\n\}/,
-    `.bank-bet-row em {
+replaceCss(
+  /\.bank-bet-row em \{[\s\S]*?\n\}/,
+  `.bank-bet-row em {
   border-color: rgba(139, 92, 246, 0.32);
   color: #d9c8ff;
   max-width: none;
   min-width: 0;
   overflow: visible;
   text-overflow: clip;
+  white-space: normal;
 }`,
-    "show full source chip"
-  );
-}
+  "bank rail full source chip"
+);
 
 fs.writeFileSync(pagePath, page, "utf8");
 if (css) fs.writeFileSync(cssPath, css, "utf8");
