@@ -1,0 +1,210 @@
+.calendar-bets-overlay {
+  align-items: center;
+  background: rgba(2, 7, 12, 0.74);
+  backdrop-filter: blur(10px);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 22px;
+  position: fixed;
+  z-index: 120;
+}
+
+.calendar-bets-dialog {
+  background: linear-gradient(180deg, rgba(17, 28, 42, 0.98), rgba(8, 14, 22, 0.98));
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+  display: grid;
+  gap: 14px;
+  max-height: min(78vh, 720px);
+  max-width: 780px;
+  overflow: hidden;
+  padding: 16px;
+  width: min(100%, 780px);
+}
+
+.calendar-bets-titlebar {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr auto;
+  padding-bottom: 13px;
+}
+
+.calendar-bets-titlebar span {
+  color: var(--muted);
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.calendar-bets-titlebar strong {
+  color: var(--cyan);
+  display: block;
+  font-size: 1.18rem;
+  margin-top: 4px;
+  text-transform: capitalize;
+}
+
+.calendar-bets-titlebar button {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1.25rem;
+  height: 38px;
+  line-height: 1;
+  width: 38px;
+}
+
+.calendar-bets-list {
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.calendar-bets-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.calendar-bets-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+
+.calendar-bets-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan), rgba(145, 95, 255, 0.9));
+  border-radius: 999px;
+}
+
+.calendar-bets-card {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  display: grid;
+  gap: 11px;
+  padding: 13px;
+}
+
+.calendar-bets-card.win {
+  border-color: rgba(0, 255, 153, 0.38);
+}
+
+.calendar-bets-card.loss {
+  border-color: rgba(255, 43, 119, 0.4);
+}
+
+.calendar-bets-card.return {
+  border-color: rgba(255, 198, 0, 0.44);
+}
+
+.calendar-bets-row {
+  display: grid;
+  gap: 10px;
+}
+
+.calendar-bets-row.main {
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.calendar-bets-row.main strong {
+  display: block;
+  font-size: 0.98rem;
+  margin-bottom: 5px;
+}
+
+.calendar-bets-row.main span,
+.calendar-bets-row.meta span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.calendar-bets-row.main b {
+  color: var(--cyan);
+  white-space: nowrap;
+}
+
+.calendar-bets-row.meta {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.calendar-bets-row.meta span {
+  background: rgba(0, 229, 255, 0.05);
+  border: 1px solid rgba(0, 229, 255, 0.12);
+  border-radius: 7px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-bets-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.calendar-bets-actions button {
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 36px;
+}
+
+.calendar-bets-actions button:nth-child(1) {
+  background: rgba(0, 255, 153, 0.14);
+  border: 1px solid rgba(0, 255, 153, 0.46);
+  color: #00ff99;
+}
+
+.calendar-bets-actions button:nth-child(2) {
+  background: rgba(255, 43, 119, 0.12);
+  border: 1px solid rgba(255, 43, 119, 0.46);
+  color: #ff5d93;
+}
+
+.calendar-bets-actions button:nth-child(3) {
+  background: rgba(255, 198, 0, 0.13);
+  border: 1px solid rgba(255, 198, 0, 0.46);
+  color: #ffd35a;
+}
+
+.calendar-bets-result {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+.calendar-bets-result strong {
+  color: var(--text);
+}
+
+.calendar-bets-empty {
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  padding: 28px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .calendar-bets-dialog {
+    max-height: 88vh;
+    padding: 14px;
+  }
+
+  .calendar-bets-row.main,
+  .calendar-bets-row.meta,
+  .calendar-bets-actions {
+    grid-template-columns: 1fr;
+  }
+}
