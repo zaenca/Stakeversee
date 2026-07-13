@@ -1,0 +1,80 @@
+name: Stakeversee one-time bank stats fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/stakeversee-bank-stats-fix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Patch Stakeversee files
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const pagePath = 'app/page.tsx';
+          const cssPath = 'app/globals.css';
+          let page = fs.readFileSync(pagePath, 'utf8');
+          let css = fs.readFileSync(cssPath, 'utf8');
+
+          if (!page.includes('const BASE_BANKROLL = 10000;')) {
+            page = page.replace('const MAX_COUPON_ITEMS = 5;\n', 'const MAX_COUPON_ITEMS = 5;\nconst BASE_BANKROLL = 10000;\n');
+          }
+
+          if (!page.includes('function formatEventName(value: string): string')) {
+            const helperAnchor = `function searchHaystack(...parts: string[]): string {\n  const normalized = parts.map(part => normalizeSearchValue(part)).filter(Boolean).join(" ");\n  const transliterated = transliterateRu(normalized);\n  return `${normalized} ${transliterated}`;\n}\n`;
+            const helperInsert = `${helperAnchor}\nfunction formatEventName(value: string): string {\n  return value.replace(/\\s+vs\\s+/gi, " - ").replace(/\\s+-\\s+/g, " - ").trim();\n}\n\nfunction betProfitValue(bet: BetRow): number {\n  if (bet.profit !== null && bet.profit !== undefined) return Number(bet.profit || 0);\n\n  const stake = Number(bet.stake || 0);\n  const odds = Number(bet.odds || 0);\n  if (bet.result === "win") return stake * odds - stake;\n  if (bet.result === "loss") return -stake;\n  return 0;\n}\n\nfunction resultLabel(result: BetRow["result"]): string {\n  if (result === "win") return "Выигрыш";\n  if (result === "loss") return "Проигрыш";\n  if (result === "return") return "Возврат";\n  return "Ожидает";\n}\n`;
+            if (!page.includes(helperAnchor)) throw new Error('helper anchor not found');
+            page = page.replace(helperAnchor, helperInsert);
+          }
+
+          page = page.replace(/const sourceStats = useMemo\(\(\) => \{[\s\S]*?\n  \}, \[bets, sources\]\);/, `const sourceStats = useMemo(() => {\n    return sources.map(source => {\n      const sourceBets = bets.filter(bet => bet.source_id === source.id);\n      const closed = sourceBets.filter(bet => bet.result !== "pending");\n      const profit = closed.reduce((sum, bet) => sum + betProfitValue(bet), 0);\n      const stake = closed.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);\n      const totalStake = sourceBets.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);\n      const avgOdds = sourceBets.length\n        ? sourceBets.reduce((sum, bet) => sum + Number(bet.odds || 0), 0) / sourceBets.length\n        : 0;\n\n      return {\n        ...source,\n        bets: sourceBets.length,\n        avgOdds,\n        losses: sourceBets.filter(bet => bet.result === "loss").length,\n        pending: sourceBets.filter(bet => bet.result === "pending").length,\n        profit,\n        returns: sourceBets.filter(bet => bet.result === "return").length,\n        roi: stake > 0 ? (profit / stake) * 100 : 0,\n        stake: totalStake,\n        wins: sourceBets.filter(bet => bet.result === "win").length\n      };\n    }).sort((first, second) => second.bets - first.bets || first.name.localeCompare(second.name, "ru"));\n  }, [bets, sources]);`);
+
+          page = page.replace('.limit(25),', '.limit(1000),');
+          page = page.replace('.limit(30)', '.limit(2000)');
+          page = page.replace('eventName: `${match.home} vs ${match.away}`,', 'eventName: `${match.home} - ${match.away}`,');
+          page = page.replace('const displayedBalance = bankrollStats.balance || 10000;', 'const displayedBalance = BASE_BANKROLL + bankrollStats.balance;');
+          page = page.replace('<strong>{bet.event_name}</strong>', '<strong>{formatEventName(bet.event_name)}</strong>');
+          page = page.replace('<strong>{bet.event_name}</strong>', '<strong>{formatEventName(bet.event_name)}</strong>');
+
+          const statsStart = page.indexOf('            {statsOpen ? <section className="rail-panel stats-panel">');
+          const statsEnd = page.indexOf('          </aside>', statsStart);
+          if (statsStart === -1 || statsEnd === -1) throw new Error('stats panel block not found');
+          const statsBlock = `            {statsOpen ? <section className="rail-panel stats-panel">\n              <div className="rail-title">Статистика</div>\n              <div className="rail-stat-grid">\n                <div><span>Средний кэф</span><strong>{betStats.avgOdds.toFixed(2)}</strong></div>\n                <div><span>Закрыто</span><strong>{betStats.closed}</strong></div>\n                <div><span>Ожидают</span><strong>{betStats.pending}</strong></div>\n                <div><span>P&L</span><strong>{formatMoney(betStats.profit)}</strong></div>\n              </div>\n\n              <div className="stats-block">\n                <div className="stats-block-head">\n                  <strong>Источники</strong>\n                  <span>{sourceStats.length}</span>\n                </div>\n                <div className="source-stat-list">\n                  {sourceStats.length ? sourceStats.map(source => (\n                    <article className={\`source-stat-card \${source.is_blacklisted ? "blacklisted" : ""}\`} key={source.id}>\n                      <div className="source-stat-top">\n                        <strong>{source.name}</strong>\n                        <span>ROI {source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>\n                      </div>\n                      <div className="source-stat-grid">\n                        <div><span>Ставок</span><strong>{source.bets}</strong></div>\n                        <div><span>В/П</span><strong>{source.wins}/{source.losses}</strong></div>\n                        <div><span>Сумма</span><strong>{formatMoney(source.stake)}</strong></div>\n                        <div><span>P&L</span><strong>{formatMoney(source.profit)}</strong></div>\n                      </div>\n                    </article>\n                  )) : <span className="empty">Источники появятся после ставок.</span>}\n                </div>\n              </div>\n\n              <div className="stats-block">\n                <div className="stats-block-head">\n                  <strong>Матчи</strong>\n                  <span>{bets.length}</span>\n                </div>\n                <div className="bets-table rail-bets">\n                  {bets.slice(0, 30).map(bet => {\n                    const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";\n                    const profit = betProfitValue(bet);\n\n                    return (\n                      <div className="rail-bet-card" key={bet.id}>\n                        <div className="rail-bet-main">\n                          <strong>{formatEventName(bet.event_name)}</strong>\n                          <span>{bet.market} · {bet.selection} · {formatMoney(Number(bet.stake || 0))} · ×{Number(bet.odds).toFixed(2)}</span>\n                        </div>\n                        <div className="rail-bet-meta">\n                          <span>{bet.bookmaker || "БК —"}</span>\n                          <em>{sourceName || "Источник —"}</em>\n                          <strong className={\`result-pill \${bet.result}\`}>\n                            {resultLabel(bet.result)}\n                            {bet.result !== "pending" ? \` · \${formatMoney(profit)}\` : ""}\n                          </strong>\n                        </div>\n                      </div>\n                    );\n                  })}\n                  {!bets.length ? <span className="empty">Ставки появятся после сохранения прогноза.</span> : null}\n                </div>\n              </div>\n            </section> : null}\n`;
+          page = page.slice(0, statsStart) + statsBlock + page.slice(statsEnd);
+
+          css = css.replace(/\.stats-panel \{\r?\n  max-height: 42vh;/, '.stats-panel {\n  max-height: 48vh;');
+          if (!css.includes('.right-rail .quick-coupon-card:not(.open)')) {
+            const anchor = `.right-rail .quick-coupon-card {\n  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);\n  min-width: 0;\n  order: 0;\n  width: 100%;\n}`;
+            const insert = `${anchor}\n\n.right-rail .quick-coupon-card:not(.open) {\n  display: none;\n}`;
+            css = css.includes(anchor) ? css.replace(anchor, insert) : `${css}\n\n.right-rail .quick-coupon-card:not(.open) {\n  display: none;\n}\n`;
+          }
+          if (!css.includes('.stats-block {')) {
+            css += `\n\n.stats-block { display: grid; gap: 10px; margin-top: 14px; }\n.stats-block-head { align-items: center; color: var(--muted); display: flex; font-size: 0.72rem; justify-content: space-between; letter-spacing: 0.12em; text-transform: uppercase; }\n.stats-block-head strong { color: var(--text); }\n.stats-block-head span { background: rgba(0, 229, 255, 0.12); border: 1px solid rgba(0, 229, 255, 0.24); border-radius: 999px; color: var(--cyan); padding: 2px 8px; }\n.source-stat-list { display: grid; gap: 8px; }\n.source-stat-card, .rail-bet-card { background: rgba(255, 255, 255, 0.035); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }\n.source-stat-card.blacklisted { border-color: rgba(255, 55, 133, 0.32); opacity: 0.58; }\n.source-stat-top { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-bottom: 8px; }\n.source-stat-top strong { color: var(--text); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.source-stat-top span { color: var(--cyan); font-size: 0.72rem; font-weight: 900; white-space: nowrap; }\n.source-stat-grid { display: grid; gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }\n.source-stat-grid div { background: rgba(9, 15, 24, 0.58); border: 1px solid rgba(130, 158, 190, 0.12); border-radius: 6px; padding: 7px; }\n.source-stat-grid span, .rail-bet-main span { color: var(--muted); font-size: 0.66rem; }\n.source-stat-grid strong { color: var(--text); display: block; font-size: 0.78rem; margin-top: 3px; }\n.rail-bet-card { display: grid; gap: 8px; }\n.rail-bet-main { display: grid; gap: 4px; min-width: 0; }\n.rail-bet-main strong { color: var(--text); font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.rail-bet-meta { align-items: center; display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }\n.rail-bet-meta span, .rail-bet-meta em, .result-pill { border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 999px; color: var(--cyan); font-size: 0.62rem; font-style: normal; font-weight: 900; overflow: hidden; padding: 4px 7px; text-overflow: ellipsis; white-space: nowrap; }\n.rail-bet-meta em { border-color: rgba(139, 92, 246, 0.32); color: #d9c8ff; }\n.result-pill { border-color: rgba(130, 158, 190, 0.22); color: var(--muted); }\n.result-pill.win { border-color: rgba(0, 224, 138, 0.36); color: var(--green); }\n.result-pill.loss { border-color: rgba(255, 55, 133, 0.38); color: var(--red); }\n.result-pill.return { border-color: rgba(255, 193, 7, 0.45); color: var(--amber); }\n`;
+          }
+
+          fs.writeFileSync(pagePath, page);
+          fs.writeFileSync(cssPath, css);
+          NODE
+      - name: Commit patch
+        run: |
+          git config user.name "stakeversee-bot"
+          git config user.email "stakeversee-bot@users.noreply.github.com"
+          rm -f .github/workflows/stakeversee-bank-stats-fix.yml
+          git add app/page.tsx app/globals.css .github/workflows/stakeversee-bank-stats-fix.yml
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Improve bankroll stats panel"
+            git push
+          fi
