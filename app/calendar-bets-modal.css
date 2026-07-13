@@ -121,7 +121,7 @@
 }
 
 .calendar-bets-row.main {
-  align-items: start;
+  align-items: flex-start;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
