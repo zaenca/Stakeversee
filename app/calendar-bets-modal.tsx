@@ -27,6 +27,11 @@ type SourceRow = {
   name: string;
 };
 
+type DaySummary = {
+  profit: number;
+  settled: number;
+};
+
 const monthNames: Record<string, number> = {
   январь: 0,
   января: 0,
@@ -66,12 +71,30 @@ const monthNames: Record<string, number> = {
   december: 11
 };
 
+const sportNames: Record<string, string> = {
+  football: "Футбол",
+  soccer: "Футбол",
+  tennis: "Теннис",
+  basketball: "Баскетбол",
+  baseball: "Бейсбол",
+  volleyball: "Волейбол",
+  "ice-hockey": "Хоккей",
+  hockey: "Хоккей",
+  handball: "Гандбол",
+  esports: "Киберспорт"
+};
+
 function formatMoney(value: number) {
   return new Intl.NumberFormat("ru-RU", {
     maximumFractionDigits: 0,
     style: "currency",
     currency: "RUB"
   }).format(value);
+}
+
+function formatSignedMoney(value: number) {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatMoney(value)}`;
 }
 
 function formatDateLabel(date: Date) {
@@ -82,11 +105,44 @@ function formatDateLabel(date: Date) {
   });
 }
 
+function formatDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function getDayBounds(date: Date) {
   const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
   const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0);
 
   return { start, end };
+}
+
+function getSportName(value: string | null) {
+  if (!value) return "Спорт";
+  return sportNames[value.toLowerCase()] || value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function formatEventName(value: string) {
+  return value
+    .replace(/\s+vs\s+/gi, " - ")
+    .replace(/\s+v\s+/gi, " - ")
+    .replace(/\s+против\s+/gi, " - ")
+    .replace(/\s+-\s+/g, " - ")
+    .trim();
+}
+
+function getBetProfit(bet: BetRow, nextResult = bet.result) {
+  const savedProfit = Number(bet.profit || 0);
+  if (nextResult !== "pending" && bet.profit !== null && bet.profit !== undefined) return savedProfit;
+
+  const stake = Number(bet.stake || 0);
+  const odds = Number(bet.odds || 0);
+  if (nextResult === "win") return stake * odds - stake;
+  if (nextResult === "loss") return -stake;
+  if (nextResult === "return") return 0;
+  return 0;
 }
 
 function parseCalendarDate(button: HTMLButtonElement) {
@@ -106,13 +162,41 @@ export function CalendarBetsModal() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [bets, setBets] = useState<BetRow[]>([]);
   const [sourceNames, setSourceNames] = useState<Record<string, string>>({});
+  const [daySummary, setDaySummary] = useState<Record<string, DaySummary>>({});
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errorText, setErrorText] = useState("");
 
   const dateTitle = useMemo(() => selectedDate ? formatDateLabel(selectedDate) : "", [selectedDate]);
 
+  async function loadDaySummary(currentUserId: string) {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 2, 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth() + 3, 1, 0, 0, 0, 0);
+
+    const { data: rows } = await supabase
+      .from("bets")
+      .select("created_at,result,profit,stake,odds")
+      .eq("user_id", currentUserId)
+      .neq("result", "pending")
+      .gte("created_at", start.toISOString())
+      .lt("created_at", end.toISOString());
+
+    const summary = ((rows || []) as BetRow[]).reduce<Record<string, DaySummary>>((acc, bet) => {
+      const key = formatDateKey(new Date(bet.created_at));
+      const current = acc[key] || { profit: 0, settled: 0 };
+      current.profit += getBetProfit(bet);
+      current.settled += 1;
+      acc[key] = current;
+      return acc;
+    }, {});
+
+    setDaySummary(summary);
+  }
+
   async function loadBets(date: Date) {
     setLoading(true);
+    setErrorText("");
     const { data: authData } = await supabase.auth.getUser();
     const currentUserId = authData.user?.id || null;
     setUserId(currentUserId);
@@ -120,18 +204,29 @@ export function CalendarBetsModal() {
     if (!currentUserId) {
       setBets([]);
       setSourceNames({});
+      setDaySummary({});
       setLoading(false);
       return;
     }
 
+    void loadDaySummary(currentUserId);
+
     const { start, end } = getDayBounds(date);
-    const { data: betRows } = await supabase
+    const { data: betRows, error } = await supabase
       .from("bets")
       .select("id,source_id,event_name,sport,bookmaker,market,selection,odds,stake,result,profit,settled_at,created_at")
       .eq("user_id", currentUserId)
       .gte("created_at", start.toISOString())
       .lt("created_at", end.toISOString())
       .order("created_at", { ascending: false });
+
+    if (error) {
+      setErrorText(error.message);
+      setBets([]);
+      setSourceNames({});
+      setLoading(false);
+      return;
+    }
 
     const loadedBets = (betRows || []) as BetRow[];
     setBets(loadedBets);
@@ -161,10 +256,11 @@ export function CalendarBetsModal() {
     if (!userId || loading) return;
 
     setLoading(true);
-    const stake = Number(bet.stake || 0);
-    const odds = Number(bet.odds || 0);
-    const profit = result === "win" ? stake * odds - stake : result === "loss" ? -stake : 0;
+    setErrorText("");
+    const profit = getBetProfit(bet, result);
     const settledAt = new Date().toISOString();
+
+    setBets(current => current.map(item => item.id === bet.id ? { ...item, result, profit, settled_at: settledAt } : item));
 
     const { error } = await supabase
       .from("bets")
@@ -172,17 +268,26 @@ export function CalendarBetsModal() {
       .eq("id", bet.id)
       .eq("user_id", userId);
 
-    if (!error) {
-      await supabase.from("bankroll_events").insert({
-        user_id: userId,
-        amount: profit,
-        kind: result,
-        note: `${bet.event_name} · ${bet.market} · ${bet.selection}`
-      });
+    if (error) {
+      setErrorText(error.message);
+      setBets(current => current.map(item => item.id === bet.id ? bet : item));
+      setLoading(false);
+      return;
     }
 
+    const { error: bankrollError } = await supabase.from("bankroll_events").insert({
+      user_id: userId,
+      amount: profit,
+      kind: result,
+      note: `${formatEventName(bet.event_name)} · ${bet.market} · ${bet.selection}`
+    });
+
+    if (bankrollError) setErrorText(bankrollError.message);
+
     if (selectedDate) await loadBets(selectedDate);
+    await loadDaySummary(userId);
     window.dispatchEvent(new CustomEvent("stakeversee:bets-updated"));
+    window.dispatchEvent(new CustomEvent("stakeversee:bankroll-updated"));
     setLoading(false);
   }
 
@@ -203,6 +308,53 @@ export function CalendarBetsModal() {
     return () => document.removeEventListener("click", onClick, true);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    async function bootstrap() {
+      const { data } = await supabase.auth.getUser();
+      const currentUserId = data.user?.id || null;
+      if (!active || !currentUserId) return;
+      setUserId(currentUserId);
+      await loadDaySummary(currentUserId);
+    }
+
+    void bootstrap();
+    const timer = window.setInterval(bootstrap, 15000);
+    const onUpdated = () => void bootstrap();
+    window.addEventListener("stakeversee:bets-updated", onUpdated);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("stakeversee:bets-updated", onUpdated);
+    };
+  }, []);
+
+  useEffect(() => {
+    const buttons = Array.from(document.querySelectorAll(".calendar-grid button")) as HTMLButtonElement[];
+
+    buttons.forEach(button => {
+      button.classList.remove("stakeversee-day-win", "stakeversee-day-loss", "stakeversee-day-even");
+      button.querySelector(".calendar-day-profit")?.remove();
+
+      const date = parseCalendarDate(button);
+      if (!date) return;
+
+      const summary = daySummary[formatDateKey(date)];
+      if (!summary || !summary.settled) return;
+
+      const marker = document.createElement("small");
+      marker.className = "calendar-day-profit";
+      marker.textContent = formatSignedMoney(summary.profit);
+      button.appendChild(marker);
+
+      if (summary.profit > 0) button.classList.add("stakeversee-day-win");
+      else if (summary.profit < 0) button.classList.add("stakeversee-day-loss");
+      else button.classList.add("stakeversee-day-even");
+    });
+  }, [daySummary]);
+
   if (!selectedDate) return null;
 
   return (
@@ -216,6 +368,7 @@ export function CalendarBetsModal() {
           <button aria-label="Закрыть" onClick={() => setSelectedDate(null)} type="button">×</button>
         </header>
 
+        {errorText ? <div className="calendar-bets-error">{errorText}</div> : null}
         {loading && !bets.length ? <div className="calendar-bets-empty">Загрузка ставок...</div> : null}
 
         {!loading && !bets.length ? <div className="calendar-bets-empty">В этот день ставок нет.</div> : null}
@@ -231,7 +384,7 @@ export function CalendarBetsModal() {
                 <article className={`calendar-bets-card ${bet.result}`} key={bet.id}>
                   <div className="calendar-bets-row main">
                     <div>
-                      <strong>{bet.event_name}</strong>
+                      <strong>{formatEventName(bet.event_name)}</strong>
                       <span>{bet.market} · {bet.selection} · ×{odds.toFixed(2)}</span>
                     </div>
                     <b>{formatMoney(stake)}</b>
@@ -240,7 +393,7 @@ export function CalendarBetsModal() {
                   <div className="calendar-bets-row meta">
                     <span>{bet.bookmaker || "БК не указан"}</span>
                     <span>{sourceName || "Источник не указан"}</span>
-                    <span>{bet.sport || "Спорт"}</span>
+                    <span>{getSportName(bet.sport)}</span>
                   </div>
 
                   {bet.result === "pending" ? (
