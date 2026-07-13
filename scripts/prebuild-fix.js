@@ -50,7 +50,7 @@ const newBankrollStats = `  const bankrollStats = useMemo(() => {
       const isBetSettlement = Boolean(event.bet_id) && ["win", "loss", "return"].includes(event.kind);
       map.set(isBetSettlement ? \`bet:\${event.bet_id}\` : \`event:\${event.id}\`, event);
       return map;
-    }, new Map<string, BankrollEvent>()).values());
+    }, new Map<string, BankrollEventRow>()).values());
 
     const balance = normalizedEvents.reduce((sum, event) => sum + Number(event.amount || 0), 0);
     const deposits = normalizedEvents
@@ -101,7 +101,7 @@ const helpersReplacement = `${helpersTarget}
 
 function betSignature(bet: BetRow): string {
   return [
-    bet.event_name,
+    formatEventName(bet.event_name),
     bet.market,
     bet.selection,
     bet.bookmaker,
@@ -128,7 +128,8 @@ function uniqueBetsBySignature(bets: BetRow[]): BetRow[] {
 if (!page.includes("function betSignature(bet: BetRow): string")) {
   page = replaceRequired(page, helpersTarget, helpersReplacement, "add bet signature helpers");
 } else {
-  console.log("[prebuild-fix] skip bet signature helpers: already present");
+  page = page.replace("    bet.event_name,\n    bet.market,", "    formatEventName(bet.event_name),\n    bet.market,");
+  console.log("[prebuild-fix] refresh bet signature helper");
 }
 
 const pendingVarsPattern = /    const pendingBets = bets\.filter\(bet => bet\.result === "pending"\);\s*\n    const settledBets = bets\.filter\(bet => bet\.result !== "pending" && bet\.settled_at\);\s*\n    const pendingRailBets = pendingBets\.slice\(0, 5\);/;
