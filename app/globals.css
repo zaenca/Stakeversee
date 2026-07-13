@@ -1420,14 +1420,14 @@ h1 {
   white-space: nowrap;
 }
 
-.bank-bet-row span,
-.bank-bet-row em {
+.bank-bet-row span {
   border: 1px solid rgba(0, 229, 255, 0.22);
   border-radius: 999px;
   color: var(--cyan);
   font-size: 0.62rem;
   font-style: normal;
   font-weight: 800;
+  max-width: 92px;
   overflow: hidden;
   padding: 3px 7px;
   text-overflow: ellipsis;
@@ -1435,12 +1435,17 @@ h1 {
 }
 
 .bank-bet-row em {
-  border-color: rgba(139, 92, 246, 0.32);
+  border: 1px solid rgba(139, 92, 246, 0.32);
+  border-radius: 999px;
   color: #d9c8ff;
-  max-width: none;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 800;
   min-width: max-content;
   overflow: visible;
+  padding: 3px 7px;
   text-overflow: clip;
+  white-space: normal;
 }
 
 .rail-bank-form {

@@ -1497,23 +1497,6 @@ export default function Home() {
                   </form>
                 </div>
               ) : null}
-              {pendingRailBets.length ? (
-                <div className="bank-pending-list" aria-label="Ожидающие ставки">
-                  {pendingRailBets.map(bet => {
-                    const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";
-
-                    return (
-                      <div className="bank-pending-card" key={bet.id}>
-                        <strong>{formatEventName(bet.event_name)}</strong>
-                        <div className="bank-pending-meta">
-                          <span>{bet.bookmaker || "БК —"}</span>
-                          <em>{sourceDisplayName(sourceName)}</em>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
             </section>
 
             <section className="rail-panel stats-entry-panel">
