@@ -1473,13 +1473,15 @@ h1 {
 }
 
 .calendar-bets-backdrop {
+  --calendar-bet-card-height: 172px;
+  --calendar-bet-gap: 10px;
   align-items: center;
   background: rgba(2, 7, 12, 0.72);
   backdrop-filter: blur(10px);
   display: flex;
   inset: 0;
   justify-content: center;
-  padding: 22px;
+  padding: 16px;
   position: fixed;
   z-index: 80;
 }
@@ -1490,19 +1492,22 @@ h1 {
   border-radius: 10px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
   color: var(--text);
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
-  max-height: min(78vh, 720px);
-  max-width: 760px;
+  height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 32px);
+  max-width: calc(100vw - 32px);
   overflow: hidden;
   padding: 16px;
-  width: min(100%, 760px);
+  width: min(960px, calc(100vw - 32px));
 }
 
 .calendar-bets-head {
   align-items: center;
   border-bottom: 1px solid var(--line);
   display: grid;
+  flex-shrink: 0;
   gap: 12px;
   grid-template-columns: 1fr auto;
   padding-bottom: 13px;
@@ -1537,9 +1542,29 @@ h1 {
 
 .calendar-bets-list {
   display: grid;
-  gap: 10px;
-  overflow: auto;
-  padding-right: 4px;
+  flex: 1;
+  gap: var(--calendar-bet-gap);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-color: rgba(0, 229, 255, 0.85) rgba(255, 255, 255, 0.04);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.calendar-bets-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.calendar-bets-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+
+.calendar-bets-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan), rgba(145, 95, 255, 0.9));
+  border-radius: 999px;
 }
 
 .calendar-bet-card {
