@@ -181,7 +181,7 @@ function dateKeyFromIso(value?: string | null): string {
 function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
   const key = dateKeyFromDate(day);
   return settledBets
-    .filter(bet => dateKeyFromIso(bet.settled_at) === key)
+    .filter(bet => dateKeyFromIso(bet.created_at) === key)
     .reduce((sum, bet) => sum + betProfitValue(bet), 0);
 }
 
