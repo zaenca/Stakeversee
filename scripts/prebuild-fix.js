@@ -10,7 +10,7 @@ function log(label, changed) {
   console.log(`[prebuild-fix] ${changed ? "apply" : "skip"} ${label}`);
 }
 
-function replaceAll(pattern, replacement, label) {
+function replacePage(pattern, replacement, label) {
   const next = page.replace(pattern, replacement);
   log(label, next !== page);
   page = next;
@@ -23,11 +23,9 @@ function replaceCss(pattern, replacement, label) {
   css = next;
 }
 
-// Keep older generated builds from failing on the bankroll event type.
-replaceAll(/new Map<string, BankrollEvent>\(\)/g, "new Map<string, BankrollEventRow>()", "bankroll event row type");
+replacePage(/new Map<string, BankrollEvent>\(\)/g, "new Map<string, BankrollEventRow>()", "bankroll event row type");
 
-// Source names in the right rail must never render the stored/visual ellipsis.
-replaceAll(
+replacePage(
   /function sourceDisplayName\(value\?: string \| null\): string \{[\s\S]*?\n\}/,
   `function sourceDisplayName(value?: string | null): string {
   const name = (value || "Источник —")
@@ -39,14 +37,9 @@ replaceAll(
   "source name without ellipsis"
 );
 
-// Use normalized event names for all bet dedupe keys.
-replaceAll(/\[\s*\n\s*bet\.event_name,\s*\n\s*bet\.market,/g, "[\n    formatEventName(bet.event_name),\n    bet.market,", "normalized bet signature");
+replacePage(/\[\s*\n\s*bet\.event_name,\s*\n\s*bet\.market,/g, "[\n    formatEventName(bet.event_name),\n    bet.market,", "normalized bet signature");
 
-if (!page.includes("function betLooseSignature(bet: BetRow): string")) {
-  replaceAll(
-    /function uniqueBetsBySignature\(bets: BetRow\[\]\): BetRow\[\] \{[\s\S]*?\n\}/,
-    match => `${match}
-
+const looseHelpers = `
 function betLooseSignature(bet: BetRow): string {
   return [
     formatEventName(bet.event_name),
@@ -70,13 +63,14 @@ function uniqueBetsByLooseSignature(bets: BetRow[]): BetRow[] {
   });
 
   return Array.from(bySignature.values());
-}`,
-    "loose bet dedupe helpers"
-  );
+}
+`;
+
+if (!page.includes("function betLooseSignature(bet: BetRow): string")) {
+  replacePage(/\nfunction makeCalendarDays\(\)/, `${looseHelpers}\nfunction makeCalendarDays()`, "loose bet dedupe helpers");
 }
 
-// Calendar profit should not count the same settled bet twice on different days.
-replaceAll(
+replacePage(
   /function calendarProfitForDate\(day: Date, settledBets: BetRow\[\]\): number \{[\s\S]*?\n\}/,
   `function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
   return uniqueBetsByLooseSignature(settledBets)
@@ -86,8 +80,7 @@ replaceAll(
   "calendar unique settled profit"
 );
 
-// The bank rail must show only pending bets. If the same bet was settled, hide the old pending clone.
-replaceAll(
+replacePage(
   /\s*const settledBets = [^;]+;\s*\n\s*const settledSignatures = [^;]+;\s*\n\s*const pendingBets = uniqueBetsBySignature\([\s\S]*?\n\s*\);\s*\n\s*const pendingRailBets = pendingBets\.slice\(0, 5\);/,
   `    const settledBets = uniqueBetsByLooseSignature(bets.filter(bet => bet.result !== "pending" && bet.settled_at));
     const settledSignatures = new Set(settledBets.map(bet => betLooseSignature(bet)));
@@ -98,7 +91,7 @@ replaceAll(
   "pending rail excludes settled bets"
 );
 
-replaceAll(
+replacePage(
   /\s*const pendingBets = bets\.filter\(bet => bet\.result === "pending"\);\s*\n\s*const pendingRailBets = pendingBets\.slice\(0, 5\);/,
   `    const settledBets = uniqueBetsByLooseSignature(bets.filter(bet => bet.result !== "pending" && bet.settled_at));
     const settledSignatures = new Set(settledBets.map(bet => betLooseSignature(bet)));
@@ -109,8 +102,7 @@ replaceAll(
   "pending rail legacy variables"
 );
 
-// Bank balance should dedupe repeated settlement events for the same bet.
-replaceAll(
+replacePage(
   /const normalizedEvents = Array\.from\(bankrollEvents\.reduce\(\(map, event\) => \{[\s\S]*?new Map<string, BankrollEventRow>\(\)\)\.values\(\)\);/,
   `const normalizedEvents = Array.from(bankrollEvents.reduce((map, event) => {
       const isBetSettlement = Boolean(event.bet_id) && ["win", "loss", "return"].includes(event.kind);
