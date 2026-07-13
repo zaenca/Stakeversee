@@ -289,6 +289,10 @@ export function CalendarBetsModal() {
     window.dispatchEvent(new CustomEvent("stakeversee:bets-updated"));
     window.dispatchEvent(new CustomEvent("stakeversee:bankroll-updated"));
     setLoading(false);
+
+    if (!bankrollError) {
+      window.setTimeout(() => window.location.reload(), 650);
+    }
   }
 
   useEffect(() => {
