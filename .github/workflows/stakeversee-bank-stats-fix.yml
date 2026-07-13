@@ -78,3 +78,4 @@ jobs:
             git commit -m "Improve bankroll stats panel"
             git push
           fi
+# trigger: 2026-07-13T10:00:00+07:00
