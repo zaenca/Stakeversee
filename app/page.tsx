@@ -118,7 +118,7 @@ function normalizeSearchValue(value: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/ё/g, "е")
-    .replace(/[^0-9a-zа-я]+/gi, " ")
+    .replace(/[^0-9a-zа-яё]+/gi, " ")
     .trim();
 }
 
@@ -261,6 +261,22 @@ function formatMoney(value: number) {
   }).format(value);
 }
 
+function formatCalendarDateLabel(date: Date) {
+  return date.toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  });
+}
+
+function isSameLocalDate(value: string | Date, date: Date) {
+  const current = value instanceof Date ? value : new Date(value);
+
+  return current.getFullYear() === date.getFullYear()
+    && current.getMonth() === date.getMonth()
+    && current.getDate() === date.getDate();
+}
+
 function makeCalendarDays() {
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -365,6 +381,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [bankEditorOpen, setBankEditorOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [calendarDateOpen, setCalendarDateOpen] = useState<Date | null>(null);
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState("Автообновление каждые 5 минут");
@@ -443,6 +460,14 @@ export default function Home() {
   }, [bankrollEvents]);
 
   const calendarDays = useMemo(() => makeCalendarDays(), []);
+
+  const calendarBets = useMemo(() => {
+    if (!calendarDateOpen) return [];
+
+    return bets
+      .filter(bet => isSameLocalDate(bet.created_at, calendarDateOpen))
+      .sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime());
+  }, [bets, calendarDateOpen]);
 
   const sourceStats = useMemo(() => {
     return sources.map(source => {
@@ -1252,25 +1277,17 @@ export default function Home() {
                 {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map(day => <span key={day}>{day}</span>)}
               </div>
               <div className="calendar-grid">
-                {calendarDays.map(day => {
-                  const dayProfit = Math.round(calendarProfitForDate(day.date, settledBets));
-                  const profitClass = dayProfit > 0 ? "positive" : dayProfit < 0 ? "negative" : "";
-
-                  return (
-                    <button
-                      className={[
-                        day.muted ? "muted" : "",
-                        day.current ? "current" : "",
-                        profitClass ? "has-profit " + profitClass : ""
-                      ].filter(Boolean).join(" ")}
-                      key={day.date.toISOString()}
-                      type="button"
-                    >
-                      {day.day}
-                      {dayProfit !== 0 ? <small>{dayProfit > 0 ? "+" : ""}{dayProfit}₽</small> : null}
-                    </button>
-                  );
-                })}
+                {calendarDays.map(day => (
+                  <button
+                    className={`${day.muted ? "muted" : ""} ${day.current ? "current" : ""} ${bets.some(bet => isSameLocalDate(bet.created_at, day.date)) ? "has-bets" : ""}`}
+                    key={day.date.toISOString()}
+                    onClick={() => setCalendarDateOpen(day.date)}
+                    type="button"
+                  >
+                    {day.day}
+                    {day.current ? <small>+{Math.max(0, Math.round(betStats.profit))}₽</small> : null}
+                  </button>
+                ))}
               </div>
             </section>
 
@@ -1575,6 +1592,64 @@ export default function Home() {
                 </div>
               </div>
             </section> : null}
+
+            {calendarDateOpen ? (
+              <div className="calendar-bets-backdrop" role="presentation">
+                <section className="calendar-bets-modal" role="dialog" aria-modal="true" aria-label="Ставки за день">
+                  <div className="calendar-bets-head">
+                    <div>
+                      <span>Ставки за день</span>
+                      <strong>{formatCalendarDateLabel(calendarDateOpen)}</strong>
+                    </div>
+                    <button
+                      aria-label="Закрыть"
+                      onClick={() => setCalendarDateOpen(null)}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  {calendarBets.length ? (
+                    <div className="calendar-bets-list">
+                      {calendarBets.map(bet => {
+                        const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";
+                        const stake = Number(bet.stake || 0);
+                        const odds = Number(bet.odds || 0);
+
+                        return (
+                          <article className={`calendar-bet-card ${bet.result}`} key={bet.id}>
+                            <div className="calendar-bet-main">
+                              <strong>{bet.event_name}</strong>
+                              <span>{bet.market} · {bet.selection} · ×{odds.toFixed(2)}</span>
+                            </div>
+                            <div className="calendar-bet-meta">
+                              <span>{formatMoney(stake)}</span>
+                              <span>{bet.bookmaker || "БК не указан"}</span>
+                              <span>{sourceName || "Источник не указан"}</span>
+                            </div>
+                            {bet.result === "pending" ? (
+                              <div className="calendar-bet-actions">
+                                <button disabled={dataLoading} onClick={() => settleBet(bet, "win")} type="button">Выигрыш</button>
+                                <button disabled={dataLoading} onClick={() => settleBet(bet, "loss")} type="button">Проигрыш</button>
+                                <button disabled={dataLoading} onClick={() => settleBet(bet, "return")} type="button">Возврат</button>
+                              </div>
+                            ) : (
+                              <div className="calendar-bet-result">
+                                {bet.result === "win" ? "Выигрыш" : bet.result === "loss" ? "Проигрыш" : "Возврат"}
+                                <strong>{formatMoney(Number(bet.profit || 0))}</strong>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="calendar-bets-empty">В этот день ставок нет.</div>
+                  )}
+                </section>
+              </div>
+            ) : null}
           </aside>
         </section>
       </main>
