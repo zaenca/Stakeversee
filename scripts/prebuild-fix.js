@@ -244,7 +244,7 @@ page = replaceBlock(
         : 0;
 
       return {
-        source,
+        ...source,
         avgOdds,
         bets: sourceBets.length,
         losses: settledSourceBets.filter(bet => bet.result === "loss").length,
