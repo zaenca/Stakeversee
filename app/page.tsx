@@ -159,7 +159,7 @@ function betProfitValue(bet: BetRow): number {
 }
 
 function sourceDisplayName(value?: string | null): string {
-  const name = (value || "Источник —").replace(/\s*\.\.\.\s*$/, "").trim();
+  const name = (value || "Источник —").replace(/\s*(?:\.{3}|…)\s*$/, "").trim();
   return name || "Источник —";
 }
 

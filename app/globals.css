@@ -1438,6 +1438,7 @@ h1 {
   border-color: rgba(139, 92, 246, 0.32);
   color: #d9c8ff;
   max-width: none;
+  min-width: max-content;
   overflow: visible;
   text-overflow: clip;
 }
