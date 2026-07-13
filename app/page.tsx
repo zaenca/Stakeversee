@@ -63,6 +63,7 @@ type CouponItem = {
 const MATCH_CACHE_KEY = "stakeversee:line-matches:v2";
 
 const MAX_COUPON_ITEMS = 5;
+const BASE_BANKROLL = 10000;
 
 const bookmakerOptions = [
   "PARI",
@@ -117,7 +118,7 @@ function normalizeSearchValue(value: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/ё/g, "е")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/[^0-9a-zа-я]+/gi, " ")
     .trim();
 }
 
@@ -141,6 +142,27 @@ function searchHaystack(...parts: string[]): string {
   const normalized = normalizeSearchValue(parts.join(" "));
   const transliterated = transliterateRu(normalized);
   return `${normalized} ${transliterated}`;
+}
+
+function formatEventName(value: string): string {
+  return value.replace(/\s+vs\s+/gi, " - ").replace(/\s+-\s+/g, " - ").trim();
+}
+
+function betProfitValue(bet: BetRow): number {
+  if (bet.profit !== null && bet.profit !== undefined) return Number(bet.profit || 0);
+
+  const stake = Number(bet.stake || 0);
+  const odds = Number(bet.odds || 0);
+  if (bet.result === "win") return stake * odds - stake;
+  if (bet.result === "loss") return -stake;
+  return 0;
+}
+
+function resultLabel(result: BetRow["result"]): string {
+  if (result === "win") return "Выигрыш";
+  if (result === "loss") return "Проигрыш";
+  if (result === "return") return "Возврат";
+  return "Ожидает";
 }
 
 const features = [
@@ -401,15 +423,26 @@ export default function Home() {
     return sources.map(source => {
       const sourceBets = bets.filter(bet => bet.source_id === source.id);
       const closed = sourceBets.filter(bet => bet.result !== "pending");
-      const profit = closed.reduce((sum, bet) => sum + Number(bet.profit || 0), 0);
+      const profit = closed.reduce((sum, bet) => sum + betProfitValue(bet), 0);
       const stake = closed.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
+      const totalStake = sourceBets.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
+      const avgOdds = sourceBets.length
+        ? sourceBets.reduce((sum, bet) => sum + Number(bet.odds || 0), 0) / sourceBets.length
+        : 0;
 
       return {
         ...source,
+        avgOdds,
         bets: sourceBets.length,
-        roi: stake > 0 ? (profit / stake) * 100 : 0
+        losses: sourceBets.filter(bet => bet.result === "loss").length,
+        pending: sourceBets.filter(bet => bet.result === "pending").length,
+        profit,
+        returns: sourceBets.filter(bet => bet.result === "return").length,
+        roi: stake > 0 ? (profit / stake) * 100 : 0,
+        stake: totalStake,
+        wins: sourceBets.filter(bet => bet.result === "win").length
       };
-    });
+    }).sort((first, second) => second.bets - first.bets || first.name.localeCompare(second.name, "ru"));
   }, [bets, sources]);
 
   const activeMatches = useMemo(() => {
@@ -557,13 +590,13 @@ export default function Home() {
         .select("id,source_id,event_name,sport,bookmaker,market,selection,odds,stake,result,profit,settled_at,created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-        .limit(25),
+        .limit(1000),
       supabase
         .from("bankroll_events")
         .select("id,bet_id,amount,kind,note,created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-        .limit(30)
+        .limit(2000)
     ]);
 
     if (sourcesResult.error || betsResult.error || bankrollResult.error) {
@@ -735,7 +768,7 @@ export default function Home() {
     return {
       id: `${match.id}-${Date.now()}`,
       matchId: match.id,
-      eventName: `${match.home} vs ${match.away}`,
+      eventName: `${match.home} - ${match.away}`,
       sport: match.sport,
       market: "Победа",
       selection: match.home,
@@ -936,7 +969,7 @@ export default function Home() {
   if (user) {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Игрок";
     const shownMatches = activeMatches;
-    const displayedBalance = bankrollStats.balance || 10000;
+    const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
 
     return (
       <main className="workspace-shell">
@@ -1067,7 +1100,7 @@ export default function Home() {
                         <strong>{match.home}</strong>
                         <span>форма 5к · вес 3</span>
                       </div>
-                      <b>VS</b>
+                      <b>-</b>
                       <div>
                         <strong>{match.away}</strong>
                         <span>форма 5к · вес 3</span>
@@ -1418,25 +1451,59 @@ export default function Home() {
                 <div><span>Ожидают</span><strong>{betStats.pending}</strong></div>
                 <div><span>P&L</span><strong>{formatMoney(betStats.profit)}</strong></div>
               </div>
-              <div className="bets-table rail-bets">
-                {bets.slice(0, 5).map(bet => (
-                  <div className="bet-row" key={bet.id}>
-                    <div>
-                      <strong>{bet.event_name}</strong>
-                      <span>{bet.market} · {bet.selection}</span>
-                    </div>
-                    <div className="bet-row-meta">
-                      <strong>×{Number(bet.odds).toFixed(2)}</strong>
-                      {bet.result === "pending" ? (
-                        <div className="settle-actions compact">
-                          <button disabled={dataLoading} onClick={() => settleBet(bet, "win")} type="button">В</button>
-                          <button disabled={dataLoading} onClick={() => settleBet(bet, "loss")} type="button">П</button>
-                          <button disabled={dataLoading} onClick={() => settleBet(bet, "return")} type="button">↩</button>
+
+              <div className="stats-block">
+                <div className="stats-block-head">
+                  <strong>Источники</strong>
+                  <span>{sourceStats.length}</span>
+                </div>
+                <div className="source-stat-list">
+                  {sourceStats.length ? sourceStats.map(source => (
+                    <article className={"source-stat-card " + (source.is_blacklisted ? "blacklisted" : "")} key={source.id}>
+                      <div className="source-stat-top">
+                        <strong>{source.name}</strong>
+                        <span>ROI {source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>
+                      </div>
+                      <div className="source-stat-grid">
+                        <div><span>Ставок</span><strong>{source.bets}</strong></div>
+                        <div><span>В/П</span><strong>{source.wins}/{source.losses}</strong></div>
+                        <div><span>Сумма</span><strong>{formatMoney(source.stake)}</strong></div>
+                        <div><span>P&L</span><strong>{formatMoney(source.profit)}</strong></div>
+                      </div>
+                    </article>
+                  )) : <span className="empty">Источники появятся после ставок.</span>}
+                </div>
+              </div>
+
+              <div className="stats-block">
+                <div className="stats-block-head">
+                  <strong>Матчи</strong>
+                  <span>{bets.length}</span>
+                </div>
+                <div className="bets-table rail-bets">
+                  {bets.slice(0, 30).map(bet => {
+                    const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";
+                    const profit = betProfitValue(bet);
+
+                    return (
+                      <div className="rail-bet-card" key={bet.id}>
+                        <div className="rail-bet-main">
+                          <strong>{formatEventName(bet.event_name)}</strong>
+                          <span>{bet.market} · {bet.selection} · {formatMoney(Number(bet.stake || 0))} · ×{Number(bet.odds).toFixed(2)}</span>
                         </div>
-                      ) : <span>{bet.result}</span>}
-                    </div>
-                  </div>
-                ))}
+                        <div className="rail-bet-meta">
+                          <span>{bet.bookmaker || "БК —"}</span>
+                          <em>{sourceName || "Источник —"}</em>
+                          <strong className={"result-pill " + bet.result}>
+                            {resultLabel(bet.result)}
+                            {bet.result !== "pending" ? " · " + formatMoney(profit) : ""}
+                          </strong>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {!bets.length ? <span className="empty">Ставки появятся после сохранения прогноза.</span> : null}
+                </div>
               </div>
             </section> : null}
           </aside>
