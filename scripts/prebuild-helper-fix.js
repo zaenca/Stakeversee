@@ -56,6 +56,7 @@ if (page.includes("function betLooseSignature") && !page.includes("function safe
 replaceAll("normalizeText(bet.event_name || \"\")", "safeNormalizeForBetSignature(bet.event_name || \"\")", "bet event normalizer call");
 replaceAll("normalizeText(bet.market || \"\")", "safeNormalizeForBetSignature(bet.market || \"\")", "bet market normalizer call");
 replaceAll("normalizeText(bet.selection || \"\")", "safeNormalizeForBetSignature(bet.selection || \"\")", "bet selection normalizer call");
+replaceAll("Number(bet.amount || 0)", "Number(bet.stake || 0)", "bet stake signature field");
 
 if (!page.includes("function uniqueBetsByLooseSignature")) {
   if (!page.includes("function betLooseSignature")) {
@@ -65,9 +66,9 @@ if (!page.includes("function uniqueBetsByLooseSignature")) {
   const normalizedEvent = safeNormalizeForBetSignature(bet.event_name || "");
   const normalizedMarket = safeNormalizeForBetSignature(bet.market || "");
   const normalizedSelection = safeNormalizeForBetSignature(bet.selection || "");
-  const amount = Math.round(Number(bet.amount || 0) * 100) / 100;
+  const stake = Math.round(Number(bet.stake || 0) * 100) / 100;
   const odds = Math.round(Number(bet.odds || 0) * 100) / 100;
-  return [normalizedEvent, normalizedMarket, normalizedSelection, amount, odds].join("|");
+  return [normalizedEvent, normalizedMarket, normalizedSelection, stake, odds].join("|");
 }
 
 function uniqueBetsByLooseSignature(bets: BetRow[]): BetRow[] {
