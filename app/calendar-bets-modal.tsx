@@ -145,6 +145,38 @@ function getBetProfit(bet: BetRow, nextResult = bet.result) {
   return 0;
 }
 
+function normalizeVisibleText(root: ParentNode = document.body) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const replacements: Record<string, string> = {
+    vs: "-",
+    VS: "-",
+    tennis: "Теннис",
+    football: "Футбол",
+    soccer: "Футбол",
+    basketball: "Баскетбол",
+    baseball: "Бейсбол",
+    volleyball: "Волейбол",
+    hockey: "Хоккей",
+    handball: "Гандбол",
+    esports: "Киберспорт"
+  };
+
+  let node = walker.nextNode();
+  while (node) {
+    const text = node.textContent || "";
+    const trimmed = text.trim();
+    const replacement = replacements[trimmed];
+
+    if (replacement) {
+      node.textContent = text.replace(trimmed, replacement);
+    } else if (/\s+vs\s+/i.test(text)) {
+      node.textContent = formatEventName(text);
+    }
+
+    node = walker.nextNode();
+  }
+}
+
 function parseCalendarDate(button: HTMLButtonElement) {
   const dayMatch = button.textContent?.match(/\d{1,2}/);
   if (!dayMatch) return null;
@@ -294,6 +326,21 @@ export function CalendarBetsModal() {
       window.setTimeout(() => window.location.reload(), 650);
     }
   }
+
+  useEffect(() => {
+    normalizeVisibleText();
+    const observer = new MutationObserver(records => {
+      records.forEach(record => {
+        record.addedNodes.forEach(node => {
+          if (node.nodeType === Node.ELEMENT_NODE) normalizeVisibleText(node as HTMLElement);
+          if (node.nodeType === Node.TEXT_NODE && node.parentElement) normalizeVisibleText(node.parentElement);
+        });
+      });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
