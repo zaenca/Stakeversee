@@ -1,0 +1,83 @@
+name: Apply final bankroll fixes
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-bankroll-final-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch bankroll logic and rail display
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const pagePath = 'app/page.tsx';
+          const cssPath = 'app/globals.css';
+          let page = fs.readFileSync(pagePath, 'utf8');
+          let css = fs.readFileSync(cssPath, 'utf8');
+
+          function replaceOnce(fileName, text, from, to) {
+            if (!text.includes(from)) {
+              console.error(`Missing patch target in ${fileName}: ${from.slice(0, 120)}`);
+              process.exit(1);
+            }
+            return text.replace(from, to);
+          }
+
+          const insertAfter = `  }, [bankrollEvents]);\n\n  const calendarDays = useMemo(() => makeCalendarDays(), []);`;
+          const insertBlock = `  }, [bankrollEvents]);\n\n  const settlementEventsByBetId = useMemo(() => {\n    const events = new Map<string, BankrollEventRow>();\n\n    bankrollEvents.forEach(event => {\n      if (event.bet_id && ["win", "loss", "return"].includes(event.kind)) {\n        events.set(event.bet_id, event);\n      }\n    });\n\n    return events;\n  }, [bankrollEvents]);\n\n  const resolvedBets = useMemo(() => {\n    return bets.map(bet => {\n      const settlement = settlementEventsByBetId.get(bet.id);\n      if (!settlement || bet.result !== "pending") return bet;\n\n      const resolvedResult: BetRow["result"] = settlement.kind === "win"\n        ? "win"\n        : settlement.kind === "loss"\n          ? "loss"\n          : "return";\n\n      return {\n        ...bet,\n        profit: settlement.amount,\n        result: resolvedResult,\n        settled_at: settlement.created_at\n      };\n    });\n  }, [bets, settlementEventsByBetId]);\n\n  const settledBets = useMemo(() => {\n    return uniqueBetsByLooseSignature(\n      resolvedBets.filter(bet => bet.result !== "pending" && bet.settled_at)\n    );\n  }, [resolvedBets]);\n\n  const pendingBets = useMemo(() => {\n    const settledSignatures = new Set(settledBets.map(bet => betLooseSignature(bet)));\n\n    return uniqueBetsByLooseSignature(\n      resolvedBets.filter(bet => (\n        bet.result === "pending"\n        && !settlementEventsByBetId.has(bet.id)\n        && !settledSignatures.has(betLooseSignature(bet))\n      ))\n    );\n  }, [resolvedBets, settledBets, settlementEventsByBetId]);\n\n  const calendarDays = useMemo(() => makeCalendarDays(), []);`;
+          if (!page.includes('const settlementEventsByBetId = useMemo')) page = replaceOnce(pagePath, page, insertAfter, insertBlock);
+
+          page = replaceOnce(pagePath, page,
+`    return bets\n      .filter(bet => isSameLocalDate(bet.created_at, calendarDateOpen))\n      .sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime());\n  }, [bets, calendarDateOpen]);`,
+`    return resolvedBets\n      .filter(bet => isSameLocalDate(bet.settled_at || bet.created_at, calendarDateOpen))\n      .sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime());\n  }, [resolvedBets, calendarDateOpen]);`);
+
+          page = page.replace('const sourceBets = bets.filter(bet => bet.source_id === source.id);', 'const sourceBets = resolvedBets.filter(bet => bet.source_id === source.id);');
+          page = page.replace('  }, [bets, sources]);', '  }, [resolvedBets, sources]);');
+
+          page = page.replace(/const hasBets = bets\.some\(bet => isSameLocalDate\(bet\.created_at, day\.date\)\);/g,
+            'const hasBets = resolvedBets.some(bet => isSameLocalDate(bet.settled_at || bet.created_at, day.date));');
+
+          page = page.replace(/const dayProfit = bankrollEvents[\s\S]*?\.reduce\(\(sum, event\) => sum \+ Number\(event\.amount \|\| 0\), 0\);/g,
+`const dayProfit = resolvedBets\n                            .filter(bet => bet.result !== "pending" && isSameLocalDate(bet.settled_at || bet.created_at, day.date))\n                            .reduce((sum, bet) => sum + betProfitValue(bet), 0);`);
+
+          page = replaceOnce(pagePath, page,
+`      if (bankrollError) {\n        setDataMessage(bankrollError.message);\n        return;\n      }\n\n      await loadWorkspaceData(user.id);`,
+`      if (bankrollError) {\n        setDataMessage(bankrollError.message);\n        return;\n      }\n\n      setBets(current => current.map(item => item.id === bet.id ? {\n        ...item,\n        profit,\n        result,\n        settled_at: settledAt\n      } : item));\n\n      await loadWorkspaceData(user.id);`);
+
+          page = page.replace(/const settledBets = uniqueBetsByLooseSignature\(bets\.filter\([\s\S]*?const pendingBets = uniqueBetsByLooseSignature\([\s\S]*?\);\n/g, '');
+
+          page = page.replace(/const displayedBalance = bankrollStats\.balance;/g, 'const displayedBalance = BASE_BANKROLL + bankrollStats.balance;');
+
+          css = css.replace(/\.bank-bet-row em \{([\s\S]*?)max-width: 92px;([\s\S]*?)overflow: hidden;([\s\S]*?)text-overflow: ellipsis;([\s\S]*?)\}/g,
+`.bank-bet-row em {\n  border: 1px solid rgba(0, 229, 255, 0.22);\n  border-radius: 999px;\n  color: var(--cyan);\n  font-size: 0.62rem;\n  font-style: normal;\n  max-width: none;\n  min-width: max-content;\n  overflow: visible;\n  padding: 2px 6px;\n  text-overflow: clip;\n  white-space: nowrap;\n}`);
+
+          if (!css.includes('.bank-bet-row em::after')) {
+            css += `\n.bank-bet-row span {\n  max-width: none;\n  min-width: max-content;\n  overflow: visible;\n  text-overflow: clip;\n}\n\n.bank-bet-row em::after {\n  content: none;\n}\n`;
+          }
+
+          fs.writeFileSync(pagePath, page);
+          fs.writeFileSync(cssPath, css);
+          NODE
+      - name: Commit patched files
+        shell: bash
+        run: |
+          git config user.name "stakeversee-bot"
+          git config user.email "stakeversee-bot@users.noreply.github.com"
+          git add app/page.tsx app/globals.css
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Apply final bankroll settlement fixes"
+            git push
+          fi
