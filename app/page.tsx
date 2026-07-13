@@ -159,7 +159,10 @@ function betProfitValue(bet: BetRow): number {
 }
 
 function sourceDisplayName(value?: string | null): string {
-  const name = (value || "Источник —").replace(/\s*(?:\.{3}|…)\s*$/, "").trim();
+  const name = (value || "Источник —")
+    .replace(/\s*(?:\.{2,}|…|â€¦)\s*$/g, "")
+    .replace(/\s+$/g, "")
+    .trim();
   return name || "Источник —";
 }
 
@@ -258,14 +261,14 @@ function isSameLocalDate(value: string | Date, date: Date) {
 }
 
 function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
-  return settledBets
+  return uniqueBetsByLooseSignature(settledBets)
     .filter(bet => isSameLocalDate(bet.created_at, day))
     .reduce((sum, bet) => sum + betProfitValue(bet), 0);
 }
 
 function betSignature(bet: BetRow): string {
   return [
-    bet.event_name,
+    formatEventName(bet.event_name),
     bet.market,
     bet.selection,
     bet.bookmaker,
@@ -275,11 +278,36 @@ function betSignature(bet: BetRow): string {
   ].join("|").toLowerCase();
 }
 
+function betLooseSignature(bet: BetRow): string {
+  return [
+    formatEventName(bet.event_name),
+    bet.market,
+    bet.selection,
+    bet.bookmaker,
+    bet.source_id
+  ].join("|").toLowerCase();
+}
+
 function uniqueBetsBySignature(bets: BetRow[]): BetRow[] {
   const bySignature = new Map<string, BetRow>();
 
   bets.forEach(bet => {
     const signature = betSignature(bet);
+    const current = bySignature.get(signature);
+
+    if (!current || new Date(bet.created_at).getTime() < new Date(current.created_at).getTime()) {
+      bySignature.set(signature, bet);
+    }
+  });
+
+  return Array.from(bySignature.values());
+}
+
+function uniqueBetsByLooseSignature(bets: BetRow[]): BetRow[] {
+  const bySignature = new Map<string, BetRow>();
+
+  bets.forEach(bet => {
+    const signature = betLooseSignature(bet);
     const current = bySignature.get(signature);
 
     if (!current || new Date(bet.created_at).getTime() < new Date(current.created_at).getTime()) {
@@ -456,7 +484,7 @@ export default function Home() {
       const isBetSettlement = Boolean(event.bet_id) && ["win", "loss", "return"].includes(event.kind);
       map.set(isBetSettlement ? `bet:${event.bet_id}` : `event:${event.id}`, event);
       return map;
-    }, new Map<string, BankrollEvent>()).values());
+    }, new Map<string, BankrollEventRow>()).values());
     const balance = normalizedEvents.reduce((sum, event) => sum + Number(event.amount || 0), 0);
     const deposits = normalizedEvents
       .filter(event => event.kind === "deposit")
@@ -1050,10 +1078,10 @@ export default function Home() {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Игрок";
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
-    const settledBets = uniqueBetsBySignature(bets.filter(bet => bet.result !== "pending" && bet.settled_at));
-    const settledSignatures = new Set(settledBets.map(bet => betSignature(bet)));
-    const pendingBets = uniqueBetsBySignature(
-      bets.filter(bet => bet.result === "pending" && !settledSignatures.has(betSignature(bet)))
+    const settledBets = uniqueBetsByLooseSignature(bets.filter(bet => bet.result !== "pending" && bet.settled_at));
+    const settledSignatures = new Set(settledBets.map(bet => betLooseSignature(bet)));
+    const pendingBets = uniqueBetsByLooseSignature(
+      bets.filter(bet => bet.result === "pending" && !settledSignatures.has(betLooseSignature(bet)))
     );
     const pendingRailBets = pendingBets.slice(0, 5);
 
