@@ -1,0 +1,66 @@
+name: Stakeversee pending bank cleanup
+
+on:
+  push:
+    paths:
+      - .github/workflows/stakeversee-pending-bank-cleanup.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch pending bank list and labels
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          const pagePath = 'app/page.tsx';
+          let page = fs.readFileSync(pagePath, 'utf8');
+
+          if (!page.includes('function sourceDisplayName(')) {
+            const anchor = 'function resultLabel(result: BetRow["result"]): string {';
+            const helper = `function sourceDisplayName(value?: string | null): string {\n  const name = (value || "Источник —").replace(/\\s*\\.\\.\\.\\s*$/, "").trim();\n  return name || "Источник —";\n}\n\n`;
+            if (!page.includes(anchor)) throw new Error('resultLabel anchor not found');
+            page = page.replace(anchor, helper + anchor);
+          }
+
+          page = page.replace(
+            'const settledBets = bets.filter(bet => bet.result !== "pending" && bet.settled_at);',
+            'const settledBets = bets.filter(bet => bet.result !== "pending" && bet.settled_at);\n    const pendingRailBets = pendingBets.slice(0, 5);'
+          );
+
+          page = page.replaceAll('sourceName || "Источник —"', 'sourceDisplayName(sourceName)');
+
+          const bankModalClose = `              ) : null}\n            </section>\n\n            <section className="rail-panel stats-entry-panel">`;
+          const pendingBlock = `              ) : null}\n              {pendingRailBets.length ? (\n                <div className="bank-pending-list" aria-label="Ожидающие ставки">\n                  {pendingRailBets.map(bet => {\n                    const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";\n\n                    return (\n                      <div className="bank-pending-card" key={bet.id}>\n                        <strong>{formatEventName(bet.event_name)}</strong>\n                        <div className="bank-pending-meta">\n                          <span>{bet.bookmaker || "БК —"}</span>\n                          <em>{sourceDisplayName(sourceName)}</em>\n                        </div>\n                      </div>\n                    );\n                  })}\n                </div>\n              ) : null}\n            </section>\n\n            <section className="rail-panel stats-entry-panel">`;
+          if (!page.includes('bank-pending-list')) {
+            if (!page.includes(bankModalClose)) throw new Error('bank section anchor not found');
+            page = page.replace(bankModalClose, pendingBlock);
+          }
+
+          fs.writeFileSync(pagePath, page);
+
+          const cssPath = 'app/globals.css';
+          let css = fs.readFileSync(cssPath, 'utf8');
+          const marker = '/* Stakeversee pending bank cleanup */';
+          if (!css.includes(marker)) {
+            css += `\n\n${marker}\n.calendar-grid button small + small {\n  display: none !important;\n}\n\n.bank-pending-list {\n  display: grid;\n  gap: 8px;\n  margin-top: 10px;\n}\n\n.bank-pending-card {\n  background: rgba(15, 23, 34, 0.88);\n  border: 1px solid rgba(0, 229, 255, 0.18);\n  border-radius: 8px;\n  display: grid;\n  gap: 7px;\n  padding: 9px 10px;\n}\n\n.bank-pending-card strong {\n  color: #f7fbff;\n  font-size: 0.72rem;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.bank-pending-meta {\n  align-items: center;\n  display: grid;\n  gap: 6px;\n  grid-template-columns: max-content minmax(0, 1fr);\n}\n\n.bank-pending-meta span,\n.bank-pending-meta em {\n  border: 1px solid rgba(0, 229, 255, 0.24);\n  border-radius: 999px;\n  color: var(--cyan);\n  font-size: 0.58rem;\n  font-style: normal;\n  font-weight: 900;\n  line-height: 1.1;\n  min-width: 0;\n  overflow: hidden;\n  padding: 4px 7px;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.bank-pending-meta em {\n  border-color: rgba(139, 92, 246, 0.4);\n  color: #d9c8ff;\n  max-width: none;\n  overflow: visible;\n  text-overflow: clip;\n}\n\n.bank-panel .rail-bet-meta em,\n.bank-panel .bank-pending-meta em {\n  max-width: none !important;\n  overflow: visible !important;\n  text-overflow: clip !important;\n}\n`;
+            fs.writeFileSync(cssPath, css);
+          }
+
+          fs.rmSync('.github/workflows/stakeversee-pending-bank-cleanup.yml', { force: true });
+          NODE
+
+      - name: Commit patch
+        run: |
+          git config user.name "Stakeversee Bot"
+          git config user.email "actions@github.com"
+          git add app/page.tsx app/globals.css .github/workflows/stakeversee-pending-bank-cleanup.yml
+          git commit -m "Clean up pending bank bets" || exit 0
+          git push
