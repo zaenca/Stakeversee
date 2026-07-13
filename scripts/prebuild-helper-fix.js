@@ -26,20 +26,45 @@ function insertBefore(marker, text, label) {
   log(`${label}: applied`);
 }
 
-if (page.includes("new Map<string, BankrollEvent>()")) {
-  page = page.split("new Map<string, BankrollEvent>()").join("new Map<string, BankrollEventRow>()");
-  changed = true;
-  log("BankrollEvent map type fixed");
+function replaceAll(from, to, label) {
+  const next = page.split(from).join(to);
+  if (next !== page) {
+    page = next;
+    changed = true;
+    log(`${label}: applied`);
+  }
 }
+
+if (page.includes("new Map<string, BankrollEvent>()")) {
+  replaceAll("new Map<string, BankrollEvent>()", "new Map<string, BankrollEventRow>()", "BankrollEvent map type fixed");
+}
+
+const normalizeHelper = `function safeNormalizeForBetSignature(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]+/g, " ")
+    .trim();
+}
+
+`;
+
+if (page.includes("function betLooseSignature") && !page.includes("function safeNormalizeForBetSignature")) {
+  insertBefore("function betLooseSignature", normalizeHelper, "safe bet signature normalizer");
+}
+
+replaceAll("normalizeText(bet.event_name || \"\")", "safeNormalizeForBetSignature(bet.event_name || \"\")", "bet event normalizer call");
+replaceAll("normalizeText(bet.market || \"\")", "safeNormalizeForBetSignature(bet.market || \"\")", "bet market normalizer call");
+replaceAll("normalizeText(bet.selection || \"\")", "safeNormalizeForBetSignature(bet.selection || \"\")", "bet selection normalizer call");
 
 if (!page.includes("function uniqueBetsByLooseSignature")) {
   if (!page.includes("function betLooseSignature")) {
     insertBefore(
       "function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {",
-      `function betLooseSignature(bet: BetRow): string {
-  const normalizedEvent = normalizeText(bet.event_name || "");
-  const normalizedMarket = normalizeText(bet.market || "");
-  const normalizedSelection = normalizeText(bet.selection || "");
+      `${normalizeHelper}function betLooseSignature(bet: BetRow): string {
+  const normalizedEvent = safeNormalizeForBetSignature(bet.event_name || "");
+  const normalizedMarket = safeNormalizeForBetSignature(bet.market || "");
+  const normalizedSelection = safeNormalizeForBetSignature(bet.selection || "");
   const amount = Math.round(Number(bet.amount || 0) * 100) / 100;
   const odds = Math.round(Number(bet.odds || 0) * 100) / 100;
   return [normalizedEvent, normalizedMarket, normalizedSelection, amount, odds].join("|");
