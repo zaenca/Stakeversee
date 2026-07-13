@@ -1990,3 +1990,70 @@ h1 {
   overflow: visible;
   text-overflow: clip;
 }
+
+
+/* Stakeversee pending bank cleanup */
+.calendar-grid button small + small {
+  display: none !important;
+}
+
+.bank-pending-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bank-pending-card {
+  background: rgba(15, 23, 34, 0.88);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  padding: 9px 10px;
+}
+
+.bank-pending-card strong {
+  color: #f7fbff;
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-pending-meta {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.bank-pending-meta span,
+.bank-pending-meta em {
+  border: 1px solid rgba(0, 229, 255, 0.24);
+  border-radius: 999px;
+  color: var(--cyan);
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-pending-meta em {
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #d9c8ff;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.bank-panel .rail-bet-meta em,
+.bank-panel .bank-pending-meta em {
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}

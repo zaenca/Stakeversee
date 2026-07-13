@@ -158,6 +158,11 @@ function betProfitValue(bet: BetRow): number {
   return 0;
 }
 
+function sourceDisplayName(value?: string | null): string {
+  const name = (value || "Источник —").replace(/\s*\.\.\.\s*$/, "").trim();
+  return name || "Источник —";
+}
+
 function resultLabel(result: BetRow["result"]): string {
   if (result === "win") return "Выигрыш";
   if (result === "loss") return "Проигрыш";
@@ -992,6 +997,7 @@ export default function Home() {
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
     const pendingBets = bets.filter(bet => bet.result === "pending");
     const settledBets = bets.filter(bet => bet.result !== "pending" && bet.settled_at);
+    const pendingRailBets = pendingBets.slice(0, 5);
 
     return (
       <main className="workspace-shell">
@@ -1462,6 +1468,23 @@ export default function Home() {
                   </form>
                 </div>
               ) : null}
+              {pendingRailBets.length ? (
+                <div className="bank-pending-list" aria-label="Ожидающие ставки">
+                  {pendingRailBets.map(bet => {
+                    const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";
+
+                    return (
+                      <div className="bank-pending-card" key={bet.id}>
+                        <strong>{formatEventName(bet.event_name)}</strong>
+                        <div className="bank-pending-meta">
+                          <span>{bet.bookmaker || "БК —"}</span>
+                          <em>{sourceDisplayName(sourceName)}</em>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
             </section>
 
             <section className="rail-panel stats-entry-panel">
@@ -1524,7 +1547,7 @@ export default function Home() {
                         </div>
                         <div className="rail-bet-meta">
                           <span>{bet.bookmaker || "БК —"}</span>
-                          <em>{sourceName || "Источник —"}</em>
+                          <em>{sourceDisplayName(sourceName)}</em>
                           <strong className={"result-pill " + bet.result}>
                             {resultLabel(bet.result)}
                             {bet.result !== "pending" ? " · " + formatMoney(profit) : ""}
