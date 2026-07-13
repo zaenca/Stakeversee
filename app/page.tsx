@@ -505,19 +505,69 @@ export default function Home() {
     };
   }, [bankrollEvents]);
 
+  const settlementEventsByBetId = useMemo(() => {
+    const events = new Map<string, BankrollEventRow>();
+
+    bankrollEvents.forEach(event => {
+      if (event.bet_id && ["win", "loss", "return"].includes(event.kind)) {
+        events.set(event.bet_id, event);
+      }
+    });
+
+    return events;
+  }, [bankrollEvents]);
+
+  const resolvedBets = useMemo(() => {
+    return bets.map(bet => {
+      const settlement = settlementEventsByBetId.get(bet.id);
+      if (!settlement || bet.result !== "pending") return bet;
+
+      const resolvedResult: BetRow["result"] = settlement.kind === "win"
+        ? "win"
+        : settlement.kind === "loss"
+          ? "loss"
+          : "return";
+
+      return {
+        ...bet,
+        profit: settlement.amount,
+        result: resolvedResult,
+        settled_at: settlement.created_at
+      };
+    });
+  }, [bets, settlementEventsByBetId]);
+
+  const settledBets = useMemo(() => {
+    return uniqueBetsByLooseSignature(
+      resolvedBets.filter(bet => bet.result !== "pending" && bet.settled_at)
+    );
+  }, [resolvedBets]);
+
+  const pendingBets = useMemo(() => {
+    const settledSignatures = new Set(settledBets.map(bet => betLooseSignature(bet)));
+
+    return uniqueBetsByLooseSignature(
+      resolvedBets.filter(bet => (
+        bet.result === "pending"
+        && !settlementEventsByBetId.has(bet.id)
+        && !settledSignatures.has(betLooseSignature(bet))
+      ))
+    );
+  }, [resolvedBets, settledBets, settlementEventsByBetId]);
+
   const calendarDays = useMemo(() => makeCalendarDays(), []);
 
   const calendarBets = useMemo(() => {
     if (!calendarDateOpen) return [];
 
-    return bets
+    return resolvedBets
       .filter(bet => isSameLocalDate(bet.created_at, calendarDateOpen))
       .sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime());
-  }, [bets, calendarDateOpen]);
+  }, [resolvedBets, calendarDateOpen]);
 
   const sourceStats = useMemo(() => {
     return sources.map(source => {
-      const sourceBets = bets.filter(bet => bet.source_id === source.id);
+      const sourceBets = resolvedBets.filter(bet => bet.source_id === source.id);
       const closed = sourceBets.filter(bet => bet.result !== "pending");
       const profit = closed.reduce((sum, bet) => sum + betProfitValue(bet), 0);
       const stake = closed.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
@@ -539,7 +589,7 @@ export default function Home() {
         wins: sourceBets.filter(bet => bet.result === "win").length
       };
     }).sort((first, second) => second.bets - first.bets || first.name.localeCompare(second.name, "ru"));
-  }, [bets, sources]);
+  }, [resolvedBets, sources]);
 
   const activeMatches = useMemo(() => {
     const queryGroups = searchTokenGroups(searchQuery);
@@ -1027,6 +1077,7 @@ export default function Home() {
     const stake = Number(bet.stake || 0);
     const odds = Number(bet.odds || 0);
     const profit = result === "win" ? stake * odds - stake : result === "loss" ? -stake : 0;
+    const settledAt = new Date().toISOString();
 
     setDataLoading(true);
     const { error } = await supabase
@@ -1034,7 +1085,7 @@ export default function Home() {
       .update({
         result,
         profit,
-        settled_at: new Date().toISOString()
+        settled_at: settledAt
       })
       .eq("id", bet.id)
       .eq("user_id", user.id);
@@ -1068,6 +1119,13 @@ export default function Home() {
         setDataMessage("");
       }
 
+      setBets(current => current.map(item => item.id === bet.id ? {
+        ...item,
+        profit,
+        result,
+        settled_at: settledAt
+      } : item));
+
       await loadWorkspaceData(user.id);
     }
 
@@ -1078,11 +1136,6 @@ export default function Home() {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Игрок";
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
-    const settledBets = uniqueBetsByLooseSignature(bets.filter(bet => bet.result !== "pending" && bet.settled_at));
-    const settledSignatures = new Set(settledBets.map(bet => betLooseSignature(bet)));
-    const pendingBets = uniqueBetsByLooseSignature(
-      bets.filter(bet => bet.result === "pending" && !settledSignatures.has(betLooseSignature(bet)))
-    );
     const pendingRailBets = pendingBets.slice(0, 5);
 
     return (
@@ -1340,7 +1393,7 @@ export default function Home() {
               <div className="calendar-grid">
                 {calendarDays.map(day => {
                   const dayProfit = Math.round(calendarProfitForDate(day.date, settledBets));
-                  const hasBets = bets.some(bet => isSameLocalDate(bet.created_at, day.date));
+                  const hasBets = resolvedBets.some(bet => isSameLocalDate(bet.created_at, day.date));
                   const profitClass = dayProfit > 0 ? "positive" : dayProfit < 0 ? "negative" : "";
 
                   return (

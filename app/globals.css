@@ -1407,7 +1407,7 @@ h1 {
   border-radius: 7px;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   min-height: 38px;
   padding: 8px 9px;
 }
@@ -1442,11 +1442,22 @@ h1 {
   font-style: normal;
   font-weight: 800;
   max-width: none;
-  min-width: 0;
+  min-width: max-content;
   overflow: visible;
   padding: 3px 7px;
   text-overflow: clip;
   white-space: normal;
+}
+
+.bank-bet-row span {
+  max-width: none;
+  min-width: max-content;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.bank-bet-row em::after {
+  content: none;
 }
 
 .rail-bank-form {
