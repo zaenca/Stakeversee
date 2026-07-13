@@ -169,26 +169,6 @@ function resultLabel(result: BetRow["result"]): string {
   if (result === "return") return "Возврат";
   return "Ожидает";
 }
-function dateKeyFromDate(value: Date): string {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return year + "-" + month + "-" + day;
-}
-
-function dateKeyFromIso(value?: string | null): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return dateKeyFromDate(date);
-}
-
-function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
-  const key = dateKeyFromDate(day);
-  return settledBets
-    .filter(bet => dateKeyFromIso(bet.created_at) === key)
-    .reduce((sum, bet) => sum + betProfitValue(bet), 0);
-}
 
 const features = [
   {
@@ -275,6 +255,12 @@ function isSameLocalDate(value: string | Date, date: Date) {
   return current.getFullYear() === date.getFullYear()
     && current.getMonth() === date.getMonth()
     && current.getDate() === date.getDate();
+}
+
+function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
+  return settledBets
+    .filter(bet => isSameLocalDate(bet.created_at, day))
+    .reduce((sum, bet) => sum + betProfitValue(bet), 0);
 }
 
 function makeCalendarDays() {
@@ -484,6 +470,7 @@ export default function Home() {
         ...source,
         avgOdds,
         bets: sourceBets.length,
+        avgOdds,
         losses: sourceBets.filter(bet => bet.result === "loss").length,
         pending: sourceBets.filter(bet => bet.result === "pending").length,
         profit,
@@ -1277,17 +1264,28 @@ export default function Home() {
                 {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map(day => <span key={day}>{day}</span>)}
               </div>
               <div className="calendar-grid">
-                {calendarDays.map(day => (
-                  <button
-                    className={`${day.muted ? "muted" : ""} ${day.current ? "current" : ""} ${bets.some(bet => isSameLocalDate(bet.created_at, day.date)) ? "has-bets" : ""}`}
-                    key={day.date.toISOString()}
-                    onClick={() => setCalendarDateOpen(day.date)}
-                    type="button"
-                  >
-                    {day.day}
-                    {day.current ? <small>+{Math.max(0, Math.round(betStats.profit))}₽</small> : null}
-                  </button>
-                ))}
+                {calendarDays.map(day => {
+                  const dayProfit = Math.round(calendarProfitForDate(day.date, settledBets));
+                  const hasBets = bets.some(bet => isSameLocalDate(bet.created_at, day.date));
+                  const profitClass = dayProfit > 0 ? "positive" : dayProfit < 0 ? "negative" : "";
+
+                  return (
+                    <button
+                      className={[
+                        day.muted ? "muted" : "",
+                        day.current ? "current" : "",
+                        hasBets ? "has-bets" : "",
+                        profitClass ? `has-profit ${profitClass}` : ""
+                      ].filter(Boolean).join(" ")}
+                      key={day.date.toISOString()}
+                      onClick={() => setCalendarDateOpen(day.date)}
+                      type="button"
+                    >
+                      {day.day}
+                      {dayProfit !== 0 ? <small>{dayProfit > 0 ? "+" : ""}{dayProfit}{"\u20bd"}</small> : null}
+                    </button>
+                  );
+                })}
               </div>
             </section>
 
@@ -1458,16 +1456,16 @@ export default function Home() {
                 </div>
                 <em>ROI {betStats.roi >= 0 ? "+" : ""}{betStats.roi.toFixed(1)}%</em>
               </div>
-              {bets.length ? (
+              {pendingRailBets.length ? (
                 <div className="bank-bet-list">
-                  {bets.slice(0, 5).map(bet => {
+                  {pendingRailBets.map(bet => {
                     const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";
 
                     return (
                       <div className="bank-bet-row" key={bet.id}>
-                        <strong>{bet.event_name}</strong>
-                        <span>{bet.bookmaker || "—"}</span>
-                        <em>{sourceName || "—"}</em>
+                        <strong>{formatEventName(bet.event_name)}</strong>
+                        <span>{bet.bookmaker || "\u2014"}</span>
+                        <em>{sourceDisplayName(sourceName)}</em>
                       </div>
                     );
                   })}
@@ -1537,7 +1535,6 @@ export default function Home() {
                 <div><span>Ожидают</span><strong>{betStats.pending}</strong></div>
                 <div><span>P&L</span><strong>{formatMoney(betStats.profit)}</strong></div>
               </div>
-
               <div className="stats-block">
                 <div className="stats-block-head">
                   <strong>Источники</strong>
@@ -1545,7 +1542,7 @@ export default function Home() {
                 </div>
                 <div className="source-stat-list">
                   {sourceStats.length ? sourceStats.map(source => (
-                    <article className={"source-stat-card " + (source.is_blacklisted ? "blacklisted" : "")} key={source.id}>
+                    <article className={`source-stat-card ${source.is_blacklisted ? "blacklisted" : ""}`} key={source.id}>
                       <div className="source-stat-top">
                         <strong>{source.name}</strong>
                         <span>ROI {source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>
@@ -1580,9 +1577,9 @@ export default function Home() {
                         <div className="rail-bet-meta">
                           <span>{bet.bookmaker || "БК —"}</span>
                           <em>{sourceDisplayName(sourceName)}</em>
-                          <strong className={"result-pill " + bet.result}>
+                          <strong className={`result-pill ${bet.result}`}>
                             {resultLabel(bet.result)}
-                            {bet.result !== "pending" ? " · " + formatMoney(profit) : ""}
+                            {bet.result !== "pending" ? ` · ${formatMoney(profit)}` : ""}
                           </strong>
                         </div>
                       </div>
@@ -1620,13 +1617,13 @@ export default function Home() {
                         return (
                           <article className={`calendar-bet-card ${bet.result}`} key={bet.id}>
                             <div className="calendar-bet-main">
-                              <strong>{bet.event_name}</strong>
+                              <strong>{formatEventName(bet.event_name)}</strong>
                               <span>{bet.market} · {bet.selection} · ×{odds.toFixed(2)}</span>
                             </div>
                             <div className="calendar-bet-meta">
                               <span>{formatMoney(stake)}</span>
                               <span>{bet.bookmaker || "БК не указан"}</span>
-                              <span>{sourceName || "Источник не указан"}</span>
+                              <span>{sourceDisplayName(sourceName)}</span>
                             </div>
                             {bet.result === "pending" ? (
                               <div className="calendar-bet-actions">

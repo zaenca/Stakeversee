@@ -1298,6 +1298,18 @@ h1 {
   box-shadow: inset 0 0 0 1px rgba(0, 229, 255, 0.14);
 }
 
+.calendar-grid button.has-profit.positive {
+  background: rgba(0, 255, 163, 0.16);
+  border-color: rgba(0, 255, 163, 0.65);
+  color: #ccffe9;
+}
+
+.calendar-grid button.has-profit.negative {
+  background: rgba(255, 45, 117, 0.16);
+  border-color: rgba(255, 45, 117, 0.65);
+  color: #ffd3df;
+}
+
 .calendar-grid button.muted {
   color: rgba(184, 198, 216, 0.26);
 }
@@ -1305,6 +1317,10 @@ h1 {
 .calendar-grid small {
   display: block;
   font-size: 0.62rem;
+}
+
+.calendar-grid button small + small {
+  display: none;
 }
 
 .bank-head,
@@ -1412,7 +1428,6 @@ h1 {
   font-size: 0.62rem;
   font-style: normal;
   font-weight: 800;
-  max-width: 82px;
   overflow: hidden;
   padding: 3px 7px;
   text-overflow: ellipsis;
@@ -1422,6 +1437,9 @@ h1 {
 .bank-bet-row em {
   border-color: rgba(139, 92, 246, 0.32);
   color: #d9c8ff;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .rail-bank-form {
