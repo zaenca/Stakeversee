@@ -188,12 +188,56 @@
   color: var(--text);
 }
 
-.calendar-bets-empty {
+.calendar-bets-empty,
+.calendar-bets-error {
   border: 1px dashed var(--line);
   border-radius: 9px;
   color: var(--muted);
   padding: 28px;
   text-align: center;
+}
+
+.calendar-bets-error {
+  background: rgba(255, 43, 119, 0.08);
+  border-color: rgba(255, 43, 119, 0.35);
+  color: #ff8db0;
+  padding: 12px;
+}
+
+.calendar-grid button.stakeversee-day-win {
+  background: rgba(0, 255, 153, 0.16);
+  border-color: rgba(0, 255, 153, 0.58);
+  color: #dfffee;
+}
+
+.calendar-grid button.stakeversee-day-loss {
+  background: rgba(255, 43, 119, 0.15);
+  border-color: rgba(255, 43, 119, 0.58);
+  color: #ffe1eb;
+}
+
+.calendar-grid button.stakeversee-day-even {
+  background: rgba(255, 198, 0, 0.13);
+  border-color: rgba(255, 198, 0, 0.5);
+}
+
+.calendar-grid button .calendar-day-profit {
+  color: inherit;
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.1;
+  margin-top: 2px;
+  text-transform: none;
+}
+
+.calendar-grid button.stakeversee-day-win .calendar-day-profit {
+  color: #00ff99;
+}
+
+.calendar-grid button.stakeversee-day-loss .calendar-day-profit {
+  color: #ff5d93;
 }
 
 @media (max-width: 720px) {
