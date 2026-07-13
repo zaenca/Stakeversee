@@ -470,7 +470,6 @@ export default function Home() {
         ...source,
         avgOdds,
         bets: sourceBets.length,
-        avgOdds,
         losses: sourceBets.filter(bet => bet.result === "loss").length,
         pending: sourceBets.filter(bet => bet.result === "pending").length,
         profit,
