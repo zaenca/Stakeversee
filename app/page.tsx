@@ -263,6 +263,33 @@ function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
     .reduce((sum, bet) => sum + betProfitValue(bet), 0);
 }
 
+function betSignature(bet: BetRow): string {
+  return [
+    bet.event_name,
+    bet.market,
+    bet.selection,
+    bet.bookmaker,
+    bet.source_id,
+    bet.stake,
+    bet.odds
+  ].join("|").toLowerCase();
+}
+
+function uniqueBetsBySignature(bets: BetRow[]): BetRow[] {
+  const bySignature = new Map<string, BetRow>();
+
+  bets.forEach(bet => {
+    const signature = betSignature(bet);
+    const current = bySignature.get(signature);
+
+    if (!current || new Date(bet.created_at).getTime() < new Date(current.created_at).getTime()) {
+      bySignature.set(signature, bet);
+    }
+  });
+
+  return Array.from(bySignature.values());
+}
+
 function makeCalendarDays() {
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -425,14 +452,19 @@ export default function Home() {
     ? couponRealStake * couponTotalOdds + couponFreebet * (couponTotalOdds - 1)
     : 0;
   const bankrollStats = useMemo(() => {
-    const balance = bankrollEvents.reduce((sum, event) => sum + Number(event.amount || 0), 0);
-    const deposits = bankrollEvents
+    const normalizedEvents = Array.from(bankrollEvents.reduce((map, event) => {
+      const isBetSettlement = Boolean(event.bet_id) && ["win", "loss", "return"].includes(event.kind);
+      map.set(isBetSettlement ? `bet:${event.bet_id}` : `event:${event.id}`, event);
+      return map;
+    }, new Map<string, BankrollEvent>()).values());
+    const balance = normalizedEvents.reduce((sum, event) => sum + Number(event.amount || 0), 0);
+    const deposits = normalizedEvents
       .filter(event => event.kind === "deposit")
       .reduce((sum, event) => sum + Number(event.amount || 0), 0);
-    const withdrawals = bankrollEvents
+    const withdrawals = normalizedEvents
       .filter(event => event.kind === "withdrawal")
       .reduce((sum, event) => sum + Math.abs(Number(event.amount || 0)), 0);
-    const bettingProfit = bankrollEvents
+    const bettingProfit = normalizedEvents
       .filter(event => ["win", "loss", "return"].includes(event.kind))
       .reduce((sum, event) => sum + Number(event.amount || 0), 0);
 
@@ -440,7 +472,7 @@ export default function Home() {
       balance,
       bettingProfit,
       deposits,
-      totalEvents: bankrollEvents.length,
+      totalEvents: normalizedEvents.length,
       withdrawals
     };
   }, [bankrollEvents]);
@@ -982,6 +1014,18 @@ export default function Home() {
     if (error) {
       setDataMessage(error.message);
     } else {
+      const { error: cleanupError } = await supabase
+        .from("bankroll_events")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("bet_id", bet.id);
+
+      if (cleanupError) {
+        setDataMessage(cleanupError.message);
+        setDataLoading(false);
+        return;
+      }
+
       const { error: bankrollError } = await supabase.from("bankroll_events").insert({
         user_id: user.id,
         bet_id: bet.id,
@@ -1006,8 +1050,11 @@ export default function Home() {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Игрок";
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
-    const pendingBets = bets.filter(bet => bet.result === "pending");
-    const settledBets = bets.filter(bet => bet.result !== "pending" && bet.settled_at);
+    const settledBets = uniqueBetsBySignature(bets.filter(bet => bet.result !== "pending" && bet.settled_at));
+    const settledSignatures = new Set(settledBets.map(bet => betSignature(bet)));
+    const pendingBets = uniqueBetsBySignature(
+      bets.filter(bet => bet.result === "pending" && !settledSignatures.has(betSignature(bet)))
+    );
     const pendingRailBets = pendingBets.slice(0, 5);
 
     return (

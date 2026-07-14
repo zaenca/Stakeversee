@@ -1407,7 +1407,7 @@ h1 {
   border-radius: 7px;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
   min-height: 38px;
   padding: 8px 9px;
 }
@@ -1441,7 +1441,8 @@ h1 {
   font-size: 0.62rem;
   font-style: normal;
   font-weight: 800;
-  min-width: max-content;
+  max-width: none;
+  min-width: 0;
   overflow: visible;
   padding: 3px 7px;
   text-overflow: clip;
