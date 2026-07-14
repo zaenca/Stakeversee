@@ -161,7 +161,6 @@ function betProfitValue(bet: BetRow): number {
 function sourceDisplayName(value?: string | null): string {
   const name = (value || "Источник —")
     .replace(/\s*(?:\.{2,}|…|â€¦)\s*$/g, "")
-    .replace(/\s+$/g, "")
     .trim();
   return name || "Источник —";
 }
@@ -260,62 +259,47 @@ function isSameLocalDate(value: string | Date, date: Date) {
     && current.getDate() === date.getDate();
 }
 
-function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
-  return uniqueBetsByLooseSignature(settledBets)
-    .filter(bet => isSameLocalDate(bet.created_at, day))
-    .reduce((sum, bet) => sum + betProfitValue(bet), 0);
-}
-
-function betSignature(bet: BetRow): string {
-  return [
-    formatEventName(bet.event_name),
-    bet.market,
-    bet.selection,
-    bet.bookmaker,
-    bet.source_id,
-    bet.stake,
-    bet.odds
-  ].join("|").toLowerCase();
+function safeNormalizeForBetSignature(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]+/g, " ")
+    .trim();
 }
 
 function betLooseSignature(bet: BetRow): string {
-  return [
-    formatEventName(bet.event_name),
-    bet.market,
-    bet.selection,
-    bet.bookmaker,
-    bet.source_id
-  ].join("|").toLowerCase();
-}
-
-function uniqueBetsBySignature(bets: BetRow[]): BetRow[] {
-  const bySignature = new Map<string, BetRow>();
-
-  bets.forEach(bet => {
-    const signature = betSignature(bet);
-    const current = bySignature.get(signature);
-
-    if (!current || new Date(bet.created_at).getTime() < new Date(current.created_at).getTime()) {
-      bySignature.set(signature, bet);
-    }
-  });
-
-  return Array.from(bySignature.values());
+  const normalizedEvent = safeNormalizeForBetSignature(bet.event_name || "");
+  const normalizedMarket = safeNormalizeForBetSignature(bet.market || "");
+  const normalizedSelection = safeNormalizeForBetSignature(bet.selection || "");
+  const stake = Math.round(Number(bet.stake || 0) * 100) / 100;
+  const odds = Math.round(Number(bet.odds || 0) * 100) / 100;
+  return [normalizedEvent, normalizedMarket, normalizedSelection, stake, odds].join("|");
 }
 
 function uniqueBetsByLooseSignature(bets: BetRow[]): BetRow[] {
   const bySignature = new Map<string, BetRow>();
-
   bets.forEach(bet => {
     const signature = betLooseSignature(bet);
-    const current = bySignature.get(signature);
+    const previous = bySignature.get(signature);
+    if (!previous) {
+      bySignature.set(signature, bet);
+      return;
+    }
 
-    if (!current || new Date(bet.created_at).getTime() < new Date(current.created_at).getTime()) {
+    const previousTime = new Date(previous.settled_at || previous.created_at).getTime() || 0;
+    const currentTime = new Date(bet.settled_at || bet.created_at).getTime() || 0;
+    if (currentTime >= previousTime) {
       bySignature.set(signature, bet);
     }
   });
-
   return Array.from(bySignature.values());
+}
+
+function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
+  const uniqueSettled = uniqueBetsByLooseSignature(settledBets);
+  return uniqueSettled
+    .filter(bet => isSameLocalDate(bet.settled_at || bet.created_at, day))
+    .reduce((sum, bet) => sum + Number(bet.profit || 0), 0);
 }
 
 function makeCalendarDays() {
@@ -482,9 +466,10 @@ export default function Home() {
   const bankrollStats = useMemo(() => {
     const normalizedEvents = Array.from(bankrollEvents.reduce((map, event) => {
       const isBetSettlement = Boolean(event.bet_id) && ["win", "loss", "return"].includes(event.kind);
-      map.set(isBetSettlement ? `bet:${event.bet_id}` : `event:${event.id}`, event);
+      map.set(isBetSettlement ? "bet:" + event.bet_id : "event:" + event.id, event);
       return map;
     }, new Map<string, BankrollEventRow>()).values());
+
     const balance = normalizedEvents.reduce((sum, event) => sum + Number(event.amount || 0), 0);
     const deposits = normalizedEvents
       .filter(event => event.kind === "deposit")
@@ -507,13 +492,11 @@ export default function Home() {
 
   const settlementEventsByBetId = useMemo(() => {
     const events = new Map<string, BankrollEventRow>();
-
     bankrollEvents.forEach(event => {
       if (event.bet_id && ["win", "loss", "return"].includes(event.kind)) {
         events.set(event.bet_id, event);
       }
     });
-
     return events;
   }, [bankrollEvents]);
 
@@ -521,31 +504,22 @@ export default function Home() {
     return bets.map(bet => {
       const settlement = settlementEventsByBetId.get(bet.id);
       if (!settlement || bet.result !== "pending") return bet;
-
-      const resolvedResult: BetRow["result"] = settlement.kind === "win"
-        ? "win"
-        : settlement.kind === "loss"
-          ? "loss"
-          : "return";
-
+      const settlementKind = (settlement.kind === "return" ? "return" : settlement.kind === "win" ? "win" : "loss") as BetRow["result"];
       return {
         ...bet,
-        profit: settlement.amount,
-        result: resolvedResult,
+        profit: Number(settlement.amount || 0),
+        result: settlementKind,
         settled_at: settlement.created_at
       };
     });
   }, [bets, settlementEventsByBetId]);
 
-  const settledBets = useMemo(() => {
-    return uniqueBetsByLooseSignature(
-      resolvedBets.filter(bet => bet.result !== "pending" && bet.settled_at)
-    );
-  }, [resolvedBets]);
+  const settledBets = useMemo(() => (
+    resolvedBets.filter(bet => bet.result !== "pending" && bet.settled_at)
+  ), [resolvedBets]);
 
   const pendingBets = useMemo(() => {
     const settledSignatures = new Set(settledBets.map(bet => betLooseSignature(bet)));
-
     return uniqueBetsByLooseSignature(
       resolvedBets.filter(bet => (
         bet.result === "pending"
@@ -561,35 +535,78 @@ export default function Home() {
     if (!calendarDateOpen) return [];
 
     return resolvedBets
-      .filter(bet => isSameLocalDate(bet.created_at, calendarDateOpen))
-      .sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime());
+      .filter(bet => isSameLocalDate(bet.settled_at || bet.created_at, calendarDateOpen))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [resolvedBets, calendarDateOpen]);
 
   const sourceStats = useMemo(() => {
-    return sources.map(source => {
-      const sourceBets = resolvedBets.filter(bet => bet.source_id === source.id);
-      const closed = sourceBets.filter(bet => bet.result !== "pending");
-      const profit = closed.reduce((sum, bet) => sum + betProfitValue(bet), 0);
-      const stake = closed.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
-      const totalStake = sourceBets.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
-      const avgOdds = sourceBets.length
-        ? sourceBets.reduce((sum, bet) => sum + Number(bet.odds || 0), 0) / sourceBets.length
-        : 0;
+    const sourceMeta = new Map(sources.map(source => [source.id, source]));
+    const grouped = new Map<string, {
+      avgStake: number;
+      bets: number;
+      id: string;
+      is_blacklisted: boolean;
+      losses: number;
+      name: string;
+      profit: number;
+      returns: number;
+      roi: number;
+      stake: number;
+      winrate: number;
+      wins: number;
+    }>();
 
-      return {
-        ...source,
-        avgOdds,
-        bets: sourceBets.length,
-        losses: sourceBets.filter(bet => bet.result === "loss").length,
-        pending: sourceBets.filter(bet => bet.result === "pending").length,
-        profit,
-        returns: sourceBets.filter(bet => bet.result === "return").length,
-        roi: stake > 0 ? (profit / stake) * 100 : 0,
-        stake: totalStake,
-        wins: sourceBets.filter(bet => bet.result === "win").length
+    const ensureSource = (id: string, name: string, isBlacklisted: boolean) => {
+      const current = grouped.get(id);
+      if (current) return current;
+
+      const next = {
+        avgStake: 0,
+        bets: 0,
+        id,
+        is_blacklisted: isBlacklisted,
+        losses: 0,
+        name: sourceDisplayName(name || "Без источника"),
+        profit: 0,
+        returns: 0,
+        roi: 0,
+        stake: 0,
+        winrate: 0,
+        wins: 0
       };
-    }).sort((first, second) => second.bets - first.bets || first.name.localeCompare(second.name, "ru"));
-  }, [resolvedBets, sources]);
+      grouped.set(id, next);
+      return next;
+    };
+
+    for (const bet of settledBets) {
+      const source = bet.source_id ? sourceMeta.get(bet.source_id) : null;
+      const stat = ensureSource(
+        source?.id || bet.source_id || "__no_source__",
+        source?.name || (bet.source_id ? "Источник" : "Без источника"),
+        Boolean(source?.is_blacklisted)
+      );
+
+      stat.bets += 1;
+      stat.stake += Number(bet.stake || 0);
+      stat.profit += betProfitValue(bet);
+
+      if (bet.result === "win") stat.wins += 1;
+      if (bet.result === "loss") stat.losses += 1;
+      if (bet.result === "return") stat.returns += 1;
+    }
+
+    return Array.from(grouped.values())
+      .map(stat => {
+        const winLossTotal = stat.wins + stat.losses;
+        return {
+          ...stat,
+          avgStake: stat.bets ? stat.stake / stat.bets : 0,
+          roi: stat.stake ? (stat.profit / stat.stake) * 100 : 0,
+          winrate: winLossTotal ? (stat.wins / winLossTotal) * 100 : 0
+        };
+      })
+      .sort((a, b) => b.bets - a.bets || b.profit - a.profit || a.name.localeCompare(b.name, "ru"));
+  }, [settledBets, sources]);
 
   const activeMatches = useMemo(() => {
     const queryGroups = searchTokenGroups(searchQuery);
@@ -1093,18 +1110,6 @@ export default function Home() {
     if (error) {
       setDataMessage(error.message);
     } else {
-      const { error: cleanupError } = await supabase
-        .from("bankroll_events")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("bet_id", bet.id);
-
-      if (cleanupError) {
-        setDataMessage(cleanupError.message);
-        setDataLoading(false);
-        return;
-      }
-
       const { error: bankrollError } = await supabase.from("bankroll_events").insert({
         user_id: user.id,
         bet_id: bet.id,
@@ -1116,15 +1121,31 @@ export default function Home() {
       if (bankrollError) {
         setDataMessage(bankrollError.message);
       } else {
+        const localSettlementEvent: BankrollEventRow = {
+          id: `local-${bet.id}-${settledAt}`,
+          bet_id: bet.id,
+          amount: profit,
+          kind: result,
+          note: `${bet.event_name} - ${bet.market} - ${bet.selection}`,
+          created_at: settledAt
+        };
+
+        setBets(current => current.map(currentBet => (
+          currentBet.id === bet.id
+            ? {
+                ...currentBet,
+                profit,
+                result,
+                settled_at: settledAt
+              }
+            : currentBet
+        )));
+        setBankrollEvents(current => [
+          ...current.filter(event => !(event.bet_id === bet.id && ["win", "loss", "return"].includes(event.kind))),
+          localSettlementEvent
+        ]);
         setDataMessage("");
       }
-
-      setBets(current => current.map(item => item.id === bet.id ? {
-        ...item,
-        profit,
-        result,
-        settled_at: settledAt
-      } : item));
 
       await loadWorkspaceData(user.id);
     }
@@ -1393,7 +1414,7 @@ export default function Home() {
               <div className="calendar-grid">
                 {calendarDays.map(day => {
                   const dayProfit = Math.round(calendarProfitForDate(day.date, settledBets));
-                  const hasBets = resolvedBets.some(bet => isSameLocalDate(bet.created_at, day.date));
+                  const hasBets = resolvedBets.some(bet => isSameLocalDate(bet.settled_at || bet.created_at, day.date));
                   const profitClass = dayProfit > 0 ? "positive" : dayProfit < 0 ? "negative" : "";
 
                   return (
@@ -1638,17 +1659,11 @@ export default function Home() {
             </section>
 
             {statsOpen ? <section className="rail-panel stats-panel">
-              <div className="rail-title">Статистика</div>
-              <div className="rail-stat-grid">
-                <div><span>Средний кэф</span><strong>{betStats.avgOdds.toFixed(2)}</strong></div>
-                <div><span>Закрыто</span><strong>{betStats.closed}</strong></div>
-                <div><span>Ожидают</span><strong>{betStats.pending}</strong></div>
-                <div><span>P&L</span><strong>{formatMoney(betStats.profit)}</strong></div>
-              </div>
+              <div className="rail-title">Статистика источников</div>
               <div className="stats-block">
                 <div className="stats-block-head">
-                  <strong>Источники</strong>
-                  <span>{sourceStats.length}</span>
+                  <strong>Рассчитанные ставки</strong>
+                  <span>{settledBets.length}</span>
                 </div>
                 <div className="source-stat-list">
                   {sourceStats.length ? sourceStats.map(source => (
@@ -1660,42 +1675,13 @@ export default function Home() {
                       <div className="source-stat-grid">
                         <div><span>Ставок</span><strong>{source.bets}</strong></div>
                         <div><span>В/П</span><strong>{source.wins}/{source.losses}</strong></div>
+                        <div><span>Winrate</span><strong>{source.winrate.toFixed(0)}%</strong></div>
+                        <div><span>Возврат</span><strong>{source.returns}</strong></div>
                         <div><span>Сумма</span><strong>{formatMoney(source.stake)}</strong></div>
-                        <div><span>P&L</span><strong>{formatMoney(source.profit)}</strong></div>
+                        <div><span>Средняя</span><strong>{formatMoney(source.avgStake)}</strong></div>
                       </div>
                     </article>
-                  )) : <span className="empty">Источники появятся после ставок.</span>}
-                </div>
-              </div>
-
-              <div className="stats-block">
-                <div className="stats-block-head">
-                  <strong>Матчи</strong>
-                  <span>{bets.length}</span>
-                </div>
-                <div className="bets-table rail-bets">
-                  {bets.slice(0, 30).map(bet => {
-                    const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";
-                    const profit = betProfitValue(bet);
-
-                    return (
-                      <div className="rail-bet-card" key={bet.id}>
-                        <div className="rail-bet-main">
-                          <strong>{formatEventName(bet.event_name)}</strong>
-                          <span>{bet.market} · {bet.selection} · {formatMoney(Number(bet.stake || 0))} · ×{Number(bet.odds).toFixed(2)}</span>
-                        </div>
-                        <div className="rail-bet-meta">
-                          <span>{bet.bookmaker || "БК —"}</span>
-                          <em>{sourceDisplayName(sourceName)}</em>
-                          <strong className={`result-pill ${bet.result}`}>
-                            {resultLabel(bet.result)}
-                            {bet.result !== "pending" ? ` · ${formatMoney(profit)}` : ""}
-                          </strong>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {!bets.length ? <span className="empty">Ставки появятся после сохранения прогноза.</span> : null}
+                  )) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
                 </div>
               </div>
             </section> : null}
