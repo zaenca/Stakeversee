@@ -605,7 +605,7 @@ export default function Home() {
           winrate: winLossTotal ? (stat.wins / winLossTotal) * 100 : 0
         };
       })
-      .sort((a, b) => b.bets - a.bets || b.profit - a.profit || a.name.localeCompare(b.name, "ru"));
+      .sort((a, b) => a.name.localeCompare(b.name, "ru", { sensitivity: "base" }));
   }, [settledBets, sources]);
 
   const activeMatches = useMemo(() => {
