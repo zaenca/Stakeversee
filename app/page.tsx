@@ -1651,40 +1651,12 @@ export default function Home() {
             <section className="rail-panel stats-entry-panel">
               <button
                 className="bank-stat-button"
-                onClick={() => setStatsOpen(current => !current)}
+                onClick={() => setStatsOpen(true)}
                 type="button"
               >
                 📊 Статистика
               </button>
             </section>
-
-            {statsOpen ? <section className="rail-panel stats-panel">
-              <div className="rail-title">Статистика источников</div>
-              <div className="stats-block">
-                <div className="stats-block-head">
-                  <strong>Рассчитанные ставки</strong>
-                  <span>{settledBets.length}</span>
-                </div>
-                <div className="source-stat-list">
-                  {sourceStats.length ? sourceStats.map(source => (
-                    <article className={`source-stat-card ${source.is_blacklisted ? "blacklisted" : ""}`} key={source.id}>
-                      <div className="source-stat-top">
-                        <strong>{source.name}</strong>
-                        <span>ROI {source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>
-                      </div>
-                      <div className="source-stat-grid">
-                        <div><span>Ставок</span><strong>{source.bets}</strong></div>
-                        <div><span>В/П</span><strong>{source.wins}/{source.losses}</strong></div>
-                        <div><span>Winrate</span><strong>{source.winrate.toFixed(0)}%</strong></div>
-                        <div><span>Возврат</span><strong>{source.returns}</strong></div>
-                        <div><span>Сумма</span><strong>{formatMoney(source.stake)}</strong></div>
-                        <div><span>Средняя</span><strong>{formatMoney(source.avgStake)}</strong></div>
-                      </div>
-                    </article>
-                  )) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
-                </div>
-              </div>
-            </section> : null}
 
             {calendarDateOpen ? (
               <div className="calendar-bets-backdrop" role="presentation">
@@ -1744,6 +1716,45 @@ export default function Home() {
               </div>
             ) : null}
           </aside>
+
+          {statsOpen ? (
+            <div className="stats-modal-backdrop" onMouseDown={() => setStatsOpen(false)} role="presentation">
+              <section
+                aria-label="Статистика источников"
+                aria-modal="true"
+                className="rail-panel stats-panel"
+                onMouseDown={event => event.stopPropagation()}
+                role="dialog"
+              >
+                <div className="rail-title">Статистика источников</div>
+                <button className="stats-modal-close" aria-label="Закрыть статистику" onClick={() => setStatsOpen(false)} type="button">×</button>
+                <div className="stats-block">
+                  <div className="stats-block-head">
+                    <strong>Рассчитанные ставки</strong>
+                    <span>{settledBets.length}</span>
+                  </div>
+                  <div className="source-stat-list">
+                    {sourceStats.length ? sourceStats.map(source => (
+                      <article className={`source-stat-card ${source.is_blacklisted ? "blacklisted" : ""}`} key={source.id}>
+                        <div className="source-stat-top">
+                          <strong>{source.name}</strong>
+                          <span>ROI {source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>
+                        </div>
+                        <div className="source-stat-grid">
+                          <div><span>Ставок</span><strong>{source.bets}</strong></div>
+                          <div><span>В/П</span><strong>{source.wins}/{source.losses}</strong></div>
+                          <div><span>Winrate</span><strong>{source.winrate.toFixed(0)}%</strong></div>
+                          <div><span>Возврат</span><strong>{source.returns}</strong></div>
+                          <div><span>Сумма</span><strong>{formatMoney(source.stake)}</strong></div>
+                          <div><span>Средняя</span><strong>{formatMoney(source.avgStake)}</strong></div>
+                        </div>
+                      </article>
+                    )) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
+                  </div>
+                </div>
+              </section>
+            </div>
+          ) : null}
         </section>
       </main>
     );

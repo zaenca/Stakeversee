@@ -1890,11 +1890,63 @@ h1 {
   margin-top: 0;
 }
 
+.stats-modal-backdrop {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: fixed;
+  z-index: 1000;
+}
+
 .stats-panel {
+  background: linear-gradient(180deg, rgba(14, 27, 42, 0.98), rgba(8, 17, 28, 0.98));
+  border: 1px solid rgba(0, 229, 255, 0.42);
+  border-radius: 16px;
+  box-shadow:
+    0 26px 90px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   display: grid;
   gap: 14px;
-  max-height: 42vh;
+  max-height: min(78vh, 760px);
   overflow: auto;
+  padding: 22px;
+  position: relative;
+  width: min(920px, calc(100vw - 32px));
+  z-index: 1001;
+}
+
+.stats-panel .rail-title {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding-right: 42px;
+}
+
+.stats-modal-close {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 22px;
+  font-weight: 900;
+  height: 34px;
+  justify-content: center;
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  width: 34px;
+}
+
+.stats-modal-close:hover {
+  border-color: rgba(0, 229, 255, 0.6);
+  color: var(--cyan);
 }
 
 .stats-block {
@@ -1930,6 +1982,11 @@ h1 {
 .source-stat-list {
   display: grid;
   gap: 8px;
+}
+
+.stats-panel .source-stat-list {
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .source-stat-card {
@@ -1978,6 +2035,10 @@ h1 {
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 10px;
+}
+
+.stats-panel .source-stat-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .source-stat-grid div {
