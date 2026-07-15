@@ -2028,14 +2028,22 @@ h1 {
 }
 
 .source-stat-top span {
-  background: rgba(0, 224, 138, 0.12);
-  border: 1px solid rgba(0, 224, 138, 0.35);
   border-radius: 999px;
-  color: var(--cyan);
+  color: #ffffff;
   font-size: 12px;
   font-weight: 900;
   padding: 2px 8px;
   white-space: nowrap;
+}
+
+.source-stat-top span.roi-positive {
+  background: rgba(0, 224, 138, 0.9);
+  border: 1px solid rgba(0, 224, 138, 1);
+}
+
+.source-stat-top span.roi-negative {
+  background: rgba(255, 77, 125, 0.9);
+  border: 1px solid rgba(255, 77, 125, 1);
 }
 
 .source-stat-grid {
@@ -2375,6 +2383,135 @@ h1 {
 .coupon-controls {
   display: grid;
   gap: 8px;
+}
+
+/* ── Custom source dropdown (replaces native <select> to avoid overflow) ── */
+.source-dropdown {
+  min-width: 0;
+  position: relative;
+}
+
+.source-dropdown-trigger {
+  align-items: center;
+  background: #111b28;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: #eaf6ff;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.source-dropdown-trigger:hover {
+  border-color: rgba(0, 229, 255, 0.4);
+}
+
+.source-dropdown-trigger-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-dropdown-caret {
+  color: var(--muted);
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+.source-dropdown-menu {
+  background: #0b111b;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  left: 0;
+  margin-top: 4px;
+  max-height: 340px; /* ~10 items visible, then scroll */
+  overflow-y: auto;
+  padding: 4px;
+  position: absolute;
+  right: 0;
+  scrollbar-color: rgba(0, 229, 255, 0.85) rgba(255, 255, 255, 0.04);
+  scrollbar-width: thin;
+  top: 100%;
+  z-index: 80;
+}
+
+.source-dropdown-menu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.source-dropdown-menu::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+
+.source-dropdown-menu::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan), rgba(145, 95, 255, 0.9));
+  border-radius: 999px;
+}
+
+.source-dropdown-item {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #eaf6ff;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 6px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.source-dropdown-item:hover {
+  background: rgba(0, 229, 255, 0.08);
+}
+
+.source-dropdown-item.active {
+  background: rgba(0, 229, 255, 0.14);
+  color: var(--cyan);
+}
+
+.source-dropdown-item.add-source {
+  border-bottom: 1px solid var(--line);
+  border-radius: 6px 6px 0 0;
+  color: var(--cyan);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.source-dropdown-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-dropdown-roi {
+  border-radius: 999px;
+  color: #ffffff;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+.source-dropdown-roi.positive {
+  background: rgba(0, 224, 138, 0.9);
+}
+
+.source-dropdown-roi.negative {
+  background: rgba(255, 77, 125, 0.9);
 }
 
 .coupon-item-grid {

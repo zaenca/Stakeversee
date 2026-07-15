@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
@@ -360,6 +360,91 @@ function writeCachedMatches(matches: MatchRow[]) {
   );
 }
 
+type SourceDropdownProps = {
+  onAddSource: () => void;
+  onChange: (sourceId: string) => void;
+  placeholder?: string;
+  roiById: Map<string, number>;
+  sources: SourceRow[];
+  value: string;
+};
+
+function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sources, value }: SourceDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  const selected = sources.find(source => source.id === value);
+  const selectedRoi = selected ? roiById.get(selected.id) : undefined;
+
+  return (
+    <div className="source-dropdown" ref={rootRef}>
+      <button
+        className="source-dropdown-trigger"
+        onClick={() => setOpen(current => !current)}
+        type="button"
+      >
+        <span className="source-dropdown-trigger-label">
+          {selected ? selected.name : (placeholder || "— выберите источник —")}
+        </span>
+        {selected && selectedRoi !== undefined ? (
+          <span className={`source-dropdown-roi ${selectedRoi >= 0 ? "positive" : "negative"}`}>
+            {selectedRoi >= 0 ? "+" : ""}{selectedRoi.toFixed(1)}%
+          </span>
+        ) : null}
+        <span className="source-dropdown-caret" aria-hidden="true">▾</span>
+      </button>
+      {open ? (
+        <div className="source-dropdown-menu" role="listbox">
+          <button
+            className="source-dropdown-item add-source"
+            onClick={() => {
+              onAddSource();
+              setOpen(false);
+            }}
+            type="button"
+          >
+            + Добавить источник
+          </button>
+          {sources.map(source => {
+            const roi = roiById.get(source.id);
+            return (
+              <button
+                className={`source-dropdown-item ${source.id === value ? "active" : ""}`}
+                key={source.id}
+                onClick={() => {
+                  onChange(source.id);
+                  setOpen(false);
+                }}
+                role="option"
+                aria-selected={source.id === value}
+                type="button"
+              >
+                <span className="source-dropdown-item-label">{source.name}</span>
+                {roi !== undefined ? (
+                  <span className={`source-dropdown-roi ${roi >= 0 ? "positive" : "negative"}`}>
+                    {roi >= 0 ? "+" : ""}{roi.toFixed(1)}%
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [mode, setMode] = useState<AuthMode>("login");
@@ -607,6 +692,11 @@ export default function Home() {
       })
       .sort((a, b) => a.name.localeCompare(b.name, "ru", { sensitivity: "base" }));
   }, [settledBets, sources]);
+
+  const sourceRoiById = useMemo(
+    () => new Map(sourceStats.map(stat => [stat.id, stat.roi])),
+    [sourceStats]
+  );
 
   const activeMatches = useMemo(() => {
     const queryGroups = searchTokenGroups(searchQuery);
@@ -1330,15 +1420,14 @@ export default function Home() {
                   </div>
                 </div>
                 <form className="compact-bet-form" onSubmit={handleBetSubmit}>
-                  <select
-                    onChange={event => setBetForm(current => ({ ...current, sourceId: event.target.value }))}
+                  <SourceDropdownField
+                    onAddSource={() => setSourcePopupOpen(true)}
+                    onChange={sourceId => setBetForm(current => ({ ...current, sourceId }))}
+                    placeholder="Источник"
+                    roiById={sourceRoiById}
+                    sources={sources.filter(source => !source.is_blacklisted)}
                     value={betForm.sourceId}
-                  >
-                    <option value="">Источник</option>
-                    {sources.filter(source => !source.is_blacklisted).map(source => (
-                      <option key={source.id} value={source.id}>{source.name}</option>
-                    ))}
-                  </select>
+                  />
                   <input
                     onChange={event => setBetForm(current => ({ ...current, eventName: event.target.value }))}
                     placeholder="Матч"
@@ -1487,22 +1576,13 @@ export default function Home() {
                       <option value="">— выберите букмекера —</option>
                       {bookmakerOptions.map(bookmaker => <option key={bookmaker} value={bookmaker}>{bookmaker}</option>)}
                     </select>
-                    <select
-                      onChange={event => {
-                        if (event.target.value === "__add_source__") {
-                          setSourcePopupOpen(true);
-                          return;
-                        }
-                        setCouponDraft(current => ({ ...current, sourceId: event.target.value }));
-                      }}
+                    <SourceDropdownField
+                      onAddSource={() => setSourcePopupOpen(true)}
+                      onChange={sourceId => setCouponDraft(current => ({ ...current, sourceId }))}
+                      roiById={sourceRoiById}
+                      sources={sources.filter(source => !source.is_blacklisted)}
                       value={couponDraft.sourceId}
-                    >
-                      <option value="">— выберите источник —</option>
-                      <option value="__add_source__">+ Добавить источник</option>
-                      {sources.filter(source => !source.is_blacklisted).map(source => (
-                        <option key={source.id} value={source.id}>{source.name}</option>
-                      ))}
-                    </select>
+                    />
                     <input
                       inputMode="decimal"
                       onChange={event => setCouponDraft(current => ({ ...current, stake: event.target.value }))}
@@ -1738,7 +1818,7 @@ export default function Home() {
                       <article className={`source-stat-card ${source.is_blacklisted ? "blacklisted" : ""}`} key={source.id}>
                         <div className="source-stat-top">
                           <strong>{source.name}</strong>
-                          <span>ROI {source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>
+                          <span className={source.roi >= 0 ? "roi-positive" : "roi-negative"}>ROI {source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>
                         </div>
                         <div className="source-stat-grid">
                           <div><span>Ставок</span><strong>{source.bets}</strong></div>
