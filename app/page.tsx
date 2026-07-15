@@ -1618,13 +1618,6 @@ export default function Home() {
                   )) : <div className="coupon-empty">Нажми на карточку матча, чтобы добавить его в купон.</div>}
 
                   <div className="coupon-controls">
-                    <select
-                      onChange={event => setCouponDraft(current => ({ ...current, bookmaker: event.target.value }))}
-                      value={couponDraft.bookmaker}
-                    >
-                      <option value="">— выберите букмекера —</option>
-                      {bookmakerOptions.map(bookmaker => <option key={bookmaker} value={bookmaker}>{bookmaker}</option>)}
-                    </select>
                     <SourceDropdownField
                       onAddSource={() => setSourcePopupOpen(true)}
                       onChange={sourceId => setCouponDraft(current => ({ ...current, sourceId }))}
@@ -1632,6 +1625,13 @@ export default function Home() {
                       sources={sources.filter(source => !source.is_blacklisted)}
                       value={couponDraft.sourceId}
                     />
+                    <select
+                      onChange={event => setCouponDraft(current => ({ ...current, bookmaker: event.target.value }))}
+                      value={couponDraft.bookmaker}
+                    >
+                      <option value="">— выберите букмекера —</option>
+                      {bookmakerOptions.map(bookmaker => <option key={bookmaker} value={bookmaker}>{bookmaker}</option>)}
+                    </select>
                     <input
                       inputMode="decimal"
                       onChange={event => setCouponDraft(current => ({ ...current, stake: event.target.value }))}

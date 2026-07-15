@@ -2424,7 +2424,7 @@ h1 {
   display: flex;
   gap: 8px;
   min-height: 38px;
-  padding: 0 10px;
+  padding: 8px 10px;
   text-align: left;
   width: 100%;
 }
@@ -2436,9 +2436,9 @@ h1 {
 .source-dropdown-trigger-label {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .source-dropdown-caret {
@@ -2514,9 +2514,9 @@ h1 {
 
 .source-dropdown-item-label {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .source-dropdown-roi {
@@ -2549,6 +2549,10 @@ h1 {
 .right-rail .coupon-controls,
 .right-rail .coupon-summary {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.right-rail .coupon-controls .source-dropdown {
+  grid-column: 1 / -1;
 }
 
 .right-rail .coupon-item-grid {
