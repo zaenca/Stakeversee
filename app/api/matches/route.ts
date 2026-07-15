@@ -248,7 +248,7 @@ function shouldDropMatch(match: RawMatch): boolean {
   if (match.sport !== "esports" && /(fc\s*\d{2}|fifa|efootball|h2h|cyber|virtual|simulation|simulator|2x4|2\s*x\s*4|mins?|liga-?\d|division-?\d|nhl\s*\d|nba\s*\d)/i.test(full)) return true;
   if (match.sport === "volleyball" && /(belarus|russia|Ð±ÐµÐ»Ð°Ñ€ÑƒÑ|Ñ€Ð¾ÑÑÐ¸).*(liga pro|Ð»Ð¸Ð³Ð° Ð¿Ñ€Ð¾|pro league)/i.test(full)) return true;
   if (match.sport === "ice-hockey" && /(magnitka|Ð¼Ð°Ð³Ð½Ð¸Ñ‚ÐºÐ°|cyber|esport|virtual|simulation|3x3|3x4|4x4|3 Ð½Ð° 3|3 Ð½Ð° 4|4 Ð½Ð° 4|nhl \d|Ð»Ð¸Ð³Ð° Ð¿Ñ€Ð¾|liga pro)/i.test(full)) return true;
-  if (match.sport === "esports" && /(fc\s*\d{2}|fifa|efootball|nhl\s*\d|nba\s*\d|h2h.*liga|liga.*h2h|h2h.*2x4|2x4.*h2h|2x4|2\s*x\s*4)/i.test(full)) return true;
+  if (match.sport === "esports" && /(fc\s*\d{2}|fifa|efootball|nhl\s*\d|nba\s*\d|h2h.*liga|liga.*h2h|h2h.*2x4|2x4.*h2h|2x4|2\s*x\s*4|h2h.*2x2|2x2.*h2h|2x2|2\s*x\s*2)/i.test(full)) return true;
   if (match.sport === "tennis" && /(double faults|aces|statistics|stats|Ð´Ð²Ð¾Ð¹Ð½.*Ð¾ÑˆÐ¸Ð±|ÑÐ¹Ñ|ÑÑ‚Ð°Ñ‚Ð¸ÑÑ‚)/i.test(full)) return true;
   if (match.sport === "baseball" && /(basketball|Ð±Ð°ÑÐºÐµÑ‚|nba|euroleague|Ð±Ð°ÑÐºÐµÑ‚Ð±Ð¾Ð»)/i.test(full)) return true;
   return false;
