@@ -485,6 +485,63 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
   );
 }
 
+type BookmakerDropdownProps = {
+  onChange: (bookmaker: string) => void;
+  options: string[];
+  placeholder?: string;
+  value: string;
+};
+
+function BookmakerDropdownField({ onChange, options, placeholder, value }: BookmakerDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  return (
+    <div className="source-dropdown" ref={rootRef}>
+      <button
+        className="source-dropdown-trigger"
+        onClick={() => setOpen(current => !current)}
+        type="button"
+      >
+        <span className="source-dropdown-trigger-label">
+          {value || (placeholder || "— выберите букмекера —")}
+        </span>
+        <span className="source-dropdown-caret" aria-hidden="true">▾</span>
+      </button>
+      {open ? (
+        <div className="source-dropdown-menu" role="listbox">
+          {options.map(bookmaker => (
+            <button
+              className={`source-dropdown-item ${bookmaker === value ? "active" : ""}`}
+              key={bookmaker}
+              onClick={() => {
+                onChange(bookmaker);
+                setOpen(false);
+              }}
+              role="option"
+              aria-selected={bookmaker === value}
+              type="button"
+            >
+              <span className="source-dropdown-item-label">{bookmaker}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [mode, setMode] = useState<AuthMode>("login");
@@ -1625,13 +1682,11 @@ export default function Home() {
                       sources={sources.filter(source => !source.is_blacklisted)}
                       value={couponDraft.sourceId}
                     />
-                    <select
-                      onChange={event => setCouponDraft(current => ({ ...current, bookmaker: event.target.value }))}
+                    <BookmakerDropdownField
+                      onChange={bookmaker => setCouponDraft(current => ({ ...current, bookmaker }))}
+                      options={bookmakerOptions}
                       value={couponDraft.bookmaker}
-                    >
-                      <option value="">— выберите букмекера —</option>
-                      {bookmakerOptions.map(bookmaker => <option key={bookmaker} value={bookmaker}>{bookmaker}</option>)}
-                    </select>
+                    />
                     <input
                       inputMode="decimal"
                       onChange={event => setCouponDraft(current => ({ ...current, stake: event.target.value }))}

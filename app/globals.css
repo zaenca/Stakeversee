@@ -2551,7 +2551,7 @@ h1 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.right-rail .coupon-controls .source-dropdown {
+.right-rail .coupon-controls .source-dropdown:first-child {
   grid-column: 1 / -1;
 }
 
