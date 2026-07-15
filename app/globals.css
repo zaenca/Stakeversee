@@ -1583,15 +1583,18 @@ h1 {
 }
 
 .calendar-bet-card.win {
-  border-color: rgba(0, 255, 153, 0.38);
+  border-color: rgba(0, 255, 153, 0.75);
+  border-width: 3px;
 }
 
 .calendar-bet-card.loss {
-  border-color: rgba(255, 43, 119, 0.38);
+  border-color: rgba(255, 43, 119, 0.75);
+  border-width: 3px;
 }
 
 .calendar-bet-card.return {
-  border-color: rgba(255, 198, 0, 0.42);
+  border-color: rgba(255, 198, 0, 0.8);
+  border-width: 3px;
 }
 
 .calendar-bet-main strong {
