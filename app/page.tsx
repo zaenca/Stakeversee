@@ -1526,13 +1526,13 @@ export default function Home() {
               </div>
             </section>
 
-            <section className={`quick-coupon-card ${couponOpen || couponItems.length ? "open" : ""}`}>
-              <button className="coupon-head" onClick={() => setCouponOpen(current => !current)} type="button">
-                <span>🎫 Купон</span>
-                <strong>{couponItems.length} / {MAX_COUPON_ITEMS}</strong>
-              </button>
+            {couponOpen || couponItems.length ? (
+              <section className="quick-coupon-card open">
+                <button className="coupon-head" onClick={() => setCouponOpen(current => !current)} type="button">
+                  <span>🎫 Купон</span>
+                  <strong>{couponItems.length} / {MAX_COUPON_ITEMS}</strong>
+                </button>
 
-              {couponOpen || couponItems.length ? (
                 <div className="coupon-body">
                   {couponItems.length ? couponItems.map((item, index) => (
                     <div className="coupon-item" key={item.id}>
@@ -1640,8 +1640,8 @@ export default function Home() {
                     </div>
                   ) : null}
                 </div>
-              ) : null}
-            </section>
+              </section>
+            ) : null}
 
             <section className="rail-panel bank-panel">
               <div className="bank-head">
