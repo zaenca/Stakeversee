@@ -1547,6 +1547,7 @@ h1 {
 }
 
 .calendar-bets-list {
+  align-content: start;
   display: grid;
   flex: 1;
   gap: var(--calendar-bet-gap);
@@ -1574,6 +1575,7 @@ h1 {
 }
 
 .calendar-bet-card {
+  align-content: start;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--line);
   border-radius: 8px;
