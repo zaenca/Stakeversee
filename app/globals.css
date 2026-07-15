@@ -2007,7 +2007,25 @@ h1 {
   align-items: center;
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(220px, 0.65fr) 1fr;
+  grid-template-columns: minmax(220px, 0.65fr) 1fr auto;
+}
+
+.source-stat-view-button {
+  background: rgba(0, 229, 255, 0.07);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-radius: 7px;
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 10px 16px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.source-stat-view-button:hover {
+  background: rgba(0, 229, 255, 0.14);
 }
 
 .source-stat-card.blacklisted {

@@ -532,6 +532,7 @@ export default function Home() {
   const [bankEditorOpen, setBankEditorOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [calendarDateOpen, setCalendarDateOpen] = useState<Date | null>(null);
+  const [sourceBetsOpen, setSourceBetsOpen] = useState<string | null>(null);
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState("Автообновление каждые 5 минут");
@@ -663,6 +664,14 @@ export default function Home() {
       .filter(bet => isSameLocalDate(bet.created_at, calendarDateOpen))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [resolvedBets, calendarDateOpen]);
+
+  const sourceBetsList = useMemo(() => {
+    if (!sourceBetsOpen) return [];
+
+    return resolvedBets
+      .filter(bet => (bet.source_id || "__no_source__") === sourceBetsOpen)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [resolvedBets, sourceBetsOpen]);
 
   const sourceStats = useMemo(() => {
     const sourceMeta = new Map(sources.map(source => [source.id, source]));
@@ -1868,10 +1877,75 @@ export default function Home() {
                           <div><span>Сумма</span><strong>{formatMoney(source.stake)}</strong></div>
                           <div><span>Средняя</span><strong>{formatMoney(source.avgStake)}</strong></div>
                         </div>
+                        <button
+                          className="source-stat-view-button"
+                          onClick={() => setSourceBetsOpen(source.id)}
+                          type="button"
+                        >
+                          Все прогнозы
+                        </button>
                       </article>
                     )) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
                   </div>
                 </div>
+              </section>
+            </div>
+          ) : null}
+
+          {sourceBetsOpen ? (
+            <div className="calendar-bets-backdrop" role="presentation">
+              <section className="calendar-bets-modal" role="dialog" aria-modal="true" aria-label="Все прогнозы источника">
+                <div className="calendar-bets-head">
+                  <div>
+                    <span>Все прогнозы</span>
+                    <strong>{sourceStats.find(source => source.id === sourceBetsOpen)?.name || "Источник"}</strong>
+                  </div>
+                  <button
+                    aria-label="Закрыть"
+                    onClick={() => setSourceBetsOpen(null)}
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {sourceBetsList.length ? (
+                  <div className="calendar-bets-list">
+                    {sourceBetsList.map(bet => {
+                      const stake = Number(bet.stake || 0);
+                      const odds = Number(bet.odds || 0);
+                      const betDate = new Date(bet.created_at);
+
+                      return (
+                        <article className={`calendar-bet-card ${bet.result}`} key={bet.id}>
+                          <div className="calendar-bet-main">
+                            <strong>{formatEventName(bet.event_name)}</strong>
+                            <span>{bet.market} · {bet.selection} · ×{odds.toFixed(2)}</span>
+                          </div>
+                          <div className="calendar-bet-meta">
+                            <span>{formatCalendarDateLabel(betDate)}</span>
+                            <span>{formatMoney(stake)}</span>
+                            <span>{bet.bookmaker || "БК не указан"}</span>
+                          </div>
+                          {bet.result === "pending" ? (
+                            <div className="calendar-bet-actions">
+                              <button disabled={dataLoading} onClick={() => settleBet(bet, "win")} type="button">Выигрыш</button>
+                              <button disabled={dataLoading} onClick={() => settleBet(bet, "loss")} type="button">Проигрыш</button>
+                              <button disabled={dataLoading} onClick={() => settleBet(bet, "return")} type="button">Возврат</button>
+                            </div>
+                          ) : (
+                            <div className="calendar-bet-result">
+                              {bet.result === "win" ? "Выигрыш" : bet.result === "loss" ? "Проигрыш" : "Возврат"}
+                              <strong>{formatMoney(Number(bet.profit || 0))}</strong>
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="calendar-bets-empty">У этого источника пока нет прогнозов.</div>
+                )}
               </section>
             </div>
           ) : null}
