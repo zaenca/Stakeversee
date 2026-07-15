@@ -620,7 +620,7 @@ export default function Home() {
     if (!calendarDateOpen) return [];
 
     return resolvedBets
-      .filter(bet => isSameLocalDate(bet.settled_at || bet.created_at, calendarDateOpen))
+      .filter(bet => isSameLocalDate(bet.created_at, calendarDateOpen))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [resolvedBets, calendarDateOpen]);
 
@@ -1503,7 +1503,7 @@ export default function Home() {
               <div className="calendar-grid">
                 {calendarDays.map(day => {
                   const dayProfit = Math.round(calendarProfitForDate(day.date, settledBets));
-                  const hasBets = resolvedBets.some(bet => isSameLocalDate(bet.settled_at || bet.created_at, day.date));
+                  const hasBets = resolvedBets.some(bet => isSameLocalDate(bet.created_at, day.date));
                   const profitClass = dayProfit > 0 ? "positive" : dayProfit < 0 ? "negative" : "";
 
                   return (
