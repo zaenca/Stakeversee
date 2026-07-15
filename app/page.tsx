@@ -277,22 +277,62 @@ function betLooseSignature(bet: BetRow): string {
 }
 
 function uniqueBetsByLooseSignature(bets: BetRow[]): BetRow[] {
-  const bySignature = new Map<string, BetRow>();
+  // Only collapse bets into one when they share the same signature AND were
+  // created within a few seconds of each other - the signature of an
+  // accidental double-submit/double-insert, not two bets a person genuinely
+  // placed separately (which can easily share the same event/market/
+  // selection/stake/odds, e.g. the same stake size used again later).
+  const DUPLICATE_WINDOW_MS = 5000;
+
+  const groups = new Map<string, BetRow[]>();
   bets.forEach(bet => {
     const signature = betLooseSignature(bet);
-    const previous = bySignature.get(signature);
-    if (!previous) {
-      bySignature.set(signature, bet);
+    const group = groups.get(signature);
+    if (group) {
+      group.push(bet);
+    } else {
+      groups.set(signature, [bet]);
+    }
+  });
+
+  const result: BetRow[] = [];
+  groups.forEach(group => {
+    if (group.length === 1) {
+      result.push(group[0]);
       return;
     }
 
-    const previousTime = new Date(previous.settled_at || previous.created_at).getTime() || 0;
-    const currentTime = new Date(bet.settled_at || bet.created_at).getTime() || 0;
-    if (currentTime >= previousTime) {
-      bySignature.set(signature, bet);
+    const sorted = [...group].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    let clusterLatest = sorted[0];
+    let clusterAnchorTime = new Date(sorted[0].created_at).getTime() || 0;
+
+    for (let i = 1; i < sorted.length; i++) {
+      const bet = sorted[i];
+      const betCreatedTime = new Date(bet.created_at).getTime() || 0;
+
+      if (betCreatedTime - clusterAnchorTime <= DUPLICATE_WINDOW_MS) {
+        // Same accidental-duplicate cluster - keep whichever record is most up to date
+        const clusterLatestUpdate = new Date(clusterLatest.settled_at || clusterLatest.created_at).getTime() || 0;
+        const betUpdate = new Date(bet.settled_at || bet.created_at).getTime() || 0;
+        if (betUpdate >= clusterLatestUpdate) {
+          clusterLatest = bet;
+        }
+        clusterAnchorTime = betCreatedTime;
+      } else {
+        // Gap too large to be an accidental duplicate - it's a separate bet
+        result.push(clusterLatest);
+        clusterLatest = bet;
+        clusterAnchorTime = betCreatedTime;
+      }
     }
+
+    result.push(clusterLatest);
   });
-  return Array.from(bySignature.values());
+
+  return result;
 }
 
 function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
