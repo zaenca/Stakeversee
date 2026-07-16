@@ -555,6 +555,7 @@ type BetCardProps = {
   editForm: EditBetForm | null;
   editingBetId: string | null;
   extraMeta?: string;
+  highlighted?: boolean;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
   onSettle: (bet: BetRow, result: "win" | "loss" | "return") => void;
@@ -568,6 +569,7 @@ function BetCard({
   editForm,
   editingBetId,
   extraMeta,
+  highlighted,
   onCancelEdit,
   onSaveEdit,
   onSettle,
@@ -577,9 +579,16 @@ function BetCard({
   const stake = Number(bet.stake || 0);
   const odds = Number(bet.odds || 0);
   const isEditing = editingBetId === bet.id && !!editForm;
+  const cardRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (highlighted && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlighted]);
 
   return (
-    <article className={`calendar-bet-card ${bet.result}`}>
+    <article className={`calendar-bet-card ${bet.result} ${highlighted ? "highlighted" : ""}`} ref={cardRef}>
       <button
         className="calendar-bet-edit-btn"
         onClick={() => (isEditing ? onCancelEdit() : onStartEdit(bet))}
@@ -709,6 +718,7 @@ export default function Home() {
   const [sourceBetsOpen, setSourceBetsOpen] = useState<string | null>(null);
   const [editingBetId, setEditingBetId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditBetForm | null>(null);
+  const [highlightBetId, setHighlightBetId] = useState<string | null>(null);
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState("Автообновление каждые 5 минут");
@@ -1984,7 +1994,16 @@ export default function Home() {
                     const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";
 
                     return (
-                      <div className="bank-bet-row" key={bet.id}>
+                      <div
+                        className="bank-bet-row"
+                        key={bet.id}
+                        onClick={() => {
+                          setCalendarDateOpen(new Date(bet.created_at));
+                          setHighlightBetId(bet.id);
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
                         <strong>{formatEventName(bet.event_name)}</strong>
                         <span>{bet.bookmaker || "\u2014"}</span>
                         <em>{sourceDisplayName(sourceName)}</em>
@@ -2042,7 +2061,10 @@ export default function Home() {
                     </div>
                     <button
                       aria-label="Закрыть"
-                      onClick={() => setCalendarDateOpen(null)}
+                      onClick={() => {
+                        setCalendarDateOpen(null);
+                        setHighlightBetId(null);
+                      }}
                       type="button"
                     >
                       ×
@@ -2061,6 +2083,7 @@ export default function Home() {
                             editForm={editForm}
                             editingBetId={editingBetId}
                             extraMeta={sourceDisplayName(sourceName)}
+                            highlighted={bet.id === highlightBetId}
                             key={bet.id}
                             onCancelEdit={cancelEditBet}
                             onSaveEdit={saveEditBet}

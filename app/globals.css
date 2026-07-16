@@ -1405,11 +1405,18 @@ h1 {
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--line);
   border-radius: 7px;
+  cursor: pointer;
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto auto;
   min-height: 38px;
   padding: 8px 9px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.bank-bet-row:hover {
+  background: rgba(0, 229, 255, 0.06);
+  border-color: rgba(0, 229, 255, 0.32);
 }
 
 .bank-bet-row strong {
@@ -1598,6 +1605,19 @@ h1 {
 .calendar-bet-card.return {
   border-color: rgba(255, 198, 0, 0.8);
   border-width: 3px;
+}
+
+.calendar-bet-card.highlighted {
+  animation: calendarBetHighlight 2.4s ease-out;
+}
+
+@keyframes calendarBetHighlight {
+  0% {
+    box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.85), 0 0 24px rgba(0, 229, 255, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 229, 255, 0);
+  }
 }
 
 .calendar-bet-edit-btn {
