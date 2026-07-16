@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
@@ -542,6 +542,123 @@ function BookmakerDropdownField({ onChange, options, placeholder, value }: Bookm
   );
 }
 
+type EditBetForm = {
+  event_name: string;
+  bookmaker: string;
+  odds: string;
+  stake: string;
+};
+
+type BetCardProps = {
+  bet: BetRow;
+  dataLoading: boolean;
+  editForm: EditBetForm | null;
+  editingBetId: string | null;
+  extraMeta?: string;
+  onCancelEdit: () => void;
+  onSaveEdit: () => void;
+  onSettle: (bet: BetRow, result: "win" | "loss" | "return") => void;
+  onStartEdit: (bet: BetRow) => void;
+  setEditForm: Dispatch<SetStateAction<EditBetForm | null>>;
+};
+
+function BetCard({
+  bet,
+  dataLoading,
+  editForm,
+  editingBetId,
+  extraMeta,
+  onCancelEdit,
+  onSaveEdit,
+  onSettle,
+  onStartEdit,
+  setEditForm
+}: BetCardProps) {
+  const stake = Number(bet.stake || 0);
+  const odds = Number(bet.odds || 0);
+  const isEditing = editingBetId === bet.id && !!editForm;
+
+  return (
+    <article className={`calendar-bet-card ${bet.result}`}>
+      <button
+        className="calendar-bet-edit-btn"
+        onClick={() => (isEditing ? onCancelEdit() : onStartEdit(bet))}
+        title={isEditing ? "Отменить редактирование" : "Редактировать прогноз"}
+        type="button"
+      >
+        {isEditing ? "✕" : "✏️"}
+      </button>
+
+      {isEditing && editForm ? (
+        <div className="calendar-bet-edit-form">
+          <input
+            onChange={event => {
+              const nextValue = event.target.value;
+              setEditForm(current => (current ? { ...current, event_name: nextValue } : current));
+            }}
+            placeholder="Матч"
+            value={editForm.event_name}
+          />
+          <div className="calendar-bet-edit-row">
+            <input
+              inputMode="decimal"
+              onChange={event => {
+                const nextValue = event.target.value;
+                setEditForm(current => (current ? { ...current, odds: nextValue } : current));
+              }}
+              placeholder="Коэффициент"
+              value={editForm.odds}
+            />
+            <input
+              inputMode="decimal"
+              onChange={event => {
+                const nextValue = event.target.value;
+                setEditForm(current => (current ? { ...current, stake: nextValue } : current));
+              }}
+              placeholder="Сумма ₽"
+              value={editForm.stake}
+            />
+          </div>
+          <BookmakerDropdownField
+            onChange={bookmaker => setEditForm(current => (current ? { ...current, bookmaker } : current))}
+            options={bookmakerOptions}
+            placeholder="Букмекер"
+            value={editForm.bookmaker}
+          />
+          <div className="calendar-bet-edit-actions">
+            <button disabled={dataLoading} onClick={onCancelEdit} type="button">Отмена</button>
+            <button disabled={dataLoading} onClick={onSaveEdit} type="button">Сохранить</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="calendar-bet-main">
+            <strong>{formatEventName(bet.event_name)}</strong>
+            <span>{bet.market} · {bet.selection} · ×{odds.toFixed(2)}</span>
+          </div>
+          <div className="calendar-bet-meta">
+            {extraMeta ? <span>{extraMeta}</span> : null}
+            <span>{formatMoney(stake)}</span>
+            <span>{bet.bookmaker || "БК не указан"}</span>
+          </div>
+          {bet.result === "pending" ? (
+            <div className="calendar-bet-actions">
+              <button disabled={dataLoading} onClick={() => onSettle(bet, "win")} type="button">Выигрыш</button>
+              <button disabled={dataLoading} onClick={() => onSettle(bet, "loss")} type="button">Проигрыш</button>
+              <button disabled={dataLoading} onClick={() => onSettle(bet, "return")} type="button">Возврат</button>
+            </div>
+          ) : (
+            <div className="calendar-bet-result">
+              {bet.result === "win" ? "Выигрыш" : bet.result === "loss" ? "Проигрыш" : "Возврат"}
+              <strong>{formatMoney(Number(bet.profit || 0))}</strong>
+            </div>
+          )}
+        </>
+      )}
+    </article>
+  );
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [mode, setMode] = useState<AuthMode>("login");
@@ -590,6 +707,8 @@ export default function Home() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [calendarDateOpen, setCalendarDateOpen] = useState<Date | null>(null);
   const [sourceBetsOpen, setSourceBetsOpen] = useState<string | null>(null);
+  const [editingBetId, setEditingBetId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditBetForm | null>(null);
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState("Автообновление каждые 5 минут");
@@ -1349,6 +1468,77 @@ export default function Home() {
     setDataLoading(false);
   }
 
+  function startEditBet(bet: BetRow) {
+    setEditingBetId(bet.id);
+    setEditForm({
+      event_name: formatEventName(bet.event_name),
+      bookmaker: bet.bookmaker || "",
+      odds: String(bet.odds ?? ""),
+      stake: String(bet.stake ?? "")
+    });
+  }
+
+  function cancelEditBet() {
+    setEditingBetId(null);
+    setEditForm(null);
+  }
+
+  async function saveEditBet() {
+    if (!user || !editingBetId || !editForm) return;
+    const bet = resolvedBets.find(row => row.id === editingBetId);
+    if (!bet) return;
+
+    const odds = parseFloat(editForm.odds.replace(",", ".")) || 0;
+    const stake = parseFloat(editForm.stake.replace(",", ".")) || 0;
+    const eventName = editForm.event_name.trim() || bet.event_name;
+    const bookmaker = editForm.bookmaker.trim();
+
+    if (odds <= 0 || stake < 0) {
+      setDataMessage("Проверь коэффициент и сумму ставки.");
+      return;
+    }
+
+    setDataLoading(true);
+
+    const payload: {
+      event_name: string;
+      bookmaker: string | null;
+      odds: number;
+      stake: number;
+      profit?: number;
+    } = {
+      event_name: eventName,
+      bookmaker: bookmaker || null,
+      odds,
+      stake
+    };
+
+    // Ставка уже рассчитана - пересчитываем выплату под новые кэф/сумму
+    if (bet.result === "win") payload.profit = stake * odds - stake;
+    else if (bet.result === "loss") payload.profit = -stake;
+    else if (bet.result === "return") payload.profit = 0;
+
+    const { error } = await supabase
+      .from("bets")
+      .update(payload)
+      .eq("id", bet.id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      setBets(current => current.map(currentBet => (
+        currentBet.id === bet.id ? { ...currentBet, ...payload } : currentBet
+      )));
+      setDataMessage("");
+      setEditingBetId(null);
+      setEditForm(null);
+      await loadWorkspaceData(user.id);
+    }
+
+    setDataLoading(false);
+  }
+
   if (user) {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Игрок";
     const shownMatches = activeMatches;
@@ -1863,33 +2053,21 @@ export default function Home() {
                     <div className="calendar-bets-list">
                       {calendarBets.map(bet => {
                         const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";
-                        const stake = Number(bet.stake || 0);
-                        const odds = Number(bet.odds || 0);
 
                         return (
-                          <article className={`calendar-bet-card ${bet.result}`} key={bet.id}>
-                            <div className="calendar-bet-main">
-                              <strong>{formatEventName(bet.event_name)}</strong>
-                              <span>{bet.market} · {bet.selection} · ×{odds.toFixed(2)}</span>
-                            </div>
-                            <div className="calendar-bet-meta">
-                              <span>{formatMoney(stake)}</span>
-                              <span>{bet.bookmaker || "БК не указан"}</span>
-                              <span>{sourceDisplayName(sourceName)}</span>
-                            </div>
-                            {bet.result === "pending" ? (
-                              <div className="calendar-bet-actions">
-                                <button disabled={dataLoading} onClick={() => settleBet(bet, "win")} type="button">Выигрыш</button>
-                                <button disabled={dataLoading} onClick={() => settleBet(bet, "loss")} type="button">Проигрыш</button>
-                                <button disabled={dataLoading} onClick={() => settleBet(bet, "return")} type="button">Возврат</button>
-                              </div>
-                            ) : (
-                              <div className="calendar-bet-result">
-                                {bet.result === "win" ? "Выигрыш" : bet.result === "loss" ? "Проигрыш" : "Возврат"}
-                                <strong>{formatMoney(Number(bet.profit || 0))}</strong>
-                              </div>
-                            )}
-                          </article>
+                          <BetCard
+                            bet={bet}
+                            dataLoading={dataLoading}
+                            editForm={editForm}
+                            editingBetId={editingBetId}
+                            extraMeta={sourceDisplayName(sourceName)}
+                            key={bet.id}
+                            onCancelEdit={cancelEditBet}
+                            onSaveEdit={saveEditBet}
+                            onSettle={settleBet}
+                            onStartEdit={startEditBet}
+                            setEditForm={setEditForm}
+                          />
                         );
                       })}
                     </div>
@@ -1967,34 +2145,22 @@ export default function Home() {
                 {sourceBetsList.length ? (
                   <div className="calendar-bets-list">
                     {sourceBetsList.map(bet => {
-                      const stake = Number(bet.stake || 0);
-                      const odds = Number(bet.odds || 0);
                       const betDate = new Date(bet.created_at);
 
                       return (
-                        <article className={`calendar-bet-card ${bet.result}`} key={bet.id}>
-                          <div className="calendar-bet-main">
-                            <strong>{formatEventName(bet.event_name)}</strong>
-                            <span>{bet.market} · {bet.selection} · ×{odds.toFixed(2)}</span>
-                          </div>
-                          <div className="calendar-bet-meta">
-                            <span>{formatCalendarDateLabel(betDate)}</span>
-                            <span>{formatMoney(stake)}</span>
-                            <span>{bet.bookmaker || "БК не указан"}</span>
-                          </div>
-                          {bet.result === "pending" ? (
-                            <div className="calendar-bet-actions">
-                              <button disabled={dataLoading} onClick={() => settleBet(bet, "win")} type="button">Выигрыш</button>
-                              <button disabled={dataLoading} onClick={() => settleBet(bet, "loss")} type="button">Проигрыш</button>
-                              <button disabled={dataLoading} onClick={() => settleBet(bet, "return")} type="button">Возврат</button>
-                            </div>
-                          ) : (
-                            <div className="calendar-bet-result">
-                              {bet.result === "win" ? "Выигрыш" : bet.result === "loss" ? "Проигрыш" : "Возврат"}
-                              <strong>{formatMoney(Number(bet.profit || 0))}</strong>
-                            </div>
-                          )}
-                        </article>
+                        <BetCard
+                          bet={bet}
+                          dataLoading={dataLoading}
+                          editForm={editForm}
+                          editingBetId={editingBetId}
+                          extraMeta={formatCalendarDateLabel(betDate)}
+                          key={bet.id}
+                          onCancelEdit={cancelEditBet}
+                          onSaveEdit={saveEditBet}
+                          onSettle={settleBet}
+                          onStartEdit={startEditBet}
+                          setEditForm={setEditForm}
+                        />
                       );
                     })}
                   </div>
