@@ -71,3 +71,7 @@ create policy "bankroll own rows"
   on public.bankroll_events for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- Позволяет прикрепить к одной ставке несколько источников
+-- (source_id остаётся основным/первым источником, остальные - здесь)
+alter table public.bets add column if not exists extra_source_ids uuid[] not null default '{}';

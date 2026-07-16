@@ -16,6 +16,7 @@ type SourceRow = {
 type BetRow = {
   id: string;
   source_id: string | null;
+  extra_source_ids: string[] | null;
   event_name: string;
   sport: string | null;
   bookmaker: string | null;
@@ -156,6 +157,14 @@ function betProfitValue(bet: BetRow): number {
   if (bet.result === "win") return stake * odds - stake;
   if (bet.result === "loss") return -stake;
   return 0;
+}
+
+// Все источники, прикреплённые к ставке (основной + дополнительные), без дублей.
+// Результат ставки (выигрыш/проигрыш/возврат) учитывается ПОЛНОСТЬЮ в статистике
+// КАЖДОГО из этих источников - сумма не делится между ними.
+function getBetSourceIds(bet: BetRow): string[] {
+  const ids = [bet.source_id, ...(bet.extra_source_ids || [])].filter((id): id is string => !!id);
+  return Array.from(new Set(ids));
 }
 
 function sourceDisplayName(value?: string | null): string {
@@ -556,11 +565,17 @@ type BetCardProps = {
   editingBetId: string | null;
   extraMeta?: string;
   highlighted?: boolean;
+  onAddSource: (sourceId: string) => void;
   onCancelEdit: () => void;
+  onRemoveSource: (sourceId: string) => void;
   onSaveEdit: () => void;
   onSettle: (bet: BetRow, result: "win" | "loss" | "return") => void;
   onStartEdit: (bet: BetRow) => void;
+  onToggleSourcePicker: () => void;
   setEditForm: Dispatch<SetStateAction<EditBetForm | null>>;
+  sourceById: Map<string, SourceRow>;
+  sourceOptions: SourceRow[];
+  sourcePickerOpen: boolean;
 };
 
 function BetCard({
@@ -570,16 +585,24 @@ function BetCard({
   editingBetId,
   extraMeta,
   highlighted,
+  onAddSource,
   onCancelEdit,
+  onRemoveSource,
   onSaveEdit,
   onSettle,
   onStartEdit,
-  setEditForm
+  onToggleSourcePicker,
+  setEditForm,
+  sourceById,
+  sourceOptions,
+  sourcePickerOpen
 }: BetCardProps) {
   const stake = Number(bet.stake || 0);
   const odds = Number(bet.odds || 0);
   const isEditing = editingBetId === bet.id && !!editForm;
   const cardRef = useRef<HTMLElement | null>(null);
+  const attachedSourceIds = getBetSourceIds(bet);
+  const pickableSources = sourceOptions.filter(source => !attachedSourceIds.includes(source.id));
 
   useEffect(() => {
     if (highlighted && cardRef.current) {
@@ -650,6 +673,46 @@ function BetCard({
             <span>{formatMoney(stake)}</span>
             <span>{bet.bookmaker || "БК не указан"}</span>
           </div>
+          <div className="calendar-bet-sources">
+            {attachedSourceIds.length ? attachedSourceIds.map(sourceId => (
+              <span className="calendar-bet-source-tag" key={sourceId}>
+                {sourceDisplayName(sourceById.get(sourceId)?.name)}
+                <button
+                  aria-label="Убрать источник"
+                  onClick={() => onRemoveSource(sourceId)}
+                  type="button"
+                >
+                  ✕
+                </button>
+              </span>
+            )) : <span className="calendar-bet-source-tag empty">Без источника</span>}
+
+            <div className="calendar-bet-source-add">
+              <button
+                aria-label="Добавить источник"
+                className="calendar-bet-add-source-btn"
+                onClick={onToggleSourcePicker}
+                title="Добавить ещё один источник"
+                type="button"
+              >
+                +
+              </button>
+              {sourcePickerOpen ? (
+                <div className="calendar-bet-source-picker" role="listbox">
+                  {pickableSources.length ? pickableSources.map(source => (
+                    <button
+                      key={source.id}
+                      onClick={() => onAddSource(source.id)}
+                      role="option"
+                      type="button"
+                    >
+                      {source.name}
+                    </button>
+                  )) : <span className="empty">Больше источников нет</span>}
+                </div>
+              ) : null}
+            </div>
+          </div>
           {bet.result === "pending" ? (
             <div className="calendar-bet-actions">
               <button disabled={dataLoading} onClick={() => onSettle(bet, "win")} type="button">Выигрыш</button>
@@ -719,6 +782,7 @@ export default function Home() {
   const [editingBetId, setEditingBetId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditBetForm | null>(null);
   const [highlightBetId, setHighlightBetId] = useState<string | null>(null);
+  const [sourcePickerForBetId, setSourcePickerForBetId] = useState<string | null>(null);
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState("Автообновление каждые 5 минут");
@@ -855,7 +919,10 @@ export default function Home() {
     if (!sourceBetsOpen) return [];
 
     return resolvedBets
-      .filter(bet => (bet.source_id || "__no_source__") === sourceBetsOpen)
+      .filter(bet => {
+        const ids = getBetSourceIds(bet);
+        return sourceBetsOpen === "__no_source__" ? !ids.length : ids.includes(sourceBetsOpen);
+      })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [resolvedBets, sourceBetsOpen]);
 
@@ -899,20 +966,27 @@ export default function Home() {
     };
 
     for (const bet of settledBets) {
-      const source = bet.source_id ? sourceMeta.get(bet.source_id) : null;
-      const stat = ensureSource(
-        source?.id || bet.source_id || "__no_source__",
-        source?.name || (bet.source_id ? "Источник" : "Без источника"),
-        Boolean(source?.is_blacklisted)
-      );
+      const ids = getBetSourceIds(bet);
+      const targetIds = ids.length ? ids : ["__no_source__"];
 
-      stat.bets += 1;
-      stat.stake += Number(bet.stake || 0);
-      stat.profit += betProfitValue(bet);
+      for (const sourceId of targetIds) {
+        const source = sourceId !== "__no_source__" ? sourceMeta.get(sourceId) : null;
+        const stat = ensureSource(
+          source?.id || sourceId,
+          source?.name || (sourceId !== "__no_source__" ? "Источник" : "Без источника"),
+          Boolean(source?.is_blacklisted)
+        );
 
-      if (bet.result === "win") stat.wins += 1;
-      if (bet.result === "loss") stat.losses += 1;
-      if (bet.result === "return") stat.returns += 1;
+        // Полная сумма/результат ставки засчитывается КАЖДОМУ источнику -
+        // не делится между ними, даже если их несколько на одной ставке.
+        stat.bets += 1;
+        stat.stake += Number(bet.stake || 0);
+        stat.profit += betProfitValue(bet);
+
+        if (bet.result === "win") stat.wins += 1;
+        if (bet.result === "loss") stat.losses += 1;
+        if (bet.result === "return") stat.returns += 1;
+      }
     }
 
     return Array.from(grouped.values())
@@ -1075,7 +1149,7 @@ export default function Home() {
         .order("name", { ascending: true }),
       supabase
         .from("bets")
-        .select("id,source_id,event_name,sport,bookmaker,market,selection,odds,stake,result,profit,settled_at,created_at")
+        .select("id,source_id,extra_source_ids,event_name,sport,bookmaker,market,selection,odds,stake,result,profit,settled_at,created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(1000),
@@ -1549,6 +1623,72 @@ export default function Home() {
     setDataLoading(false);
   }
 
+  async function addSourceToBet(bet: BetRow, sourceId: string) {
+    if (!user) return;
+    const currentIds = getBetSourceIds(bet);
+    if (currentIds.includes(sourceId)) {
+      setSourcePickerForBetId(null);
+      return;
+    }
+
+    setDataLoading(true);
+
+    // Если у ставки ещё нет ни одного источника - новый становится основным,
+    // иначе добавляется как дополнительный (оба получают полный результат ставки).
+    const payload: { source_id?: string; extra_source_ids?: string[] } = !bet.source_id
+      ? { source_id: sourceId }
+      : { extra_source_ids: [...(bet.extra_source_ids || []), sourceId] };
+
+    const { error } = await supabase
+      .from("bets")
+      .update(payload)
+      .eq("id", bet.id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      setBets(current => current.map(currentBet => (
+        currentBet.id === bet.id ? { ...currentBet, ...payload } : currentBet
+      )));
+      setDataMessage("");
+    }
+
+    setSourcePickerForBetId(null);
+    setDataLoading(false);
+  }
+
+  async function removeSourceFromBet(bet: BetRow, sourceId: string) {
+    if (!user) return;
+    setDataLoading(true);
+
+    let payload: { source_id?: string | null; extra_source_ids?: string[] };
+    if (bet.source_id === sourceId) {
+      // Основной источник убирают - продвигаем первый дополнительный на его место
+      const extras = bet.extra_source_ids || [];
+      payload = { source_id: extras[0] || null, extra_source_ids: extras.slice(1) };
+    } else {
+      payload = { extra_source_ids: (bet.extra_source_ids || []).filter(id => id !== sourceId) };
+    }
+
+    const { error } = await supabase
+      .from("bets")
+      .update(payload)
+      .eq("id", bet.id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      setBets(current => current.map(currentBet => (
+        currentBet.id === bet.id ? { ...currentBet, ...payload } : currentBet
+      )));
+      setDataMessage("");
+    }
+
+    setDataLoading(false);
+  }
+
   if (user) {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Игрок";
     const shownMatches = activeMatches;
@@ -1991,7 +2131,8 @@ export default function Home() {
               {pendingRailBets.length ? (
                 <div className="bank-bet-list">
                   {pendingRailBets.map(bet => {
-                    const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";
+                    const sourceNames = getBetSourceIds(bet).map(id => sourceDisplayName(sourceById.get(id)?.name));
+                    const sourceLabel = sourceNames.length ? sourceNames.join(" + ") : "Без источника";
 
                     return (
                       <div
@@ -2006,7 +2147,7 @@ export default function Home() {
                       >
                         <strong>{formatEventName(bet.event_name)}</strong>
                         <span>{bet.bookmaker || "\u2014"}</span>
-                        <em>{sourceDisplayName(sourceName)}</em>
+                        <em>{sourceLabel}</em>
                       </div>
                     );
                   })}
@@ -2073,26 +2214,27 @@ export default function Home() {
 
                   {calendarBets.length ? (
                     <div className="calendar-bets-list">
-                      {calendarBets.map(bet => {
-                        const sourceName = bet.source_id ? sourceById.get(bet.source_id)?.name : "";
-
-                        return (
-                          <BetCard
-                            bet={bet}
-                            dataLoading={dataLoading}
-                            editForm={editForm}
-                            editingBetId={editingBetId}
-                            extraMeta={sourceDisplayName(sourceName)}
-                            highlighted={bet.id === highlightBetId}
-                            key={bet.id}
-                            onCancelEdit={cancelEditBet}
-                            onSaveEdit={saveEditBet}
-                            onSettle={settleBet}
-                            onStartEdit={startEditBet}
-                            setEditForm={setEditForm}
-                          />
-                        );
-                      })}
+                      {calendarBets.map(bet => (
+                        <BetCard
+                          bet={bet}
+                          dataLoading={dataLoading}
+                          editForm={editForm}
+                          editingBetId={editingBetId}
+                          highlighted={bet.id === highlightBetId}
+                          key={bet.id}
+                          onAddSource={sourceId => addSourceToBet(bet, sourceId)}
+                          onCancelEdit={cancelEditBet}
+                          onRemoveSource={sourceId => removeSourceFromBet(bet, sourceId)}
+                          onSaveEdit={saveEditBet}
+                          onSettle={settleBet}
+                          onStartEdit={startEditBet}
+                          onToggleSourcePicker={() => setSourcePickerForBetId(current => (current === bet.id ? null : bet.id))}
+                          setEditForm={setEditForm}
+                          sourceById={sourceById}
+                          sourceOptions={sources.filter(source => !source.is_blacklisted)}
+                          sourcePickerOpen={sourcePickerForBetId === bet.id}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <div className="calendar-bets-empty">В этот день ставок нет.</div>
@@ -2177,12 +2319,19 @@ export default function Home() {
                           editForm={editForm}
                           editingBetId={editingBetId}
                           extraMeta={formatCalendarDateLabel(betDate)}
+                          highlighted={bet.id === highlightBetId}
                           key={bet.id}
+                          onAddSource={sourceId => addSourceToBet(bet, sourceId)}
                           onCancelEdit={cancelEditBet}
+                          onRemoveSource={sourceId => removeSourceFromBet(bet, sourceId)}
                           onSaveEdit={saveEditBet}
                           onSettle={settleBet}
                           onStartEdit={startEditBet}
+                          onToggleSourcePicker={() => setSourcePickerForBetId(current => (current === bet.id ? null : bet.id))}
                           setEditForm={setEditForm}
+                          sourceById={sourceById}
+                          sourceOptions={sources.filter(source => !source.is_blacklisted)}
+                          sourcePickerOpen={sourcePickerForBetId === bet.id}
                         />
                       );
                     })}
