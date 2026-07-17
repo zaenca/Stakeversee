@@ -167,39 +167,6 @@ function getBetSourceIds(bet: BetRow): string[] {
   return Array.from(new Set(ids));
 }
 
-// Часовые пояса России + пара популярных зарубежных - для выбора в профиле
-const TIMEZONE_OPTIONS: { label: string; offset: number }[] = [
-  { label: "Калининград (UTC+2)", offset: 120 },
-  { label: "Москва (UTC+3)", offset: 180 },
-  { label: "Самара (UTC+4)", offset: 240 },
-  { label: "Екатеринбург (UTC+5)", offset: 300 },
-  { label: "Омск (UTC+6)", offset: 360 },
-  { label: "Красноярск (UTC+7)", offset: 420 },
-  { label: "Иркутск (UTC+8)", offset: 480 },
-  { label: "Якутск (UTC+9)", offset: 540 },
-  { label: "Владивосток (UTC+10)", offset: 600 },
-  { label: "Магадан (UTC+11)", offset: 660 },
-  { label: "Камчатка (UTC+12)", offset: 720 },
-  { label: "UTC+0 (Лондон)", offset: 0 },
-  { label: "UTC+1 (Берлин)", offset: 60 }
-];
-const DEFAULT_TIMEZONE_OFFSET = 180; // Москва
-
-function getUserTimezoneOffsetMinutes(user: User | null): number {
-  const raw = user?.user_metadata?.timezone_offset_minutes;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : DEFAULT_TIMEZONE_OFFSET;
-}
-
-function formatBetTime(createdAt: string, offsetMinutes: number): string {
-  const utcMs = new Date(createdAt).getTime();
-  if (!Number.isFinite(utcMs)) return "--:--";
-  const shifted = new Date(utcMs + offsetMinutes * 60000);
-  const hh = String(shifted.getUTCHours()).padStart(2, "0");
-  const mm = String(shifted.getUTCMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
-}
-
 function sourceDisplayName(value?: string | null): string {
   const name = (value || "Источник —")
     .replace(/\s*(?:\.{2,}|…|â€¦)\s*$/g, "")
@@ -240,6 +207,58 @@ const sportTabs = [
   { key: "football", label: "Футбол", icon: "⚽" },
   { key: "baseball", label: "Бейсбол", icon: "⚾" }
 ];
+
+const COUNTRY_FLAGS: Record<string, string> = {
+  "Russia": "🇷🇺", "Россия": "🇷🇺",
+  "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Англия": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "GB": "🇬🇧",
+  "USA": "🇺🇸", "США": "🇺🇸", "United States": "🇺🇸", "US": "🇺🇸",
+  "Germany": "🇩🇪", "Германия": "🇩🇪", "DE": "🇩🇪",
+  "France": "🇫🇷", "Франция": "🇫🇷", "FR": "🇫🇷",
+  "Spain": "🇪🇸", "Испания": "🇪🇸", "ES": "🇪🇸",
+  "Italy": "🇮🇹", "Италия": "🇮🇹", "IT": "🇮🇹",
+  "Japan": "🇯🇵", "Япония": "🇯🇵", "JP": "🇯🇵",
+  "Brazil": "🇧🇷", "Бразилия": "🇧🇷", "BR": "🇧🇷",
+  "Australia": "🇦🇺", "Австралия": "🇦🇺", "AU": "🇦🇺",
+  "China": "🇨🇳", "Китай": "🇨🇳", "CN": "🇨🇳",
+  "South Korea": "🇰🇷", "Южная Корея": "🇰🇷", "KR": "🇰🇷", "Korea": "🇰🇷",
+  "Poland": "🇵🇱", "Польша": "🇵🇱", "PL": "🇵🇱",
+  "Turkey": "🇹🇷", "Турция": "🇹🇷", "TR": "🇹🇷",
+  "Ukraine": "🇺🇦", "Украина": "🇺🇦", "UA": "🇺🇦",
+  "Netherlands": "🇳🇱", "Нидерланды": "🇳🇱", "NL": "🇳🇱",
+  "Belgium": "🇧🇪", "Бельгия": "🇧🇪", "BE": "🇧🇪",
+  "Portugal": "🇵🇹", "Португалия": "🇵🇹", "PT": "🇵🇹",
+  "Argentina": "🇦🇷", "Аргентина": "🇦🇷", "AR": "🇦🇷",
+  "Mexico": "🇲🇽", "Мексика": "🇲🇽", "MX": "🇲🇽",
+  "Canada": "🇨🇦", "Канада": "🇨🇦", "CA": "🇨🇦",
+  "Serbia": "🇷🇸", "Сербия": "🇷🇸", "RS": "🇷🇸",
+  "Croatia": "🇭🇷", "Хорватия": "🇭🇷", "HR": "🇭🇷",
+  "Czech Republic": "🇨🇿", "Чехия": "🇨🇿", "CZ": "🇨🇿",
+  "Romania": "🇷🇴", "Румыния": "🇷🇴", "RO": "🇷🇴",
+  "Sweden": "🇸🇪", "Швеция": "🇸🇪", "SE": "🇸🇪",
+  "Norway": "🇳🇴", "Норвегия": "🇳🇴", "NO": "🇳🇴",
+  "Denmark": "🇩🇰", "Дания": "🇩🇰", "DK": "🇩🇰",
+  "Finland": "🇫🇮", "Финляндия": "🇫🇮", "FI": "🇫🇮",
+  "Switzerland": "🇨🇭", "Швейцария": "🇨🇭", "CH": "🇨🇭",
+  "Austria": "🇦🇹", "Австрия": "🇦🇹", "AT": "🇦🇹",
+  "Greece": "🇬🇷", "Греция": "🇬🇷", "GR": "🇬🇷",
+  "Hungary": "🇭🇺", "Венгрия": "🇭🇺", "HU": "🇭🇺",
+  "Slovakia": "🇸🇰", "Словакия": "🇸🇰", "SK": "🇸🇰",
+  "Bulgaria": "🇧🇬", "Болгария": "🇧🇬", "BG": "🇧🇬",
+  "Israel": "🇮🇱", "Израиль": "🇮🇱", "IL": "🇮🇱",
+  "Kazakhstan": "🇰🇿", "Казахстан": "🇰🇿", "KZ": "🇰🇿",
+  "Belarus": "🇧🇾", "Беларусь": "🇧🇾", "BY": "🇧🇾",
+  "Thailand": "🇹🇭", "Таиланд": "🇹🇭", "TH": "🇹🇭",
+  "India": "🇮🇳", "Индия": "🇮🇳", "IN": "🇮🇳",
+  "Taiwan": "🇹🇼", "Тайвань": "🇹🇼", "TW": "🇹🇼",
+  "World": "🌍", "WORLD": "🌍", "INT": "🌍", "International": "🌍",
+  "ATP": "🎾", "WTA": "🎾", "ITF": "🎾",
+  "Europe": "🇪🇺", "UEFA": "🇪🇺",
+};
+
+function getCountryFlag(country: string): string {
+  return COUNTRY_FLAGS[country] ?? COUNTRY_FLAGS[country.toUpperCase()] ?? "🌐";
+}
+
 
 const demoMatches: MatchRow[] = [
   {
@@ -609,7 +628,6 @@ type BetCardProps = {
   sourceById: Map<string, SourceRow>;
   sourceOptions: SourceRow[];
   sourcePickerOpen: boolean;
-  timezoneOffsetMinutes: number;
 };
 
 function BetCard({
@@ -629,8 +647,7 @@ function BetCard({
   setEditForm,
   sourceById,
   sourceOptions,
-  sourcePickerOpen,
-  timezoneOffsetMinutes
+  sourcePickerOpen
 }: BetCardProps) {
   const stake = Number(bet.stake || 0);
   const odds = Number(bet.odds || 0);
@@ -647,17 +664,14 @@ function BetCard({
 
   return (
     <article className={`calendar-bet-card ${bet.result} ${highlighted ? "highlighted" : ""}`} ref={cardRef}>
-      <div className="calendar-bet-top-actions">
-        <span className="calendar-bet-time" title="Время ставки">{formatBetTime(bet.created_at, timezoneOffsetMinutes)}</span>
-        <button
-          className="calendar-bet-edit-btn"
-          onClick={() => (isEditing ? onCancelEdit() : onStartEdit(bet))}
-          title={isEditing ? "Отменить редактирование" : "Редактировать прогноз"}
-          type="button"
-        >
-          {isEditing ? "✕" : "✏️"}
-        </button>
-      </div>
+      <button
+        className="calendar-bet-edit-btn"
+        onClick={() => (isEditing ? onCancelEdit() : onStartEdit(bet))}
+        title={isEditing ? "Отменить редактирование" : "Редактировать прогноз"}
+        type="button"
+      >
+        {isEditing ? "✕" : "✏️"}
+      </button>
 
       {isEditing && editForm ? (
         <div className="calendar-bet-edit-form">
@@ -821,19 +835,7 @@ export default function Home() {
   const [editForm, setEditForm] = useState<EditBetForm | null>(null);
   const [highlightBetId, setHighlightBetId] = useState<string | null>(null);
   const [sourcePickerForBetId, setSourcePickerForBetId] = useState<string | null>(null);
-  const [timezonePickerOpen, setTimezonePickerOpen] = useState(false);
-  const profilePillRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!timezonePickerOpen) return;
-    const handleOutside = (event: MouseEvent) => {
-      if (profilePillRef.current && !profilePillRef.current.contains(event.target as Node)) {
-        setTimezonePickerOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, [timezonePickerOpen]);
+  const [countryFilter, setCountryFilter] = useState("all");
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState("Автообновление каждые 5 минут");
@@ -1064,14 +1066,15 @@ export default function Home() {
 
     return upcomingMatches.filter(match => {
       const sportOk = activeSport === "all" || match.sport === activeSport;
+      const countryOk = countryFilter === "all" || match.country === countryFilter;
       const haystack = searchHaystack(match.home, match.away, match.league, match.country);
       const searchOk =
         !queryGroups.length ||
         queryGroups.every(group => group.some(token => haystack.includes(token)));
 
-      return sportOk && searchOk;
+      return sportOk && countryOk && searchOk;
     });
-  }, [activeSport, lineMatches, searchQuery]);
+  }, [activeSport, countryFilter, lineMatches, searchQuery]);
 
   const matchCounts = useMemo(() => {
     const upcomingMatches = getUpcomingMatches(lineMatches);
@@ -1085,6 +1088,15 @@ export default function Home() {
       all: upcomingMatches.length,
       bySport: counts
     };
+  }, [lineMatches]);
+
+  const countryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const match of getUpcomingMatches(lineMatches)) {
+      const c = match.country;
+      if (c) counts.set(c, (counts.get(c) || 0) + 1);
+    }
+    return counts;
   }, [lineMatches]);
 
   async function refreshMatchesWindow() {
@@ -1740,22 +1752,8 @@ export default function Home() {
     setDataLoading(false);
   }
 
-  async function saveTimezone(offsetMinutes: number) {
-    if (!user) return;
-    setTimezonePickerOpen(false);
-    const { data, error } = await supabase.auth.updateUser({
-      data: { timezone_offset_minutes: offsetMinutes }
-    });
-    if (error) {
-      setDataMessage(error.message);
-    } else if (data.user) {
-      setUser(data.user);
-    }
-  }
-
   if (user) {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Игрок";
-    const timezoneOffsetMinutes = getUserTimezoneOffsetMinutes(user);
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
     const pendingRailBets = pendingBets.slice(0, 5);
@@ -1765,29 +1763,12 @@ export default function Home() {
         <header className="workspace-topbar">
           <div className="workspace-brand">Stakeversee</div>
 
-          <div className="profile-pill" onClick={() => setTimezonePickerOpen(current => !current)} ref={profilePillRef}>
+          <div className="profile-pill">
             <span>{userName.slice(0, 1).toUpperCase()}</span>
             <div>
               <strong>{userName}</strong>
-              <small>{TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes)?.label || "игрок"}</small>
+              <small>игрок</small>
             </div>
-            {timezonePickerOpen ? (
-              <div className="timezone-picker" onClick={event => event.stopPropagation()} role="listbox">
-                <div className="timezone-picker-title">Часовой пояс</div>
-                {TIMEZONE_OPTIONS.map(tz => (
-                  <button
-                    className={tz.offset === timezoneOffsetMinutes ? "active" : ""}
-                    key={tz.offset}
-                    onClick={() => saveTimezone(tz.offset)}
-                    role="option"
-                    aria-selected={tz.offset === timezoneOffsetMinutes}
-                    type="button"
-                  >
-                    {tz.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
           </div>
 
           <div className="sync-meter">
@@ -1834,11 +1815,16 @@ export default function Home() {
             <div className="match-filters">
               <label>
                 <span>Страна:</span>
-                <select>
-                  <option>🌐 Все страны</option>
-                  <option>🇷🇺 Россия</option>
-                  <option>🇺🇸 США</option>
-                  <option>🇬🇧 Англия</option>
+                <select onChange={e => setCountryFilter(e.target.value)} value={countryFilter}>
+                  <option value="all">🌍 Все страны</option>
+                  {Array.from(countryCounts.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([country, count]) => (
+                      <option key={country} value={country}>
+                        {getCountryFlag(country)} {country} ({count})
+                      </option>
+                    ))
+                  }
                 </select>
               </label>
               <label>
@@ -1881,7 +1867,7 @@ export default function Home() {
                 shownMatches.map(match => (
                   <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
                     <div className="match-meta">
-                      <span>{match.country}</span>
+                      <span>{getCountryFlag(match.country)} {match.country}</span>
                       <strong>{match.league}</strong>
                       <time>{match.time}</time>
                     </div>
@@ -2315,7 +2301,6 @@ export default function Home() {
                           sourceById={sourceById}
                           sourceOptions={sources.filter(source => !source.is_blacklisted)}
                           sourcePickerOpen={sourcePickerForBetId === bet.id}
-                          timezoneOffsetMinutes={timezoneOffsetMinutes}
                         />
                       ))}
                     </div>
@@ -2415,7 +2400,6 @@ export default function Home() {
                           sourceById={sourceById}
                           sourceOptions={sources.filter(source => !source.is_blacklisted)}
                           sourcePickerOpen={sourcePickerForBetId === bet.id}
-                          timezoneOffsetMinutes={timezoneOffsetMinutes}
                         />
                       );
                     })}
