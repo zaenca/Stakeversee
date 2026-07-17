@@ -259,6 +259,37 @@ function getCountryFlag(country: string): string {
   return COUNTRY_FLAGS[country] ?? COUNTRY_FLAGS[country.toUpperCase()] ?? "🌐";
 }
 
+const COUNTRY_RU_NAMES: Record<string, string> = {
+  "Russia": "Россия", "England": "Англия", "USA": "США", "Germany": "Германия",
+  "France": "Франция", "Spain": "Испания", "Italy": "Италия", "Japan": "Япония",
+  "Brazil": "Бразилия", "Australia": "Австралия", "China": "Китай",
+  "South Korea": "Южная Корея", "Korea": "Южная Корея", "Poland": "Польша",
+  "Turkey": "Турция", "Ukraine": "Украина", "Netherlands": "Нидерланды",
+  "Belgium": "Бельгия", "Portugal": "Португалия", "Argentina": "Аргентина",
+  "Mexico": "Мексика", "Canada": "Канада", "Serbia": "Сербия",
+  "Croatia": "Хорватия", "Czech Republic": "Чехия", "Romania": "Румыния",
+  "Sweden": "Швеция", "Norway": "Норвегия", "Denmark": "Дания",
+  "Finland": "Финляндия", "Switzerland": "Швейцария", "Austria": "Австрия",
+  "Greece": "Греция", "Hungary": "Венгрия", "Slovakia": "Словакия",
+  "Bulgaria": "Болгария", "Israel": "Израиль", "Kazakhstan": "Казахстан",
+  "Belarus": "Беларусь", "Thailand": "Таиланд", "India": "Индия",
+  "Taiwan": "Тайвань", "World": "Мир", "New Zealand": "Новая Зеландия",
+  "Indonesia": "Индонезия", "Iran": "Иран", "United Arab Emirates": "ОАЭ",
+  "Qatar": "Катар", "Chile": "Чили", "Colombia": "Колумбия", "Peru": "Перу",
+  "Egypt": "Египет", "Morocco": "Марокко", "Tunisia": "Тунис",
+  "Lithuania": "Литва", "Latvia": "Латвия", "Estonia": "Эстония",
+  "Philippines": "Филиппины", "Saudi Arabia": "Саудовская Аравия",
+  "Scotland": "Шотландия", "Wales": "Уэльс", "Ireland": "Ирландия",
+  "Slovenia": "Словения", "Bosnia and Herzegovina": "Босния и Герцеговина",
+  "North Macedonia": "Северная Македония", "Albania": "Албания",
+  "Iceland": "Исландия", "Vietnam": "Вьетнам", "Malaysia": "Малайзия",
+  "Singapore": "Сингапур", "Hong Kong": "Гонконг",
+};
+
+function getCountryLabel(country: string): string {
+  return COUNTRY_RU_NAMES[country] ?? country;
+}
+
 
 const demoMatches: MatchRow[] = [
   {
@@ -540,6 +571,78 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
               </button>
             );
           })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type FilterOption = {
+  count?: number;
+  flag?: string;
+  label: string;
+  value: string;
+};
+
+type MatchFilterDropdownProps = {
+  onChange: (value: string) => void;
+  options: FilterOption[];
+  placeholderIcon: string;
+  placeholderLabel: string;
+  value: string;
+};
+
+function MatchFilterDropdown({ onChange, options, placeholderIcon, placeholderLabel, value }: MatchFilterDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  const selected = options.find(option => option.value === value);
+
+  return (
+    <div className="match-filter-dropdown" ref={rootRef}>
+      <button
+        className="source-dropdown-trigger"
+        onClick={() => setOpen(current => !current)}
+        type="button"
+      >
+        <span className="source-dropdown-trigger-label">
+          {selected ? `${selected.flag ? selected.flag + " " : ""}${selected.label}` : `${placeholderIcon} ${placeholderLabel}`}
+        </span>
+        <span className="source-dropdown-caret" aria-hidden="true">▾</span>
+      </button>
+      {open ? (
+        <div className="source-dropdown-menu match-filter-dropdown-menu" role="listbox">
+          {options.map(option => (
+            <button
+              className={`source-dropdown-item ${option.value === value ? "active" : ""}`}
+              key={option.value}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              role="option"
+              aria-selected={option.value === value}
+              type="button"
+            >
+              <span className="source-dropdown-item-label">
+                {option.flag ? `${option.flag} ` : ""}{option.label}
+              </span>
+              {option.count !== undefined ? (
+                <span className="match-filter-dropdown-count">{option.count}</span>
+              ) : null}
+            </button>
+          ))}
         </div>
       ) : null}
     </div>
@@ -836,6 +939,7 @@ export default function Home() {
   const [highlightBetId, setHighlightBetId] = useState<string | null>(null);
   const [sourcePickerForBetId, setSourcePickerForBetId] = useState<string | null>(null);
   const [countryFilter, setCountryFilter] = useState("all");
+  const [leagueFilter, setLeagueFilter] = useState("all");
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState("Автообновление каждые 5 минут");
@@ -1067,14 +1171,15 @@ export default function Home() {
     return upcomingMatches.filter(match => {
       const sportOk = activeSport === "all" || match.sport === activeSport;
       const countryOk = countryFilter === "all" || match.country === countryFilter;
+      const leagueOk = leagueFilter === "all" || match.league === leagueFilter;
       const haystack = searchHaystack(match.home, match.away, match.league, match.country);
       const searchOk =
         !queryGroups.length ||
         queryGroups.every(group => group.some(token => haystack.includes(token)));
 
-      return sportOk && countryOk && searchOk;
+      return sportOk && countryOk && leagueOk && searchOk;
     });
-  }, [activeSport, countryFilter, lineMatches, searchQuery]);
+  }, [activeSport, countryFilter, leagueFilter, lineMatches, searchQuery]);
 
   const matchCounts = useMemo(() => {
     const upcomingMatches = getUpcomingMatches(lineMatches);
@@ -1098,6 +1203,18 @@ export default function Home() {
     }
     return counts;
   }, [lineMatches]);
+
+  const leagueCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const match of getUpcomingMatches(lineMatches)) {
+      const sportOk = activeSport === "all" || match.sport === activeSport;
+      const countryOk = countryFilter === "all" || match.country === countryFilter;
+      if (!sportOk || !countryOk) continue;
+      const l = match.league;
+      if (l) counts.set(l, (counts.get(l) || 0) + 1);
+    }
+    return counts;
+  }, [activeSport, countryFilter, lineMatches]);
 
   async function refreshMatchesWindow() {
     const cachedMatches = readCachedMatches();
@@ -1815,25 +1932,32 @@ export default function Home() {
             <div className="match-filters">
               <label>
                 <span>Страна:</span>
-                <select onChange={e => setCountryFilter(e.target.value)} value={countryFilter}>
-                  <option value="all">🌍 Все страны</option>
-                  {Array.from(countryCounts.entries())
+                <MatchFilterDropdown
+                  onChange={value => { setCountryFilter(value); setLeagueFilter("all"); }}
+                  options={Array.from(countryCounts.entries())
                     .sort((a, b) => b[1] - a[1])
-                    .map(([country, count]) => (
-                      <option key={country} value={country}>
-                        {getCountryFlag(country)} {country} ({count})
-                      </option>
-                    ))
-                  }
-                </select>
+                    .map(([country, count]) => ({
+                      count,
+                      flag: getCountryFlag(country),
+                      label: getCountryLabel(country),
+                      value: country
+                    }))}
+                  placeholderIcon="🌍"
+                  placeholderLabel="Все страны"
+                  value={countryFilter}
+                />
               </label>
               <label>
                 <span>Лига:</span>
-                <select>
-                  <option>🏆 Все лиги</option>
-                  <option>Топовые лиги</option>
-                  <option>Избранные</option>
-                </select>
+                <MatchFilterDropdown
+                  onChange={setLeagueFilter}
+                  options={Array.from(leagueCounts.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([league, count]) => ({ count, label: league, value: league }))}
+                  placeholderIcon="🏆"
+                  placeholderLabel="Все лиги"
+                  value={leagueFilter}
+                />
               </label>
 
               <div className="filter-buttons">
@@ -1855,8 +1979,9 @@ export default function Home() {
               </div>
 
               <input
+                className="match-search-input"
                 onChange={event => setSearchQuery(event.target.value)}
-                placeholder="🔍 Команда, лига..."
+                placeholder="🔍 Поиск..."
                 spellCheck={false}
                 value={searchQuery}
               />
@@ -1867,7 +1992,7 @@ export default function Home() {
                 shownMatches.map(match => (
                   <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
                     <div className="match-meta">
-                      <span>{getCountryFlag(match.country)} {match.country}</span>
+                      <span>{getCountryFlag(match.country)} {getCountryLabel(match.country)}</span>
                       <strong>{match.league}</strong>
                       <time>{match.time}</time>
                     </div>
