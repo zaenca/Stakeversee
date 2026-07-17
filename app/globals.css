@@ -1101,9 +1101,13 @@ h1 {
   display: grid;
   font-size: 0.7rem;
   gap: 8px;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.match-meta-sport {
+  white-space: nowrap;
 }
 
 .match-meta span {
