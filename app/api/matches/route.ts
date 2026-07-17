@@ -172,6 +172,27 @@ function normalizeCountryName(raw: string): string {
   return COUNTRY_NAME_MAP[upper] ?? raw;
 }
 
+// Список реальных стран — всё что не входит сюда (лиги, туры, дисциплины
+// вроде LoL/Counter-Strike/ATP/UTR Pro) не считается страной и уходит в лигу.
+const KNOWN_COUNTRIES = new Set([
+  "russia", "england", "usa", "germany", "france", "spain", "italy", "japan",
+  "brazil", "australia", "china", "south korea", "korea", "poland", "turkey",
+  "ukraine", "netherlands", "belgium", "portugal", "argentina", "mexico",
+  "canada", "serbia", "croatia", "czech republic", "romania", "sweden",
+  "norway", "denmark", "finland", "switzerland", "austria", "greece",
+  "hungary", "slovakia", "bulgaria", "israel", "kazakhstan", "belarus",
+  "thailand", "india", "taiwan", "new zealand", "indonesia", "iran",
+  "united arab emirates", "qatar", "chile", "colombia", "peru", "egypt",
+  "morocco", "tunisia", "lithuania", "latvia", "estonia", "philippines",
+  "saudi arabia", "scotland", "wales", "ireland", "slovenia",
+  "bosnia and herzegovina", "north macedonia", "albania", "iceland",
+  "vietnam", "malaysia", "singapore", "hong kong", "world",
+]);
+
+function isKnownCountry(name: string): boolean {
+  return KNOWN_COUNTRIES.has(name.toLowerCase().trim());
+}
+
 function extractCountryAndLeague(data: PariLikeData, item: PariLikeEvent): { country: string; league: string } {
   const sports = asArray(data.sports);
   const byId = new Map<number, PariLikeEvent>(sports.map((s) => [asNumber(s.id), s]));
@@ -190,14 +211,26 @@ function extractCountryAndLeague(data: PariLikeData, item: PariLikeEvent): { cou
 
   if (nonSport.length >= 2) {
     const league = asString(nonSport[0].name);
-    const country = normalizeCountryName(asString(nonSport[1].name));
-    return { country, league };
+    const countryCandidate = normalizeCountryName(asString(nonSport[1].name));
+    if (isKnownCountry(countryCandidate)) {
+      return { country: countryCandidate, league };
+    }
+    // Не страна (например LoL, ATP, Counter-Strike, UTR Pro) — переносим в лигу
+    return { country: "World", league: `${countryCandidate} — ${league}` };
   }
   if (nonSport.length === 1) {
-    return splitCountryLeague(asString(nonSport[0].name));
+    const result = splitCountryLeague(asString(nonSport[0].name));
+    if (!isKnownCountry(result.country)) {
+      return { country: "World", league: asString(nonSport[0].name) };
+    }
+    return result;
   }
   const rawLeague = asString(chain.find((n) => n.kind !== "sport" && n.name)?.name || "World");
-  return splitCountryLeague(rawLeague);
+  const fallback = splitCountryLeague(rawLeague);
+  if (!isKnownCountry(fallback.country)) {
+    return { country: "World", league: rawLeague };
+  }
+  return fallback;
 }
 
 function factorOdd(factors: PariLikeEvent[], id: number): number | null {
