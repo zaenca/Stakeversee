@@ -947,6 +947,8 @@ export default function Home() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [calendarDateOpen, setCalendarDateOpen] = useState<Date | null>(null);
   const [sourceBetsOpen, setSourceBetsOpen] = useState<string | null>(null);
+  const [statsSortField, setStatsSortField] = useState<"roi" | "stake">("roi");
+  const [statsSortDirection, setStatsSortDirection] = useState<"asc" | "desc">("desc");
   const [editingBetId, setEditingBetId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditBetForm | null>(null);
   const [highlightBetId, setHighlightBetId] = useState<string | null>(null);
@@ -1099,12 +1101,14 @@ export default function Home() {
   const sourceStats = useMemo(() => {
     const sourceMeta = new Map(sources.map(source => [source.id, source]));
     const grouped = new Map<string, {
+      avgOdds: number;
       avgStake: number;
       bets: number;
       id: string;
       is_blacklisted: boolean;
       losses: number;
       name: string;
+      oddsSum: number;
       profit: number;
       returns: number;
       roi: number;
@@ -1118,12 +1122,14 @@ export default function Home() {
       if (current) return current;
 
       const next = {
+        avgOdds: 0,
         avgStake: 0,
         bets: 0,
         id,
         is_blacklisted: isBlacklisted,
         losses: 0,
         name: sourceDisplayName(name || "Без источника"),
+        oddsSum: 0,
         profit: 0,
         returns: 0,
         roi: 0,
@@ -1152,6 +1158,7 @@ export default function Home() {
         stat.bets += 1;
         stat.stake += Number(bet.stake || 0);
         stat.profit += betProfitValue(bet);
+        stat.oddsSum += Number(bet.odds || 0);
 
         if (bet.result === "win") stat.wins += 1;
         if (bet.result === "loss") stat.losses += 1;
@@ -1164,6 +1171,7 @@ export default function Home() {
         const winLossTotal = stat.wins + stat.losses;
         return {
           ...stat,
+          avgOdds: stat.bets ? stat.oddsSum / stat.bets : 0,
           avgStake: stat.bets ? stat.stake / stat.bets : 0,
           roi: stat.stake ? (stat.profit / stat.stake) * 100 : 0,
           winrate: winLossTotal ? (stat.wins / winLossTotal) * 100 : 0
@@ -1174,11 +1182,13 @@ export default function Home() {
 
   const bookmakerStats = useMemo(() => {
     const grouped = new Map<string, {
+      avgOdds: number;
       avgStake: number;
       bets: number;
       id: string;
       losses: number;
       name: string;
+      oddsSum: number;
       profit: number;
       returns: number;
       roi: number;
@@ -1192,11 +1202,13 @@ export default function Home() {
       if (current) return current;
 
       const next = {
+        avgOdds: 0,
         avgStake: 0,
         bets: 0,
         id: name,
         losses: 0,
         name,
+        oddsSum: 0,
         profit: 0,
         returns: 0,
         roi: 0,
@@ -1215,6 +1227,7 @@ export default function Home() {
       stat.bets += 1;
       stat.stake += Number(bet.stake || 0);
       stat.profit += betProfitValue(bet);
+      stat.oddsSum += Number(bet.odds || 0);
 
       if (bet.result === "win") stat.wins += 1;
       if (bet.result === "loss") stat.losses += 1;
@@ -1226,6 +1239,7 @@ export default function Home() {
         const winLossTotal = stat.wins + stat.losses;
         return {
           ...stat,
+          avgOdds: stat.bets ? stat.oddsSum / stat.bets : 0,
           avgStake: stat.bets ? stat.stake / stat.bets : 0,
           roi: stat.stake ? (stat.profit / stat.stake) * 100 : 0,
           winrate: winLossTotal ? (stat.wins / winLossTotal) * 100 : 0
@@ -1245,6 +1259,33 @@ export default function Home() {
       .filter(event => event.kind === "deposit" || event.kind === "withdrawal")
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [bankrollEvents]);
+
+  function toggleStatsSort(field: "roi" | "stake") {
+    if (statsSortField === field) {
+      setStatsSortDirection(current => (current === "desc" ? "asc" : "desc"));
+    } else {
+      setStatsSortField(field);
+      setStatsSortDirection("desc");
+    }
+  }
+
+  const sortedSourceStats = useMemo(() => {
+    const list = [...sourceStats];
+    list.sort((a, b) => {
+      const diff = statsSortField === "roi" ? a.roi - b.roi : a.stake - b.stake;
+      return statsSortDirection === "asc" ? diff : -diff;
+    });
+    return list;
+  }, [sourceStats, statsSortField, statsSortDirection]);
+
+  const sortedBookmakerStats = useMemo(() => {
+    const list = [...bookmakerStats];
+    list.sort((a, b) => {
+      const diff = statsSortField === "roi" ? a.roi - b.roi : a.stake - b.stake;
+      return statsSortDirection === "asc" ? diff : -diff;
+    });
+    return list;
+  }, [bookmakerStats, statsSortField, statsSortDirection]);
 
   const sourceRoiById = useMemo(
     () => new Map(sourceStats.map(stat => [stat.id, stat.roi])),
@@ -2536,13 +2577,32 @@ export default function Home() {
               >
                 <div className="rail-title">Статистика источников</div>
                 <button className="stats-modal-close" aria-label="Закрыть статистику" onClick={() => setStatsOpen(false)} type="button">×</button>
+
+                <div className="stats-sort-bar">
+                  <span>Сортировка</span>
+                  <button
+                    className={statsSortField === "roi" ? "active" : ""}
+                    onClick={() => toggleStatsSort("roi")}
+                    type="button"
+                  >
+                    ROI {statsSortField === "roi" ? (statsSortDirection === "desc" ? "↓" : "↑") : ""}
+                  </button>
+                  <button
+                    className={statsSortField === "stake" ? "active" : ""}
+                    onClick={() => toggleStatsSort("stake")}
+                    type="button"
+                  >
+                    Сумма ставок {statsSortField === "stake" ? (statsSortDirection === "desc" ? "↓" : "↑") : ""}
+                  </button>
+                </div>
+
                 <div className="stats-block">
                   <div className="stats-block-head">
                     <strong>Рассчитанные ставки</strong>
                     <span>{settledBets.length}</span>
                   </div>
                   <div className="source-stat-list">
-                    {sourceStats.length ? sourceStats.map(source => (
+                    {sortedSourceStats.length ? sortedSourceStats.map(source => (
                       <article className={`source-stat-card ${source.is_blacklisted ? "blacklisted" : ""}`} key={source.id}>
                         <div className="source-stat-top">
                           <strong>{source.name}</strong>
@@ -2552,7 +2612,7 @@ export default function Home() {
                           <div><span>Ставок</span><strong>{source.bets}</strong></div>
                           <div><span>В/П</span><strong>{source.wins}/{source.losses}</strong></div>
                           <div><span>Winrate</span><strong>{source.winrate.toFixed(0)}%</strong></div>
-                          <div><span>Возврат</span><strong>{source.returns}</strong></div>
+                          <div><span>Ср. кэф</span><strong>{source.avgOdds.toFixed(2)}</strong></div>
                           <div><span>Сумма</span><strong>{formatMoney(source.stake)}</strong></div>
                           <div><span>Средняя</span><strong>{formatMoney(source.avgStake)}</strong></div>
                         </div>
@@ -2574,7 +2634,7 @@ export default function Home() {
                     <span>{bookmakerStats.length}</span>
                   </div>
                   <div className="source-stat-list">
-                    {bookmakerStats.length ? bookmakerStats.map(bookmaker => (
+                    {sortedBookmakerStats.length ? sortedBookmakerStats.map(bookmaker => (
                       <article className="source-stat-card" key={bookmaker.id}>
                         <div className="source-stat-top">
                           <strong>{bookmaker.name}</strong>
@@ -2584,7 +2644,7 @@ export default function Home() {
                           <div><span>Ставок</span><strong>{bookmaker.bets}</strong></div>
                           <div><span>В/П</span><strong>{bookmaker.wins}/{bookmaker.losses}</strong></div>
                           <div><span>Winrate</span><strong>{bookmaker.winrate.toFixed(0)}%</strong></div>
-                          <div><span>Возврат</span><strong>{bookmaker.returns}</strong></div>
+                          <div><span>Ср. кэф</span><strong>{bookmaker.avgOdds.toFixed(2)}</strong></div>
                           <div><span>Сумма</span><strong>{formatMoney(bookmaker.stake)}</strong></div>
                           <div><span>Прибыль</span><strong className={bookmaker.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(bookmaker.profit)}</strong></div>
                         </div>
