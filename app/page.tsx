@@ -1172,6 +1172,80 @@ export default function Home() {
       .sort((a, b) => a.name.localeCompare(b.name, "ru", { sensitivity: "base" }));
   }, [settledBets, sources]);
 
+  const bookmakerStats = useMemo(() => {
+    const grouped = new Map<string, {
+      avgStake: number;
+      bets: number;
+      id: string;
+      losses: number;
+      name: string;
+      profit: number;
+      returns: number;
+      roi: number;
+      stake: number;
+      winrate: number;
+      wins: number;
+    }>();
+
+    const ensureBookmaker = (name: string) => {
+      const current = grouped.get(name);
+      if (current) return current;
+
+      const next = {
+        avgStake: 0,
+        bets: 0,
+        id: name,
+        losses: 0,
+        name,
+        profit: 0,
+        returns: 0,
+        roi: 0,
+        stake: 0,
+        winrate: 0,
+        wins: 0
+      };
+      grouped.set(name, next);
+      return next;
+    };
+
+    for (const bet of settledBets) {
+      const name = (bet.bookmaker || "").trim() || "Букмекер не указан";
+      const stat = ensureBookmaker(name);
+
+      stat.bets += 1;
+      stat.stake += Number(bet.stake || 0);
+      stat.profit += betProfitValue(bet);
+
+      if (bet.result === "win") stat.wins += 1;
+      if (bet.result === "loss") stat.losses += 1;
+      if (bet.result === "return") stat.returns += 1;
+    }
+
+    return Array.from(grouped.values())
+      .map(stat => {
+        const winLossTotal = stat.wins + stat.losses;
+        return {
+          ...stat,
+          avgStake: stat.bets ? stat.stake / stat.bets : 0,
+          roi: stat.stake ? (stat.profit / stat.stake) * 100 : 0,
+          winrate: winLossTotal ? (stat.wins / winLossTotal) * 100 : 0
+        };
+      })
+      .sort((a, b) => b.bets - a.bets);
+  }, [settledBets]);
+
+  const bankrollAdjustments = useMemo(() => {
+    const normalizedEvents = Array.from(bankrollEvents.reduce((map, event) => {
+      const isBetSettlement = Boolean(event.bet_id) && ["win", "loss", "return"].includes(event.kind);
+      map.set(isBetSettlement ? "bet:" + event.bet_id : "event:" + event.id, event);
+      return map;
+    }, new Map<string, BankrollEventRow>()).values());
+
+    return normalizedEvents
+      .filter(event => event.kind === "deposit" || event.kind === "withdrawal")
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [bankrollEvents]);
+
   const sourceRoiById = useMemo(
     () => new Map(sourceStats.map(stat => [stat.id, stat.roi])),
     [sourceStats]
@@ -2491,6 +2565,67 @@ export default function Home() {
                         </button>
                       </article>
                     )) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
+                  </div>
+                </div>
+
+                <div className="stats-block">
+                  <div className="stats-block-head">
+                    <strong>Статистика по букмекерам</strong>
+                    <span>{bookmakerStats.length}</span>
+                  </div>
+                  <div className="source-stat-list">
+                    {bookmakerStats.length ? bookmakerStats.map(bookmaker => (
+                      <article className="source-stat-card" key={bookmaker.id}>
+                        <div className="source-stat-top">
+                          <strong>{bookmaker.name}</strong>
+                          <span className={bookmaker.roi >= 0 ? "roi-positive" : "roi-negative"}>ROI {bookmaker.roi >= 0 ? "+" : ""}{bookmaker.roi.toFixed(1)}%</span>
+                        </div>
+                        <div className="source-stat-grid">
+                          <div><span>Ставок</span><strong>{bookmaker.bets}</strong></div>
+                          <div><span>В/П</span><strong>{bookmaker.wins}/{bookmaker.losses}</strong></div>
+                          <div><span>Winrate</span><strong>{bookmaker.winrate.toFixed(0)}%</strong></div>
+                          <div><span>Возврат</span><strong>{bookmaker.returns}</strong></div>
+                          <div><span>Сумма</span><strong>{formatMoney(bookmaker.stake)}</strong></div>
+                          <div><span>Прибыль</span><strong className={bookmaker.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(bookmaker.profit)}</strong></div>
+                        </div>
+                      </article>
+                    )) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
+                  </div>
+                </div>
+
+                <div className="stats-block">
+                  <div className="stats-block-head">
+                    <strong>Пополнения и выводы</strong>
+                    <span>{bankrollAdjustments.length}</span>
+                  </div>
+                  <div className="bankroll-summary-grid">
+                    <div>
+                      <span>Пополнено</span>
+                      <strong className="roi-positive-text">{formatMoney(bankrollStats.deposits)}</strong>
+                    </div>
+                    <div>
+                      <span>Выведено</span>
+                      <strong className="roi-negative-text">{formatMoney(bankrollStats.withdrawals)}</strong>
+                    </div>
+                    <div>
+                      <span>Итого</span>
+                      <strong className={bankrollStats.deposits - bankrollStats.withdrawals >= 0 ? "roi-positive-text" : "roi-negative-text"}>
+                        {formatMoney(bankrollStats.deposits - bankrollStats.withdrawals)}
+                      </strong>
+                    </div>
+                  </div>
+                  <div className="bankroll-adjustments-list">
+                    {bankrollAdjustments.length ? bankrollAdjustments.map(event => (
+                      <div className="bankroll-adjustment-row" key={event.id}>
+                        <span className="bankroll-adjustment-date">
+                          {new Date(event.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                        </span>
+                        <span className="bankroll-adjustment-note">{event.note || (event.kind === "deposit" ? "Пополнение" : "Вывод")}</span>
+                        <strong className={event.kind === "deposit" ? "roi-positive-text" : "roi-negative-text"}>
+                          {event.kind === "deposit" ? "+" : ""}{formatMoney(Number(event.amount || 0))}
+                        </strong>
+                      </div>
+                    )) : <span className="empty">Пополнения и выводы появятся здесь после первой операции с балансом.</span>}
                   </div>
                 </div>
               </section>

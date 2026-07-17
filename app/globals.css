@@ -2297,6 +2297,98 @@ h1 {
   padding: 2px 8px;
 }
 
+.roi-positive-text {
+  color: var(--green);
+}
+
+.roi-negative-text {
+  color: var(--red);
+}
+
+.bankroll-summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bankroll-summary-grid > div {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  text-align: center;
+}
+
+.bankroll-summary-grid span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.bankroll-summary-grid strong {
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.bankroll-adjustments-list {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-color: rgba(0, 229, 255, 0.85) rgba(255, 255, 255, 0.04);
+  scrollbar-width: thin;
+}
+
+.bankroll-adjustments-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bankroll-adjustments-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+
+.bankroll-adjustments-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan), rgba(145, 95, 255, 0.9));
+  border-radius: 999px;
+}
+
+.bankroll-adjustment-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto 1fr auto;
+  padding: 9px 11px;
+}
+
+.bankroll-adjustment-date {
+  color: var(--muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.bankroll-adjustment-note {
+  color: var(--text);
+  font-size: 0.8rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bankroll-adjustment-row strong {
+  font-size: 0.85rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .source-stat-list {
   display: grid;
   gap: 8px;
