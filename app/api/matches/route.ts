@@ -190,8 +190,7 @@ function fromBookmakerEvent(data: PariLikeData, item: PariLikeEvent, factorMap: 
   if (!odds) return null;
   const startMs = startMsFrom(item.startTime, item.startTimestamp, item.timestamp);
   if (!startMs) return null;
-  const rawLeague = leagueName(data, item);
-  const locale = splitCountryLeague(rawLeague);
+  const locale = extractCountryAndLeague(data, item);
   return {
     id: `${source}-${asString(item.id)}`,
     sport,
