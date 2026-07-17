@@ -143,9 +143,61 @@ function leagueName(data: PariLikeData, item: PariLikeEvent): string {
 }
 
 function splitCountryLeague(league: string): { country: string; league: string } {
-  const parts = league.split(/[Â·:]/).map((part) => part.trim()).filter(Boolean);
-  if (parts.length >= 2) return { country: parts[0], league: parts.slice(1).join(" Â· ") };
+  const parts1 = league.split(/[\u00b7:]/).map((part) => part.trim()).filter(Boolean);
+  if (parts1.length >= 2) return { country: normalizeCountryName(parts1[0]), league: parts1.slice(1).join(" \u00b7 ") };
+  const parts2 = league.split(".").map((part) => part.trim()).filter(Boolean);
+  if (parts2.length >= 2) return { country: normalizeCountryName(parts2[0]), league: parts2.slice(1).join(". ") };
   return { country: "World", league: league || "World" };
+}
+
+const COUNTRY_NAME_MAP: Record<string, string> = {
+  "\u0411\u0415\u041b\u0410\u0420\u0423\u0421\u042c": "Belarus", "\u0420\u041e\u0421\u0421\u0418\u042f": "Russia", "\u0423\u041a\u0420\u0410\u0418\u041d\u0410": "Ukraine",
+  "\u042f\u041f\u041e\u041d\u0418\u042f": "Japan", "\u041a\u0418\u0422\u0410\u0419": "China", "\u041a\u041e\u0420\u0415\u042f": "South Korea",
+  "\u0411\u0420\u0410\u0417\u0418\u041b\u0418\u042f": "Brazil", "\u0410\u0420\u0413\u0415\u041d\u0422\u0418\u041d\u0410": "Argentina", "\u041c\u0415\u041a\u0421\u0418\u041a\u0410": "Mexico",
+  "\u0421\u0428\u0410": "USA", "\u041a\u0410\u041d\u0410\u0414\u0410": "Canada", "\u0410\u0412\u0421\u0422\u0420\u0410\u041b\u0418\u042f": "Australia",
+  "\u0413\u0415\u0420\u041c\u0410\u041d\u0418\u042f": "Germany", "\u0424\u0420\u0410\u041d\u0426\u0418\u042f": "France", "\u0418\u0421\u041f\u0410\u041d\u0418\u042f": "Spain",
+  "\u0418\u0422\u0410\u041b\u0418\u042f": "Italy", "\u041f\u041e\u041b\u042c\u0428\u0410": "Poland", "\u0422\u0423\u0420\u0426\u0418\u042f": "Turkey",
+  "\u041d\u0418\u0414\u0415\u0420\u041b\u0410\u041d\u0414\u042b": "Netherlands", "\u0411\u0415\u041b\u042c\u0413\u0418\u042f": "Belgium", "\u041f\u041e\u0420\u0422\u0423\u0413\u0410\u041b\u0418\u042f": "Portugal",
+  "\u0428\u0412\u0415\u0426\u0418\u042f": "Sweden", "\u041d\u041e\u0420\u0412\u0415\u0413\u0418\u042f": "Norway", "\u0414\u0410\u041d\u0418\u042f": "Denmark",
+  "\u0424\u0418\u041d\u041b\u042f\u041d\u0414\u0418\u042f": "Finland", "\u0428\u0412\u0415\u0419\u0426\u0410\u0420\u0418\u042f": "Switzerland", "\u0410\u0412\u0421\u0422\u0420\u0418\u042f": "Austria",
+  "\u0413\u0420\u0415\u0426\u0418\u042f": "Greece", "\u0412\u0415\u041d\u0413\u0420\u0418\u042f": "Hungary", "\u0420\u0423\u041c\u042b\u041d\u0418\u042f": "Romania",
+  "\u0411\u041e\u041b\u0413\u0410\u0420\u0418\u042f": "Bulgaria", "\u0425\u041e\u0420\u0412\u0410\u0422\u0418\u042f": "Croatia", "\u0421\u0415\u0420\u0411\u0418\u042f": "Serbia",
+  "\u0421\u041b\u041e\u0412\u0410\u041a\u0418\u042f": "Slovakia", "\u0427\u0415\u0425\u0418\u042f": "Czech Republic", "\u0418\u0417\u0420\u0410\u0418\u041b\u042c": "Israel",
+  "\u041a\u0410\u0417\u0410\u0425\u0421\u0422\u0410\u041d": "Kazakhstan", "\u0422\u0410\u0418\u041b\u0410\u041d\u0414": "Thailand", "\u0418\u041d\u0414\u0418\u042f": "India",
+  "\u0422\u0410\u0419\u0412\u0410\u041d\u042c": "Taiwan", "\u041c\u0423\u0416\u0427\u0418\u041d\u042b": "ATP", "\u0416\u0415\u041d\u0429\u0418\u041d\u042b": "WTA",
+};
+
+function normalizeCountryName(raw: string): string {
+  const upper = raw.toUpperCase().trim();
+  return COUNTRY_NAME_MAP[upper] ?? raw;
+}
+
+function extractCountryAndLeague(data: PariLikeData, item: PariLikeEvent): { country: string; league: string } {
+  const sports = asArray(data.sports);
+  const byId = new Map<number, PariLikeEvent>(sports.map((s) => [asNumber(s.id), s]));
+
+  let current = byId.get(asNumber(item.sportId));
+  const guard = new Set<number>();
+  const chain: PariLikeEvent[] = [];
+
+  while (current && !guard.has(asNumber(current.id))) {
+    guard.add(asNumber(current.id));
+    chain.push(current);
+    current = byId.get(asNumber(current.parentId ?? asArray(current.parentIds)[0] ?? current.sportId));
+  }
+
+  const nonSport = chain.filter((n) => n.kind !== "sport" && n.name);
+
+  if (nonSport.length >= 2) {
+    const league = asString(nonSport[0].name);
+    const country = normalizeCountryName(asString(nonSport[1].name));
+    return { country, league };
+  }
+  if (nonSport.length === 1) {
+    return splitCountryLeague(asString(nonSport[0].name));
+  }
+  const rawLeague = asString(chain.find((n) => n.kind !== "sport" && n.name)?.name || "World");
+  return splitCountryLeague(rawLeague);
 }
 
 function factorOdd(factors: PariLikeEvent[], id: number): number | null {
