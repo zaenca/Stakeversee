@@ -208,6 +208,19 @@ const sportTabs = [
   { key: "baseball", label: "Бейсбол", icon: "⚾" }
 ];
 
+const SPORT_ICON_BY_KEY: Record<string, string> = Object.fromEntries(
+  sportTabs.filter(tab => tab.key !== "all").map(tab => [tab.key, tab.icon])
+);
+
+function getSportIcon(sport: string): string {
+  return SPORT_ICON_BY_KEY[sport] ?? "🏆";
+}
+
+function getSportLabel(sport: string): string {
+  const tab = sportTabs.find(t => t.key === sport);
+  return tab ? tab.label : sport;
+}
+
 const COUNTRY_FLAGS: Record<string, string> = {
   "Russia": "🇷🇺", "Россия": "🇷🇺",
   "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Англия": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "GB": "🇬🇧",
@@ -1993,6 +2006,7 @@ export default function Home() {
                   <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
                     <div className="match-meta">
                       <span>{getCountryFlag(match.country)} {getCountryLabel(match.country)}</span>
+                      <span className="match-meta-sport" title={getSportLabel(match.sport)}>{getSportIcon(match.sport)} {getSportLabel(match.sport)}</span>
                       <strong>{match.league}</strong>
                       <time>{match.time}</time>
                     </div>
