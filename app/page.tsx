@@ -1,6 +1,6 @@
 "use client";
 
-import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
@@ -270,6 +270,52 @@ const COUNTRY_FLAGS: Record<string, string> = {
 
 function getCountryFlag(country: string): string {
   return COUNTRY_FLAGS[country] ?? COUNTRY_FLAGS[country.toUpperCase()] ?? "🌐";
+}
+
+// Windows/Chrome не рендерит flag-эмодзи (регион. индикаторы) — показывает
+// буквенный код страны как текст. Поэтому используем реальные PNG-флаги.
+const COUNTRY_ISO: Record<string, string> = {
+  "Russia": "ru", "England": "gb-eng", "USA": "us", "Germany": "de",
+  "France": "fr", "Spain": "es", "Italy": "it", "Japan": "jp",
+  "Brazil": "br", "Australia": "au", "China": "cn", "South Korea": "kr",
+  "Korea": "kr", "Poland": "pl", "Turkey": "tr", "Ukraine": "ua",
+  "Netherlands": "nl", "Belgium": "be", "Portugal": "pt", "Argentina": "ar",
+  "Mexico": "mx", "Canada": "ca", "Serbia": "rs", "Croatia": "hr",
+  "Czech Republic": "cz", "Romania": "ro", "Sweden": "se", "Norway": "no",
+  "Denmark": "dk", "Finland": "fi", "Switzerland": "ch", "Austria": "at",
+  "Greece": "gr", "Hungary": "hu", "Slovakia": "sk", "Bulgaria": "bg",
+  "Israel": "il", "Kazakhstan": "kz", "Belarus": "by", "Thailand": "th",
+  "India": "in", "Taiwan": "tw", "New Zealand": "nz", "Indonesia": "id",
+  "Iran": "ir", "United Arab Emirates": "ae", "Qatar": "qa", "Chile": "cl",
+  "Colombia": "co", "Peru": "pe", "Egypt": "eg", "Morocco": "ma",
+  "Tunisia": "tn", "Lithuania": "lt", "Latvia": "lv", "Estonia": "ee",
+  "Philippines": "ph", "Saudi Arabia": "sa", "Scotland": "gb-sct",
+  "Wales": "gb-wls", "Ireland": "ie", "Slovenia": "si",
+  "Bosnia and Herzegovina": "ba", "North Macedonia": "mk", "Albania": "al",
+  "Iceland": "is", "Vietnam": "vn", "Malaysia": "my", "Singapore": "sg",
+  "Hong Kong": "hk",
+};
+
+function getCountryIso(country: string): string | null {
+  return COUNTRY_ISO[country] ?? null;
+}
+
+function FlagIcon({ country }: { country: string }) {
+  const iso = getCountryIso(country);
+  if (!iso) {
+    return <span className="flag-icon flag-icon-fallback" aria-hidden="true">🌍</span>;
+  }
+  return (
+    <img
+      alt=""
+      className="flag-icon"
+      height={13}
+      loading="lazy"
+      onError={event => { event.currentTarget.style.display = "none"; }}
+      src={`https://flagcdn.com/24x18/${iso}.png`}
+      width={17}
+    />
+  );
 }
 
 const COUNTRY_RU_NAMES: Record<string, string> = {
@@ -592,7 +638,7 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
 
 type FilterOption = {
   count?: number;
-  flag?: string;
+  flag?: ReactNode;
   label: string;
   value: string;
 };
@@ -630,7 +676,15 @@ function MatchFilterDropdown({ onChange, options, placeholderIcon, placeholderLa
         type="button"
       >
         <span className="source-dropdown-trigger-label">
-          {selected ? `${selected.flag ? selected.flag + " " : ""}${selected.label}` : `${placeholderIcon} ${placeholderLabel}`}
+          {selected ? (
+            <>
+              {selected.flag}
+              {selected.flag ? " " : ""}
+              {selected.label}
+            </>
+          ) : (
+            `${placeholderIcon} ${placeholderLabel}`
+          )}
         </span>
         <span className="source-dropdown-caret" aria-hidden="true">▾</span>
       </button>
@@ -649,7 +703,9 @@ function MatchFilterDropdown({ onChange, options, placeholderIcon, placeholderLa
               type="button"
             >
               <span className="source-dropdown-item-label">
-                {option.flag ? `${option.flag} ` : ""}{option.label}
+                {option.flag}
+                {option.flag ? " " : ""}
+                {option.label}
               </span>
               {option.count !== undefined ? (
                 <span className="match-filter-dropdown-count">{option.count}</span>
@@ -2066,7 +2122,7 @@ export default function Home() {
                     .sort((a, b) => b[1] - a[1])
                     .map(([country, count]) => ({
                       count,
-                      flag: getCountryFlag(country),
+                      flag: <FlagIcon country={country} />,
                       label: getCountryLabel(country),
                       value: country
                     }))}
@@ -2120,7 +2176,7 @@ export default function Home() {
                 shownMatches.map(match => (
                   <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
                     <div className="match-meta">
-                      <span>{getCountryFlag(match.country)} {getCountryLabel(match.country)}</span>
+                      <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country)}</span>
                       <span className="match-meta-sport" title={getSportLabel(match.sport)}>{getSportIcon(match.sport)} {getSportLabel(match.sport)}</span>
                       <strong>{match.league}</strong>
                       <time>{match.time}</time>
