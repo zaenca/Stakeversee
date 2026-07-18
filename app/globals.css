@@ -2444,6 +2444,24 @@ h1 {
   color: var(--red);
 }
 
+.roi-positive {
+  color: var(--green);
+  font-weight: 800;
+}
+
+.roi-negative {
+  color: var(--red);
+  font-weight: 800;
+}
+
+.stats-roi-amount {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin-top: 2px;
+  opacity: 0.85;
+}
+
 .bankroll-summary-grid {
   display: grid;
   gap: 10px;
@@ -3063,13 +3081,22 @@ h1 {
 }
 
 .source-dropdown-roi {
-  border-radius: 999px;
+  border-radius: 8px;
   color: #ffffff;
   flex-shrink: 0;
   font-size: 11px;
   font-weight: 900;
-  padding: 2px 7px;
+  line-height: 1.3;
+  padding: 3px 8px;
+  text-align: center;
   white-space: nowrap;
+}
+
+.source-dropdown-roi small {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  opacity: 0.9;
 }
 
 .source-dropdown-roi.positive {

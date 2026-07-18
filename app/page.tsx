@@ -608,7 +608,7 @@ type SourceDropdownProps = {
   onAddSource: () => void;
   onChange: (sourceId: string) => void;
   placeholder?: string;
-  roiById: Map<string, number>;
+  roiById: Map<string, { roi: number; profit: number }>;
   sources: SourceRow[];
   value: string;
 };
@@ -629,7 +629,7 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
   }, [open]);
 
   const selected = sources.find(source => source.id === value);
-  const selectedRoi = selected ? roiById.get(selected.id) : undefined;
+  const selectedStat = selected ? roiById.get(selected.id) : undefined;
 
   return (
     <div className="source-dropdown" ref={rootRef}>
@@ -641,9 +641,10 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
         <span className="source-dropdown-trigger-label">
           {selected ? selected.name : (placeholder || "— выберите источник —")}
         </span>
-        {selected && selectedRoi !== undefined ? (
-          <span className={`source-dropdown-roi ${selectedRoi >= 0 ? "positive" : "negative"}`}>
-            {selectedRoi >= 0 ? "+" : ""}{selectedRoi.toFixed(1)}%
+        {selected && selectedStat ? (
+          <span className={`source-dropdown-roi ${selectedStat.roi >= 0 ? "positive" : "negative"}`}>
+            {selectedStat.roi >= 0 ? "+" : ""}{selectedStat.roi.toFixed(1)}%
+            <small>{selectedStat.profit >= 0 ? "+" : ""}{formatMoney(selectedStat.profit)}</small>
           </span>
         ) : null}
         <span className="source-dropdown-caret" aria-hidden="true">▾</span>
@@ -661,7 +662,7 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
             + Добавить источник
           </button>
           {sources.map(source => {
-            const roi = roiById.get(source.id);
+            const stat = roiById.get(source.id);
             return (
               <button
                 className={`source-dropdown-item ${source.id === value ? "active" : ""}`}
@@ -675,9 +676,10 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
                 type="button"
               >
                 <span className="source-dropdown-item-label">{source.name}</span>
-                {roi !== undefined ? (
-                  <span className={`source-dropdown-roi ${roi >= 0 ? "positive" : "negative"}`}>
-                    {roi >= 0 ? "+" : ""}{roi.toFixed(1)}%
+                {stat ? (
+                  <span className={`source-dropdown-roi ${stat.roi >= 0 ? "positive" : "negative"}`}>
+                    {stat.roi >= 0 ? "+" : ""}{stat.roi.toFixed(1)}%
+                    <small>{stat.profit >= 0 ? "+" : ""}{formatMoney(stat.profit)}</small>
                   </span>
                 ) : null}
               </button>
@@ -1455,7 +1457,7 @@ export default function Home() {
   );
 
   const sourceRoiById = useMemo(
-    () => new Map(sourceStats.map(stat => [stat.id, stat.roi])),
+    () => new Map(sourceStats.map(stat => [stat.id, { roi: stat.roi, profit: stat.profit }])),
     [sourceStats]
   );
 
@@ -2823,7 +2825,10 @@ export default function Home() {
                           {sortedSourceStats.map(source => (
                             <tr className={source.is_blacklisted ? "blacklisted" : ""} key={source.id}>
                               <td className="stats-table-name">{source.name}</td>
-                              <td><span className={source.roi >= 0 ? "roi-positive" : "roi-negative"}>{source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span></td>
+                              <td>
+                                <span className={source.roi >= 0 ? "roi-positive" : "roi-negative"}>{source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>
+                                <span className={`stats-roi-amount ${source.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}`}>{source.profit >= 0 ? "+" : ""}{formatMoney(source.profit)}</span>
+                              </td>
                               <td>{source.bets}</td>
                               <td>{source.wins}/{source.losses}</td>
                               <td>{source.winrate.toFixed(0)}%</td>
@@ -2864,20 +2869,21 @@ export default function Home() {
                             <SortableTh field="winrate" label="% побед" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
                             <SortableTh field="avgOdds" label="Ср. кэф" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
                             <SortableTh field="stake" label="Сумма" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
-                            <SortableTh field="profit" label="Прибыль" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
                           </tr>
                         </thead>
                         <tbody>
                           {sortedBookmakerStats.map(bookmaker => (
                             <tr key={bookmaker.id}>
                               <td className="stats-table-name">{bookmaker.name}</td>
-                              <td><span className={bookmaker.roi >= 0 ? "roi-positive" : "roi-negative"}>{bookmaker.roi >= 0 ? "+" : ""}{bookmaker.roi.toFixed(1)}%</span></td>
+                              <td>
+                                <span className={bookmaker.roi >= 0 ? "roi-positive" : "roi-negative"}>{bookmaker.roi >= 0 ? "+" : ""}{bookmaker.roi.toFixed(1)}%</span>
+                                <span className={`stats-roi-amount ${bookmaker.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}`}>{bookmaker.profit >= 0 ? "+" : ""}{formatMoney(bookmaker.profit)}</span>
+                              </td>
                               <td>{bookmaker.bets}</td>
                               <td>{bookmaker.wins}/{bookmaker.losses}</td>
                               <td>{bookmaker.winrate.toFixed(0)}%</td>
                               <td>{bookmaker.avgOdds.toFixed(2)}</td>
                               <td>{formatMoney(bookmaker.stake)}</td>
-                              <td className={bookmaker.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(bookmaker.profit)}</td>
                             </tr>
                           ))}
                         </tbody>
