@@ -300,10 +300,30 @@ function getCountryIso(country: string): string | null {
   return COUNTRY_ISO[country] ?? null;
 }
 
+function WorldGlobeIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="flag-icon flag-icon-world"
+      fill="none"
+      height={13}
+      viewBox="0 0 17 13"
+      width={17}
+    >
+      <rect x="0.5" y="0.5" width="16" height="12" rx="2" fill="#0e4d92" />
+      <circle cx="8.5" cy="6.5" r="4.3" stroke="#9fd1ff" strokeWidth="0.6" fill="none" />
+      <ellipse cx="8.5" cy="6.5" rx="2" ry="4.3" stroke="#9fd1ff" strokeWidth="0.5" fill="none" />
+      <line x1="4.2" y1="6.5" x2="12.8" y2="6.5" stroke="#9fd1ff" strokeWidth="0.5" />
+      <line x1="5" y1="4" x2="12" y2="4" stroke="#9fd1ff" strokeWidth="0.4" />
+      <line x1="5" y1="9" x2="12" y2="9" stroke="#9fd1ff" strokeWidth="0.4" />
+    </svg>
+  );
+}
+
 function FlagIcon({ country }: { country: string }) {
   const iso = getCountryIso(country);
   if (!iso) {
-    return <span className="flag-icon flag-icon-fallback" aria-hidden="true">🌍</span>;
+    return <WorldGlobeIcon />;
   }
   return (
     <img
