@@ -1110,6 +1110,37 @@ h1 {
   white-space: nowrap;
 }
 
+.flag-icon {
+  border-radius: 2px;
+  display: inline-block;
+  flex-shrink: 0;
+  object-fit: cover;
+  vertical-align: -2px;
+}
+
+.flag-icon-fallback {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.match-meta-country {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.source-dropdown-item-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.source-dropdown-trigger-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
 .match-meta span {
   border: 1px solid var(--line);
   border-radius: 4px;
