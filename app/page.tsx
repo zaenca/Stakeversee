@@ -2674,9 +2674,9 @@ export default function Home() {
                         role="button"
                         tabIndex={0}
                       >
-                        <strong>{formatEventName(bet.event_name)}</strong>
+                        <strong title={formatEventName(bet.event_name)}>{formatEventName(bet.event_name)}</strong>
                         <span>{bet.bookmaker || "\u2014"}</span>
-                        <em>{sourceLabel}</em>
+                        <em title={sourceLabel}>{sourceLabel}</em>
                       </div>
                     );
                   })}

@@ -304,28 +304,10 @@ page = replaceAll(
 
 write(pagePath, page);
 
-const cssFix = `
-
-/* Prebuild safety: bankroll rail chips must be readable and never show artificial ellipsis. */
-.bank-bet-row span,
-.bank-bet-row em {
-  max-width: none;
-  min-width: max-content;
-  overflow: visible;
-  text-overflow: clip;
-  white-space: nowrap;
-}
-
-.bank-bet-row em::after {
-  content: none;
-}
-`;
-
-if (!css.includes("Prebuild safety: bankroll rail chips")) {
-  css += cssFix;
-  note("bank rail CSS readable chips", true);
-} else {
-  note("bank rail CSS readable chips", false);
-}
+// NOTE: the old forced-no-truncate CSS override for .bank-bet-row chips was
+// removed - it caused long bookmaker/source labels (e.g. multiple sources
+// joined with " + ") to overflow past the card edge instead of truncating.
+// Proper ellipsis truncation now lives directly in app/globals.css.
+note("bank rail CSS readable chips", false);
 
 write(cssPath, css);

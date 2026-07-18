@@ -1529,7 +1529,7 @@ h1 {
   cursor: pointer;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 108px);
   min-height: 38px;
   padding: 8px 9px;
   transition: background 0.15s, border-color 0.15s;
@@ -1569,12 +1569,12 @@ h1 {
   font-size: 0.62rem;
   font-style: normal;
   font-weight: 800;
-  max-width: none;
-  min-width: max-content;
-  overflow: visible;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   padding: 3px 7px;
-  text-overflow: clip;
-  white-space: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rail-bank-form {
@@ -3164,18 +3164,3 @@ h1 {
   }
 }
 
-
-
-/* Prebuild safety: bankroll rail chips must be readable and never show artificial ellipsis. */
-.bank-bet-row span,
-.bank-bet-row em {
-  max-width: none;
-  min-width: max-content;
-  overflow: visible;
-  text-overflow: clip;
-  white-space: nowrap;
-}
-
-.bank-bet-row em::after {
-  content: none;
-}
