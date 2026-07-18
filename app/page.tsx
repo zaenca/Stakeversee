@@ -3,6 +3,7 @@
 import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { type Lang, localeFor, translate, translateBetMarket, translateBetSelectionLine, translateBookmakerLabel, useLanguage } from "@/lib/i18n";
 
 type AuthMode = "login" | "register";
 type AuthStatus = "idle" | "loading" | "ok" | "error";
@@ -61,6 +62,19 @@ type CouponItem = {
   selection: string;
   odds: string;
 };
+
+type MatchesStatusState = {
+  kind: "idle" | "cache" | "live" | "unavailable";
+  count?: number;
+};
+
+function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => string): string {
+  if (status.kind === "cache") return `${t("Из кэша:")} ${status.count} ${t("матчей")}`;
+  if (status.kind === "live") return `${t("Автообновлено:")} ${status.count} ${t("матчей")}`;
+  if (status.kind === "unavailable") return t("Линия букмекеров пока не подключена");
+  return t("Автообновление каждые 5 минут");
+}
+
 const MATCH_CACHE_KEY = "stakeversee:line-matches:v2";
 
 const MAX_COUPON_ITEMS = 5;
@@ -207,11 +221,11 @@ function sourceDisplayName(value?: string | null): string {
   return name || "Источник —";
 }
 
-function resultLabel(result: BetRow["result"]): string {
-  if (result === "win") return "Выигрыш";
-  if (result === "loss") return "Проигрыш";
-  if (result === "return") return "Возврат";
-  return "Ожидает";
+function resultLabel(result: BetRow["result"], lang: Lang): string {
+  if (result === "win") return translate("Выигрыш", lang);
+  if (result === "loss") return translate("Проигрыш", lang);
+  if (result === "return") return translate("Возврат", lang);
+  return translate("Ожидает", lang);
 }
 
 const features = [
@@ -249,9 +263,9 @@ function getSportIcon(sport: string): string {
   return SPORT_ICON_BY_KEY[sport] ?? "🏆";
 }
 
-function getSportLabel(sport: string): string {
+function getSportLabel(sport: string, lang: Lang): string {
   const tab = sportTabs.find(t => t.key === sport);
-  return tab ? tab.label : sport;
+  return translate(tab ? tab.label : sport, lang);
 }
 
 const COUNTRY_FLAGS: Record<string, string> = {
@@ -398,7 +412,8 @@ const COUNTRY_RU_NAMES: Record<string, string> = {
   "Singapore": "Сингапур", "Hong Kong": "Гонконг",
 };
 
-function getCountryLabel(country: string): string {
+function getCountryLabel(country: string, lang: Lang): string {
+  if (lang === "en") return country;
   return COUNTRY_RU_NAMES[country] ?? country;
 }
 
@@ -447,8 +462,8 @@ function formatMoney(value: number) {
   }).format(value);
 }
 
-function formatCalendarDateLabel(date: Date) {
-  return date.toLocaleDateString("ru-RU", {
+function formatCalendarDateLabel(date: Date, lang: Lang) {
+  return date.toLocaleDateString(localeFor(lang), {
     day: "2-digit",
     month: "long",
     year: "numeric"
@@ -614,6 +629,7 @@ type SourceDropdownProps = {
 };
 
 function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sources, value }: SourceDropdownProps) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -639,7 +655,7 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
         type="button"
       >
         <span className="source-dropdown-trigger-label">
-          {selected ? selected.name : (placeholder || "— выберите источник —")}
+          {selected ? selected.name : (placeholder || t("— выберите источник —"))}
         </span>
         {selected && selectedStat ? (
           <span className={`source-dropdown-roi ${selectedStat.roi >= 0 ? "positive" : "negative"}`}>
@@ -659,7 +675,7 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
             }}
             type="button"
           >
-            + Добавить источник
+            + {t("Добавить источник")}
           </button>
           {sources.map(source => {
             const stat = roiById.get(source.id);
@@ -781,6 +797,7 @@ type BookmakerDropdownProps = {
 };
 
 function BookmakerDropdownField({ onChange, options, placeholder, value }: BookmakerDropdownProps) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -803,7 +820,7 @@ function BookmakerDropdownField({ onChange, options, placeholder, value }: Bookm
         type="button"
       >
         <span className="source-dropdown-trigger-label">
-          {value || (placeholder || "— выберите букмекера —")}
+          {value ? t(value) : (placeholder || t("— выберите букмекера —"))}
         </span>
         <span className="source-dropdown-caret" aria-hidden="true">▾</span>
       </button>
@@ -821,7 +838,7 @@ function BookmakerDropdownField({ onChange, options, placeholder, value }: Bookm
               aria-selected={bookmaker === value}
               type="button"
             >
-              <span className="source-dropdown-item-label">{bookmaker}</span>
+              <span className="source-dropdown-item-label">{t(bookmaker)}</span>
             </button>
           ))}
         </div>
@@ -901,6 +918,7 @@ function BetCard({
   sourcePickerOpen,
   timezoneOffsetMinutes
 }: BetCardProps) {
+  const { lang, t } = useLanguage();
   const stake = Number(bet.stake || 0);
   const odds = Number(bet.odds || 0);
   const isEditing = editingBetId === bet.id && !!editForm;
@@ -917,11 +935,11 @@ function BetCard({
   return (
     <article className={`calendar-bet-card ${bet.result} ${highlighted ? "highlighted" : ""}`} ref={cardRef}>
       <div className="calendar-bet-top-actions">
-        <span className="calendar-bet-time" title="Время ставки">{formatBetTime(bet.created_at, timezoneOffsetMinutes)}</span>
+        <span className="calendar-bet-time" title={t("Время ставки")}>{formatBetTime(bet.created_at, timezoneOffsetMinutes)}</span>
         <button
           className="calendar-bet-edit-btn"
           onClick={() => (isEditing ? onCancelEdit() : onStartEdit(bet))}
-          title={isEditing ? "Отменить редактирование" : "Редактировать прогноз"}
+          title={isEditing ? t("Отменить редактирование") : t("Редактировать прогноз")}
           type="button"
         >
           {isEditing ? "✕" : "✏️"}
@@ -935,7 +953,7 @@ function BetCard({
               const nextValue = event.target.value;
               setEditForm(current => (current ? { ...current, event_name: nextValue } : current));
             }}
-            placeholder="Матч"
+            placeholder={t("Матч")}
             value={editForm.event_name}
           />
           <div className="calendar-bet-edit-row">
@@ -945,7 +963,7 @@ function BetCard({
                 const nextValue = event.target.value;
                 setEditForm(current => (current ? { ...current, odds: nextValue } : current));
               }}
-              placeholder="Коэффициент"
+              placeholder={t("Коэффициент")}
               value={editForm.odds}
             />
             <input
@@ -954,52 +972,52 @@ function BetCard({
                 const nextValue = event.target.value;
                 setEditForm(current => (current ? { ...current, stake: nextValue } : current));
               }}
-              placeholder="Сумма ₽"
+              placeholder={t("Сумма ₽")}
               value={editForm.stake}
             />
           </div>
           <BookmakerDropdownField
             onChange={bookmaker => setEditForm(current => (current ? { ...current, bookmaker } : current))}
             options={bookmakerOptions}
-            placeholder="Букмекер"
+            placeholder={t("Букмекер")}
             value={editForm.bookmaker}
           />
           <div className="calendar-bet-edit-actions">
-            <button disabled={dataLoading} onClick={onCancelEdit} type="button">Отмена</button>
-            <button disabled={dataLoading} onClick={onSaveEdit} type="button">Сохранить</button>
+            <button disabled={dataLoading} onClick={onCancelEdit} type="button">{t("Отмена")}</button>
+            <button disabled={dataLoading} onClick={onSaveEdit} type="button">{t("Сохранить")}</button>
           </div>
         </div>
       ) : (
         <>
           <div className="calendar-bet-main">
             <strong>{formatEventName(bet.event_name)}</strong>
-            <span>{bet.market} · {bet.selection} · ×{odds.toFixed(2)}</span>
+            <span>{translateBetMarket(bet.market, lang)} · {translateBetSelectionLine(bet.selection, lang)} · ×{odds.toFixed(2)}</span>
           </div>
           <div className="calendar-bet-meta">
             {extraMeta ? <span>{extraMeta}</span> : null}
             <span>{formatMoney(stake)}</span>
-            <span>{bet.bookmaker || "БК не указан"}</span>
+            <span>{bet.bookmaker ? translateBookmakerLabel(bet.bookmaker, lang) : t("БК не указан")}</span>
           </div>
           <div className="calendar-bet-sources">
             {attachedSourceIds.length ? attachedSourceIds.map(sourceId => (
               <span className="calendar-bet-source-tag" key={sourceId}>
                 {sourceDisplayName(sourceById.get(sourceId)?.name)}
                 <button
-                  aria-label="Убрать источник"
+                  aria-label={t("Убрать источник")}
                   onClick={() => onRemoveSource(sourceId)}
                   type="button"
                 >
                   ✕
                 </button>
               </span>
-            )) : <span className="calendar-bet-source-tag empty">Без источника</span>}
+            )) : <span className="calendar-bet-source-tag empty">{t("Без источника")}</span>}
 
             <div className="calendar-bet-source-add">
               <button
-                aria-label="Добавить источник"
+                aria-label={t("Добавить источник")}
                 className="calendar-bet-add-source-btn"
                 onClick={onToggleSourcePicker}
-                title="Добавить ещё один источник"
+                title={t("Добавить ещё один источник")}
                 type="button"
               >
                 +
@@ -1015,20 +1033,20 @@ function BetCard({
                     >
                       {source.name}
                     </button>
-                  )) : <span className="empty">Больше источников нет</span>}
+                  )) : <span className="empty">{t("Больше источников нет")}</span>}
                 </div>
               ) : null}
             </div>
           </div>
           {bet.result === "pending" ? (
             <div className="calendar-bet-actions">
-              <button disabled={dataLoading} onClick={() => onSettle(bet, "win")} type="button">Выигрыш</button>
-              <button disabled={dataLoading} onClick={() => onSettle(bet, "loss")} type="button">Проигрыш</button>
-              <button disabled={dataLoading} onClick={() => onSettle(bet, "return")} type="button">Возврат</button>
+              <button disabled={dataLoading} onClick={() => onSettle(bet, "win")} type="button">{t("Выигрыш")}</button>
+              <button disabled={dataLoading} onClick={() => onSettle(bet, "loss")} type="button">{t("Проигрыш")}</button>
+              <button disabled={dataLoading} onClick={() => onSettle(bet, "return")} type="button">{t("Возврат")}</button>
             </div>
           ) : (
             <div className="calendar-bet-result">
-              {bet.result === "win" ? "Выигрыш" : bet.result === "loss" ? "Проигрыш" : "Возврат"}
+              {bet.result === "win" ? t("Выигрыш") : bet.result === "loss" ? t("Проигрыш") : t("Возврат")}
               <strong>{formatMoney(Number(bet.profit || 0))}</strong>
             </div>
           )}
@@ -1039,6 +1057,7 @@ function BetCard({
 }
 
 export default function Home() {
+  const { lang, setLang, t } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
@@ -1110,7 +1129,7 @@ export default function Home() {
   const [leagueFilter, setLeagueFilter] = useState("all");
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
-  const [matchesStatus, setMatchesStatus] = useState("Автообновление каждые 5 минут");
+  const [matchesStatus, setMatchesStatus] = useState<MatchesStatusState>({ kind: "idle" });
 
   const supabaseHost = useMemo(() => {
     return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.local").host;
@@ -1520,7 +1539,7 @@ export default function Home() {
     const cachedMatches = readCachedMatches();
     if (cachedMatches.length) {
       setLineMatches(cachedMatches);
-      setMatchesStatus(`Из кэша: ${cachedMatches.length} матчей`);
+      setMatchesStatus({ kind: "cache", count: cachedMatches.length });
     }
 
     setMatchesLoading(true);
@@ -1529,7 +1548,7 @@ export default function Home() {
       const response = await fetch("/api/matches?hours=72", { cache: "no-store" });
       if (!response.ok) {
         if (!cachedMatches.length) setLineMatches([]);
-        setMatchesStatus("Линия букмекеров пока не подключена");
+        setMatchesStatus({ kind: "unavailable" });
         return;
       }
 
@@ -1563,10 +1582,10 @@ export default function Home() {
 
       writeCachedMatches(normalizedMatches);
       setLineMatches(getUpcomingMatches(normalizedMatches));
-      setMatchesStatus(`Автообновлено: ${normalizedMatches.length} матчей`);
+      setMatchesStatus({ kind: "live", count: normalizedMatches.length });
     } catch {
       if (!cachedMatches.length) setLineMatches([]);
-      setMatchesStatus("Линия букмекеров пока не подключена");
+      setMatchesStatus({ kind: "unavailable" });
     } finally {
       setMatchesLoading(false);
     }
@@ -1646,7 +1665,7 @@ export default function Home() {
         sourcesResult.error?.message
         || betsResult.error?.message
         || bankrollResult.error?.message
-        || "Ошибка загрузки данных."
+        || t("Ошибка загрузки данных.")
       );
     } else {
       setSources((sourcesResult.data || []) as SourceRow[]);
@@ -1667,7 +1686,7 @@ export default function Home() {
 
     if (!cleanEmail || !password || (mode === "register" && !cleanName)) {
       setStatus("error");
-      setMessage("Заполни email, пароль и имя для регистрации.");
+      setMessage(t("Заполни email, пароль и имя для регистрации."));
       return;
     }
 
@@ -1684,7 +1703,7 @@ export default function Home() {
       }
 
       setStatus("ok");
-      setMessage("Вход выполнен.");
+      setMessage(t("Вход выполнен."));
       return;
     }
 
@@ -1713,7 +1732,7 @@ export default function Home() {
     }
 
     setStatus("ok");
-    setMessage("Аккаунт создан. Если Supabase просит подтверждение почты, открой письмо.");
+    setMessage(t("Аккаунт создан. Если Supabase просит подтверждение почты, открой письмо."));
   }
 
   async function handleLogout() {
@@ -1770,7 +1789,7 @@ export default function Home() {
     const stake = Number(betForm.stake.replace(",", "."));
 
     if (!betForm.sourceId || !betForm.eventName.trim() || !betForm.selection.trim() || !odds || !stake) {
-      setDataMessage("Для ставки нужны источник, матч, исход, коэффициент и сумма.");
+      setDataMessage(t("Для ставки нужны источник, матч, исход, коэффициент и сумма."));
       return;
     }
 
@@ -1825,7 +1844,7 @@ export default function Home() {
       }
 
       if (current.length >= MAX_COUPON_ITEMS) {
-        setDataMessage(`В купоне максимум ${MAX_COUPON_ITEMS} матчей.`);
+        setDataMessage(`${t("В купоне максимум")} ${MAX_COUPON_ITEMS} ${t("матчей.")}`);
         return current;
       }
 
@@ -1847,12 +1866,12 @@ export default function Home() {
     const activeStake = stake > 0 ? stake : freebet;
 
     if (!couponItems.length) {
-      setDataMessage("Добавь хотя бы один матч в купон.");
+      setDataMessage(t("Добавь хотя бы один матч в купон."));
       return;
     }
 
     if (!couponDraft.bookmaker || !couponDraft.sourceId || activeStake <= 0) {
-      setDataMessage("Для купона нужны букмекер, источник и сумма ставки или фрибета.");
+      setDataMessage(t("Для купона нужны букмекер, источник и сумма ставки или фрибета."));
       return;
     }
 
@@ -1862,7 +1881,7 @@ export default function Home() {
     });
 
     if (invalid) {
-      setDataMessage("Проверь исходы и коэффициенты в купоне.");
+      setDataMessage(t("Проверь исходы и коэффициенты в купоне."));
       return;
     }
 
@@ -1899,7 +1918,7 @@ export default function Home() {
       setCouponItems([]);
       setCouponDraft(current => ({ ...current, stake: "", freebet: "" }));
       setCouponOpen(false);
-      setDataMessage("Купон сохранён в ставки.");
+      setDataMessage(t("Купон сохранён в ставки."));
       await loadWorkspaceData(user.id);
     }
 
@@ -1938,7 +1957,7 @@ export default function Home() {
 
     const rawAmount = Number(bankrollForm.amount.replace(",", "."));
     if (!rawAmount) {
-      setDataMessage("Укажи сумму движения банка.");
+      setDataMessage(t("Укажи сумму движения банка."));
       return;
     }
 
@@ -2058,7 +2077,7 @@ export default function Home() {
     const bookmaker = editForm.bookmaker.trim();
 
     if (odds <= 0 || stake < 0) {
-      setDataMessage("Проверь коэффициент и сумму ставки.");
+      setDataMessage(t("Проверь коэффициент и сумму ставки."));
       return;
     }
 
@@ -2183,7 +2202,7 @@ export default function Home() {
   }
 
   if (user) {
-    const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Игрок";
+    const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || t("Игрок");
     const timezoneOffsetMinutes = getUserTimezoneOffsetMinutes(user);
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
@@ -2198,11 +2217,11 @@ export default function Home() {
             <span>{userName.slice(0, 1).toUpperCase()}</span>
             <div>
               <strong>{userName}</strong>
-              <small>{TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes)?.label || "игрок"}</small>
+              <small>{TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes)?.label ? t(TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes)!.label) : t("игрок")}</small>
             </div>
             {timezonePickerOpen ? (
               <div className="timezone-picker" onClick={event => event.stopPropagation()} role="listbox">
-                <div className="timezone-picker-title">Часовой пояс</div>
+                <div className="timezone-picker-title">{t("Часовой пояс")}</div>
                 {TIMEZONE_OPTIONS.map(tz => (
                   <button
                     className={tz.offset === timezoneOffsetMinutes ? "active" : ""}
@@ -2212,7 +2231,7 @@ export default function Home() {
                     aria-selected={tz.offset === timezoneOffsetMinutes}
                     type="button"
                   >
-                    {tz.label}
+                    {t(tz.label)}
                   </button>
                 ))}
               </div>
@@ -2221,26 +2240,26 @@ export default function Home() {
 
           <div className="sync-meter">
             <div>
-              <span>Линия</span>
-              <strong>{matchesLoading ? "обновляю..." : matchesStatus}</strong>
+              <span>{t("Линия")}</span>
+              <strong>{matchesLoading ? t("обновляю...") : matchesStatusLabel(matchesStatus, t)}</strong>
             </div>
             <div className="meter-track">
               <span style={{ width: `${matchesLoading ? 42 : matchCounts.all ? 100 : 0}%` }} />
             </div>
-            <b>{matchCounts.all} матчей</b>
+            <b>{matchCounts.all} {t("матчей")}</b>
           </div>
 
           <div className="top-actions">
-            <button className="assistant-button" type="button">🤖 Ассистент</button>
-            <button className="lang-button active" type="button">RU</button>
-            <button className="lang-button" type="button">ENG</button>
-            <button className="logout-button" onClick={handleLogout} type="button">Выйти</button>
+            <button className="assistant-button" type="button">🤖 {t("Ассистент")}</button>
+            <button className={`lang-button ${lang === "ru" ? "active" : ""}`} onClick={() => setLang("ru")} type="button">RU</button>
+            <button className={`lang-button ${lang === "en" ? "active" : ""}`} onClick={() => setLang("en")} type="button">ENG</button>
+            <button className="logout-button" onClick={handleLogout} type="button">{t("Выйти")}</button>
           </div>
         </header>
 
         <section className="workspace-grid">
           <div className="match-board">
-            <nav className="sport-tabs" aria-label="Виды спорта">
+            <nav className="sport-tabs" aria-label={t("Виды спорта")}>
               {sportTabs.map(tab => {
                 const count = tab.key === "all" ? matchCounts.all : matchCounts.bySport.get(tab.key) || 0;
                 return (
@@ -2251,7 +2270,7 @@ export default function Home() {
                     type="button"
                   >
                     <span>{tab.icon}</span>
-                    <strong>{tab.label}</strong>
+                    <strong>{t(tab.label)}</strong>
                     <em>{count}</em>
                   </button>
                 );
@@ -2260,40 +2279,40 @@ export default function Home() {
 
             <div className="match-filters">
               <label>
-                <span>Страна:</span>
+                <span>{t("Страна:")}</span>
                 <MatchFilterDropdown
                   onChange={value => { setCountryFilter(value); setLeagueFilter("all"); }}
                   options={Array.from(countryCounts.entries())
                     .map(([country, count]) => ({
                       count,
                       flag: <FlagIcon country={country} />,
-                      label: getCountryLabel(country),
+                      label: getCountryLabel(country, lang),
                       value: country
                     }))
-                    .sort((a, b) => a.label.localeCompare(b.label, "ru"))}
+                    .sort((a, b) => a.label.localeCompare(b.label, lang === "en" ? "en" : "ru"))}
                   placeholderIcon="🌍"
-                  placeholderLabel="Все страны"
+                  placeholderLabel={t("Все страны")}
                   value={countryFilter}
                 />
               </label>
               <label>
-                <span>Лига:</span>
+                <span>{t("Лига:")}</span>
                 <MatchFilterDropdown
                   onChange={setLeagueFilter}
                   options={Array.from(leagueCounts.entries())
                     .sort(([leagueA, infoA], [leagueB, infoB]) => {
-                      const countryCmp = getCountryLabel(infoA.country).localeCompare(getCountryLabel(infoB.country), "ru");
+                      const countryCmp = getCountryLabel(infoA.country, lang).localeCompare(getCountryLabel(infoB.country, lang), lang === "en" ? "en" : "ru");
                       if (countryCmp !== 0) return countryCmp;
-                      return leagueA.localeCompare(leagueB, "ru");
+                      return leagueA.localeCompare(leagueB, lang === "en" ? "en" : "ru");
                     })
                     .map(([league, info]) => ({
                       count: info.count,
                       flag: <FlagIcon country={info.country} />,
-                      label: `${getCountryLabel(info.country)} \u2014 ${league}`,
+                      label: `${getCountryLabel(info.country, lang)} \u2014 ${t(league)}`,
                       value: league
                     }))}
                   placeholderIcon="🏆"
-                  placeholderLabel="Все лиги"
+                  placeholderLabel={t("Все лиги")}
                   value={leagueFilter}
                 />
               </label>
@@ -2311,7 +2330,7 @@ export default function Home() {
                     onClick={() => setMatchFilter(key)}
                     type="button"
                   >
-                    {label}
+                    {t(label)}
                   </button>
                 ))}
               </div>
@@ -2319,7 +2338,7 @@ export default function Home() {
               <input
                 className="match-search-input"
                 onChange={event => setSearchQuery(event.target.value)}
-                placeholder="🔍 Поиск..."
+                placeholder={t("🔍 Поиск...")}
                 spellCheck={false}
                 value={searchQuery}
               />
@@ -2330,47 +2349,47 @@ export default function Home() {
                 shownMatches.map(match => (
                   <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
                     <div className="match-meta">
-                      <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country)}</span>
-                      <span className="match-meta-sport" title={getSportLabel(match.sport)}>{getSportIcon(match.sport)} {getSportLabel(match.sport)}</span>
-                      <strong>{match.league}</strong>
+                      <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country, lang)}</span>
+                      <span className="match-meta-sport" title={getSportLabel(match.sport, lang)}>{getSportIcon(match.sport)} {getSportLabel(match.sport, lang)}</span>
+                      <strong>{t(match.league)}</strong>
                       <time>{match.time}</time>
                     </div>
 
                     <div className="odds-strip">
                       <button type="button">
                         <strong>{match.odds[0]}</strong>
-                        <span>П1 · лучший</span>
+                        <span>{t("П1 · лучший")}</span>
                       </button>
                       <button type="button">
                         <strong>{match.odds[1]}</strong>
-                        <span>Х</span>
+                        <span>{t("Х")}</span>
                       </button>
                       <button type="button">
                         <strong>{match.odds[2]}</strong>
-                        <span>П2 · лучший</span>
+                        <span>{t("П2 · лучший")}</span>
                       </button>
                     </div>
 
                     <div className="match-teams">
                       <div>
                         <strong>{match.home}</strong>
-                        <span>форма 5к · вес 3</span>
+                        <span>{t("форма 5к · вес 3")}</span>
                       </div>
                       <b>-</b>
                       <div>
                         <strong>{match.away}</strong>
-                        <span>форма 5к · вес 3</span>
+                        <span>{t("форма 5к · вес 3")}</span>
                       </div>
                     </div>
 
                     <div className="recommendation-card">
                       <div>
-                        <span>Рекомендация</span>
-                        <strong>Победа {match.home}</strong>
+                        <span>{t("Рекомендация")}</span>
+                        <strong>{t("Победа")} {match.home}</strong>
                       </div>
                       <div>
                         <strong>{match.confidence}%</strong>
-                        <span>хорошо</span>
+                        <span>{t("хорошо")}</span>
                       </div>
                     </div>
 
@@ -2378,13 +2397,13 @@ export default function Home() {
                       <div className="probability-bar">
                         <span style={{ width: `${match.confidence}%` }} />
                       </div>
-                      <button onClick={() => toggleCouponMatch(match)} type="button">{couponItems.some(item => item.matchId === match.id) ? "✓ В купоне" : "+ Добавить в купон"}</button>
+                      <button onClick={() => toggleCouponMatch(match)} type="button">{couponItems.some(item => item.matchId === match.id) ? t("✓ В купоне") : t("+ Добавить в купон")}</button>
                     </div>
                   </article>
                 ))
               ) : (
                 <div className="empty-board">
-                  <strong>{matchesLoading ? "Загружаю матчи" : "Матчи не найдены"}</strong>
+                  <strong>{matchesLoading ? t("Загружаю матчи") : t("Матчи не найдены")}</strong>
                 </div>
               )}
             </div>
@@ -2393,59 +2412,59 @@ export default function Home() {
               <article className="quick-card">
                 <div className="compact-head">
                   <div>
-                    <span>Быстрая ставка</span>
-                    <strong>Добавить в статистику</strong>
+                    <span>{t("Быстрая ставка")}</span>
+                    <strong>{t("Добавить в статистику")}</strong>
                   </div>
                 </div>
                 <form className="compact-bet-form" onSubmit={handleBetSubmit}>
                   <SourceDropdownField
                     onAddSource={() => setSourcePopupOpen(true)}
                     onChange={sourceId => setBetForm(current => ({ ...current, sourceId }))}
-                    placeholder="Источник"
+                    placeholder={t("Источник")}
                     roiById={sourceRoiById}
                     sources={sources.filter(source => !source.is_blacklisted)}
                     value={betForm.sourceId}
                   />
                   <input
                     onChange={event => setBetForm(current => ({ ...current, eventName: event.target.value }))}
-                    placeholder="Матч"
+                    placeholder={t("Матч")}
                     value={betForm.eventName}
                   />
                   <input
                     onChange={event => setBetForm(current => ({ ...current, selection: event.target.value }))}
-                    placeholder="Исход"
+                    placeholder={t("Исход")}
                     value={betForm.selection}
                   />
                   <input
                     inputMode="decimal"
                     onChange={event => setBetForm(current => ({ ...current, odds: event.target.value }))}
-                    placeholder="Кэф"
+                    placeholder={t("Кэф")}
                     value={betForm.odds}
                   />
                   <input
                     inputMode="decimal"
                     onChange={event => setBetForm(current => ({ ...current, stake: event.target.value }))}
-                    placeholder="Сумма"
+                    placeholder={t("Сумма")}
                     value={betForm.stake}
                   />
-                  <button disabled={dataLoading} type="submit">Добавить</button>
+                  <button disabled={dataLoading} type="submit">{t("Добавить")}</button>
                 </form>
               </article>
 
               <article className="quick-card">
                 <div className="compact-head">
                   <div>
-                    <span>Источники</span>
-                    <strong>Чёрный список и ROI</strong>
+                    <span>{t("Источники")}</span>
+                    <strong>{t("Чёрный список и ROI")}</strong>
                   </div>
                 </div>
                 <form className="source-form compact-source-form" onSubmit={handleSourceSubmit}>
                   <input
                     onChange={event => setSourceName(event.target.value)}
-                    placeholder="Название источника"
+                    placeholder={t("Название источника")}
                     value={sourceName}
                   />
-                  <button disabled={dataLoading} type="submit">Добавить</button>
+                  <button disabled={dataLoading} type="submit">{t("Добавить")}</button>
                 </form>
                 <div className="compact-source-list">
                   {sourceStats.slice(0, 5).map(source => (
@@ -2455,11 +2474,11 @@ export default function Home() {
                       onClick={() => toggleSourceBlacklist(source)}
                       type="button"
                     >
-                      <span>{source.name}</span>
+                      <span>{t(source.name)}</span>
                       <strong>{source.roi.toFixed(1)}%</strong>
                     </button>
                   ))}
-                  {!sourceStats.length ? <span className="empty">Источники появятся после добавления.</span> : null}
+                  {!sourceStats.length ? <span className="empty">{t("Источники появятся после добавления.")}</span> : null}
                 </div>
               </article>
             </section>
@@ -2469,14 +2488,14 @@ export default function Home() {
 
           <aside className="right-rail">
             <section className="rail-panel calendar-panel">
-              <div className="rail-title">Календарь прогнозов</div>
+              <div className="rail-title">{t("Календарь прогнозов")}</div>
               <div className="calendar-head">
                 <button type="button">‹</button>
-                <strong>{new Date().toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}</strong>
+                <strong>{new Date().toLocaleDateString(localeFor(lang), { month: "long", year: "numeric" })}</strong>
                 <button type="button">›</button>
               </div>
               <div className="weekdays">
-                {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map(day => <span key={day}>{day}</span>)}
+                {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map(day => <span key={day}>{t(day)}</span>)}
               </div>
               <div className="calendar-grid">
                 {calendarDays.map(day => {
@@ -2507,7 +2526,7 @@ export default function Home() {
             {couponOpen || couponItems.length ? (
               <section className="quick-coupon-card open">
                 <button className="coupon-head" onClick={() => setCouponOpen(current => !current)} type="button">
-                  <span>🎫 Купон</span>
+                  <span>{t("🎫 Купон")}</span>
                   <strong>{couponItems.length} / {MAX_COUPON_ITEMS}</strong>
                 </button>
 
@@ -2524,27 +2543,27 @@ export default function Home() {
                           onChange={event => updateCouponItem(item.id, { market: event.target.value })}
                           value={item.market}
                         >
-                          <option value="Победа">Победа</option>
-                          <option value="Фора">Фора</option>
-                          <option value="Тотал">Тотал</option>
-                          <option value="Обе забьют">Обе забьют</option>
-                          <option value="Точный счёт">Точный счёт</option>
-                          <option value="Инд. тотал">Инд. тотал</option>
+                          <option value="Победа">{t("Победа")}</option>
+                          <option value="Фора">{t("Фора")}</option>
+                          <option value="Тотал">{t("Тотал")}</option>
+                          <option value="Обе забьют">{t("Обе забьют")}</option>
+                          <option value="Точный счёт">{t("Точный счёт")}</option>
+                          <option value="Инд. тотал">{t("Инд. тотал")}</option>
                         </select>
                         <input
                           onChange={event => updateCouponItem(item.id, { selection: event.target.value })}
-                          placeholder="Исход"
+                          placeholder={t("Исход")}
                           value={item.selection}
                         />
                         <input
                           inputMode="decimal"
                           onChange={event => updateCouponItem(item.id, { odds: event.target.value })}
-                          placeholder="Кэф"
+                          placeholder={t("Кэф")}
                           value={item.odds}
                         />
                       </div>
                     </div>
-                  )) : <div className="coupon-empty">Нажми на карточку матча, чтобы добавить его в купон.</div>}
+                  )) : <div className="coupon-empty">{t("Нажми на карточку матча, чтобы добавить его в купон.")}</div>}
 
                   <div className="coupon-controls">
                     <SourceDropdownField
@@ -2562,40 +2581,40 @@ export default function Home() {
                     <input
                       inputMode="decimal"
                       onChange={event => setCouponDraft(current => ({ ...current, stake: event.target.value }))}
-                      placeholder="Ставка ₽"
+                      placeholder={t("Ставка ₽")}
                       value={couponDraft.stake}
                     />
                     <input
                       inputMode="decimal"
                       onChange={event => setCouponDraft(current => ({ ...current, freebet: event.target.value }))}
-                      placeholder="Фрибет"
+                      placeholder={t("Фрибет")}
                       value={couponDraft.freebet}
                     />
                   </div>
 
                   <div className="coupon-summary">
                     <div>
-                      <span>{couponItems.length === 1 ? "Одиночная ставка" : `Экспресс · ${couponItems.length} события`}</span>
+                      <span>{couponItems.length === 1 ? t("Одиночная ставка") : `${t("Экспресс")} · ${couponItems.length} ${t("события")}`}</span>
                       <strong>{couponTotalOdds > 1 ? `× ${couponTotalOdds.toFixed(2)}` : "—"}</strong>
                     </div>
                     <div>
-                      <span>Возможный выигрыш</span>
+                      <span>{t("Возможный выигрыш")}</span>
                       <strong>{couponPotentialWin > 0 ? formatMoney(couponPotentialWin) : "—"}</strong>
                     </div>
                   </div>
 
                   <div className="coupon-actions">
-                    <button onClick={() => setCouponItems([])} type="button">Очистить</button>
-                    <button disabled={dataLoading} onClick={saveCoupon} type="button">Сохранить прогноз</button>
+                    <button onClick={() => setCouponItems([])} type="button">{t("Очистить")}</button>
+                    <button disabled={dataLoading} onClick={saveCoupon} type="button">{t("Сохранить прогноз")}</button>
                   </div>
 
                   {sourcePopupOpen ? (
-                    <div className="coupon-source-popover" role="dialog" aria-label="Добавить источник">
+                    <div className="coupon-source-popover" role="dialog" aria-label={t("Добавить источник")}>
                       <form className="coupon-source-form" onSubmit={handleCouponSourceSubmit}>
                         <div className="bank-modal-head">
-                          <strong>Добавить источник</strong>
+                          <strong>{t("Добавить источник")}</strong>
                           <button
-                            aria-label="Закрыть"
+                            aria-label={t("Закрыть")}
                             onClick={() => setSourcePopupOpen(false)}
                             type="button"
                           >
@@ -2605,12 +2624,12 @@ export default function Home() {
                         <input
                           autoFocus
                           onChange={event => setSourceName(event.target.value)}
-                          placeholder="Название источника"
+                          placeholder={t("Название источника")}
                           value={sourceName}
                         />
                         <div className="bank-modal-actions">
-                          <button onClick={() => setSourcePopupOpen(false)} type="button">Отмена</button>
-                          <button disabled={dataLoading} type="submit">Добавить</button>
+                          <button onClick={() => setSourcePopupOpen(false)} type="button">{t("Отмена")}</button>
+                          <button disabled={dataLoading} type="submit">{t("Добавить")}</button>
                         </div>
                       </form>
                     </div>
@@ -2621,22 +2640,22 @@ export default function Home() {
 
             <section className="rail-panel bank-panel">
               <div className="bank-head">
-                <strong>💰 Банк</strong>
-                <button type="button">↺ Сброс</button>
+                <strong>{t("💰 Банк")}</strong>
+                <button type="button">{t("↺ Сброс")}</button>
               </div>
               <div className="bank-stats">
-                <div><span>Ставок</span><strong>{betStats.total}</strong></div>
-                <div><span>Выиграно</span><strong>{bets.filter(bet => bet.result === "win").length}</strong></div>
-                <div><span>Проиграно</span><strong>{bets.filter(bet => bet.result === "loss").length}</strong></div>
+                <div><span>{t("Ставок")}</span><strong>{betStats.total}</strong></div>
+                <div><span>{t("Выиграно")}</span><strong>{bets.filter(bet => bet.result === "win").length}</strong></div>
+                <div><span>{t("Проиграно")}</span><strong>{bets.filter(bet => bet.result === "loss").length}</strong></div>
               </div>
               <div className="bank-balance">
                 <div>
-                  <span>Баланс</span>
+                  <span>{t("Баланс")}</span>
                   <strong>{formatMoney(displayedBalance)}</strong>
                 </div>
                 <div className="bank-actions">
                   <button
-                    aria-label="Пополнить банк"
+                    aria-label={t("Пополнить банк")}
                     className="bank-action bank-plus"
                     onClick={() => {
                       setBankrollForm(current => ({ ...current, amount: "", kind: "deposit", note: "Пополнение букмекера" }));
@@ -2647,7 +2666,7 @@ export default function Home() {
                     +
                   </button>
                   <button
-                    aria-label="Вывести из банка"
+                    aria-label={t("Вывести из банка")}
                     className="bank-action bank-minus"
                     onClick={() => {
                       setBankrollForm(current => ({ ...current, amount: "", kind: "withdrawal", note: "Вывод от букмекера" }));
@@ -2664,7 +2683,7 @@ export default function Home() {
                 <div className={`bank-bet-list ${allPendingBetsOpen ? "expanded" : ""}`}>
                   {pendingRailBets.map(bet => {
                     const sourceNames = getBetSourceIds(bet).map(id => sourceDisplayName(sourceById.get(id)?.name));
-                    const sourceLabel = sourceNames.length ? sourceNames.join(" + ") : "Без источника";
+                    const sourceLabel = sourceNames.length ? sourceNames.map(name => t(name)).join(" + ") : t("Без источника");
 
                     return (
                       <div
@@ -2678,7 +2697,7 @@ export default function Home() {
                         tabIndex={0}
                       >
                         <strong title={formatEventName(bet.event_name)}>{formatEventName(bet.event_name)}</strong>
-                        <span>{bet.bookmaker || "\u2014"}</span>
+                        <span>{bet.bookmaker ? translateBookmakerLabel(bet.bookmaker, lang) : "\u2014"}</span>
                         <em title={sourceLabel}>{sourceLabel}</em>
                       </div>
                     );
@@ -2700,9 +2719,9 @@ export default function Home() {
                 <div className="bank-modal-backdrop" role="presentation">
                   <form className="bank-modal" onSubmit={handleBankrollSubmit}>
                     <div className="bank-modal-head">
-                      <strong>{bankrollForm.kind === "withdrawal" ? "Вывод от букмекера" : "Пополнение букмекера"}</strong>
+                      <strong>{t(bankrollForm.kind === "withdrawal" ? "Вывод от букмекера" : "Пополнение букмекера")}</strong>
                       <button
-                        aria-label="Закрыть"
+                        aria-label={t("Закрыть")}
                         onClick={() => setBankEditorOpen(false)}
                         type="button"
                       >
@@ -2713,12 +2732,12 @@ export default function Home() {
                       autoFocus
                       inputMode="decimal"
                       onChange={event => setBankrollForm(current => ({ ...current, amount: event.target.value }))}
-                      placeholder="Сумма"
+                      placeholder={t("Сумма")}
                       value={bankrollForm.amount}
                     />
                     <div className="bank-modal-actions">
-                      <button onClick={() => setBankEditorOpen(false)} type="button">Отмена</button>
-                      <button disabled={dataLoading} type="submit">Сохранить</button>
+                      <button onClick={() => setBankEditorOpen(false)} type="button">{t("Отмена")}</button>
+                      <button disabled={dataLoading} type="submit">{t("Сохранить")}</button>
                     </div>
                   </form>
                 </div>
@@ -2731,20 +2750,20 @@ export default function Home() {
                 onClick={() => setStatsOpen(true)}
                 type="button"
               >
-                📊 Статистика
+                {t("📊 Статистика")}
               </button>
             </section>
 
             {calendarDateOpen ? (
               <div className="calendar-bets-backdrop" role="presentation">
-                <section className="calendar-bets-modal" role="dialog" aria-modal="true" aria-label="Ставки за день">
+                <section className="calendar-bets-modal" role="dialog" aria-modal="true" aria-label={t("Ставки за день")}>
                   <div className="calendar-bets-head">
                     <div>
-                      <span>Ставки за день</span>
-                      <strong>{formatCalendarDateLabel(calendarDateOpen)}</strong>
+                      <span>{t("Ставки за день")}</span>
+                      <strong>{formatCalendarDateLabel(calendarDateOpen, lang)}</strong>
                     </div>
                     <button
-                      aria-label="Закрыть"
+                      aria-label={t("Закрыть")}
                       onClick={() => {
                         setCalendarDateOpen(null);
                         setHighlightBetId(null);
@@ -2781,7 +2800,7 @@ export default function Home() {
                       ))}
                     </div>
                   ) : (
-                    <div className="calendar-bets-empty">В этот день ставок нет.</div>
+                    <div className="calendar-bets-empty">{t("В этот день ставок нет.")}</div>
                   )}
                 </section>
               </div>
@@ -2791,18 +2810,18 @@ export default function Home() {
           {statsOpen ? (
             <div className="stats-modal-backdrop" onMouseDown={() => setStatsOpen(false)} role="presentation">
               <section
-                aria-label="Статистика источников"
+                aria-label={t("Статистика источников")}
                 aria-modal="true"
                 className="rail-panel stats-panel"
                 onMouseDown={event => event.stopPropagation()}
                 role="dialog"
               >
-                <div className="rail-title">Статистика источников</div>
-                <button className="stats-modal-close" aria-label="Закрыть статистику" onClick={() => setStatsOpen(false)} type="button">×</button>
+                <div className="rail-title">{t("Статистика источников")}</div>
+                <button className="stats-modal-close" aria-label={t("Закрыть статистику")} onClick={() => setStatsOpen(false)} type="button">×</button>
 
                 <div className="stats-block">
                   <div className="stats-block-head">
-                    <strong>Рассчитанные ставки</strong>
+                    <strong>{t("Рассчитанные ставки")}</strong>
                     <span>{settledBets.length}</span>
                   </div>
                   {sortedSourceStats.length ? (
@@ -2810,21 +2829,21 @@ export default function Home() {
                       <table className="stats-table">
                         <thead>
                           <tr>
-                            <SortableTh field="name" label="Источник" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
-                            <SortableTh field="roi" label="ROI" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
-                            <SortableTh field="bets" label="Ставок" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
-                            <SortableTh field="wins" label="В/П" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
-                            <SortableTh field="winrate" label="% побед" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
-                            <SortableTh field="avgOdds" label="Ср. кэф" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
-                            <SortableTh field="stake" label="Сумма" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
-                            <SortableTh field="avgStake" label="Средняя" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="name" label={t("Источник")} onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="roi" label={t("ROI")} onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="bets" label={t("Ставок")} onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="wins" label={t("В/П")} onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="winrate" label={t("% побед")} onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="avgOdds" label={t("Ср. кэф")} onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="stake" label={t("Сумма")} onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="avgStake" label={t("Средняя")} onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
                             <th></th>
                           </tr>
                         </thead>
                         <tbody>
                           {sortedSourceStats.map(source => (
                             <tr className={source.is_blacklisted ? "blacklisted" : ""} key={source.id}>
-                              <td className="stats-table-name">{source.name}</td>
+                              <td className="stats-table-name">{t(source.name)}</td>
                               <td>
                                 <span className={source.roi >= 0 ? "roi-positive" : "roi-negative"}>{source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>
                                 <span className={`stats-roi-amount ${source.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}`}>{source.profit >= 0 ? "+" : ""}{formatMoney(source.profit)}</span>
@@ -2841,7 +2860,7 @@ export default function Home() {
                                   onClick={() => setSourceBetsOpen(source.id)}
                                   type="button"
                                 >
-                                  Все прогнозы
+                                  {t("Все прогнозы")}
                                 </button>
                               </td>
                             </tr>
@@ -2849,12 +2868,12 @@ export default function Home() {
                         </tbody>
                       </table>
                     </div>
-                  ) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
+                  ) : <span className="empty">{t("Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.")}</span>}
                 </div>
 
                 <div className="stats-block">
                   <div className="stats-block-head">
-                    <strong>Статистика по букмекерам</strong>
+                    <strong>{t("Статистика по букмекерам")}</strong>
                     <span>{bookmakerStats.length}</span>
                   </div>
                   {sortedBookmakerStats.length ? (
@@ -2862,19 +2881,19 @@ export default function Home() {
                       <table className="stats-table">
                         <thead>
                           <tr>
-                            <SortableTh field="name" label="Букмекер" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
-                            <SortableTh field="roi" label="ROI" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
-                            <SortableTh field="bets" label="Ставок" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
-                            <SortableTh field="wins" label="В/П" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
-                            <SortableTh field="winrate" label="% побед" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
-                            <SortableTh field="avgOdds" label="Ср. кэф" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
-                            <SortableTh field="stake" label="Сумма" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="name" label={t("Букмекер")} onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="roi" label={t("ROI")} onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="bets" label={t("Ставок")} onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="wins" label={t("В/П")} onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="winrate" label={t("% побед")} onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="avgOdds" label={t("Ср. кэф")} onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="stake" label={t("Сумма")} onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
                           </tr>
                         </thead>
                         <tbody>
                           {sortedBookmakerStats.map(bookmaker => (
                             <tr key={bookmaker.id}>
-                              <td className="stats-table-name">{bookmaker.name}</td>
+                              <td className="stats-table-name">{translateBookmakerLabel(bookmaker.name, lang)}</td>
                               <td>
                                 <span className={bookmaker.roi >= 0 ? "roi-positive" : "roi-negative"}>{bookmaker.roi >= 0 ? "+" : ""}{bookmaker.roi.toFixed(1)}%</span>
                                 <span className={`stats-roi-amount ${bookmaker.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}`}>{bookmaker.profit >= 0 ? "+" : ""}{formatMoney(bookmaker.profit)}</span>
@@ -2889,25 +2908,25 @@ export default function Home() {
                         </tbody>
                       </table>
                     </div>
-                  ) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
+                  ) : <span className="empty">{t("Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.")}</span>}
                 </div>
 
                 <div className="stats-block">
                   <div className="stats-block-head">
-                    <strong>Пополнения и выводы</strong>
+                    <strong>{t("Пополнения и выводы")}</strong>
                     <span>{bankrollAdjustments.length}</span>
                   </div>
                   <div className="bankroll-summary-grid">
                     <div>
-                      <span>Пополнено</span>
+                      <span>{t("Пополнено")}</span>
                       <strong className="roi-positive-text">{formatMoney(bankrollStats.deposits)}</strong>
                     </div>
                     <div>
-                      <span>Выведено</span>
+                      <span>{t("Выведено")}</span>
                       <strong className="roi-negative-text">{formatMoney(bankrollStats.withdrawals)}</strong>
                     </div>
                     <div>
-                      <span>Итого</span>
+                      <span>{t("Итого")}</span>
                       <strong className={bankrollStats.deposits - bankrollStats.withdrawals >= 0 ? "roi-positive-text" : "roi-negative-text"}>
                         {formatMoney(bankrollStats.deposits - bankrollStats.withdrawals)}
                       </strong>
@@ -2917,14 +2936,14 @@ export default function Home() {
                     {bankrollAdjustments.length ? bankrollAdjustments.map(event => (
                       <div className="bankroll-adjustment-row" key={event.id}>
                         <span className="bankroll-adjustment-date">
-                          {new Date(event.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                          {new Date(event.created_at).toLocaleDateString(localeFor(lang), { day: "2-digit", month: "2-digit", year: "numeric" })}
                         </span>
-                        <span className="bankroll-adjustment-note">{event.note || (event.kind === "deposit" ? "Пополнение" : "Вывод")}</span>
+                        <span className="bankroll-adjustment-note">{event.note ? t(event.note) : t(event.kind === "deposit" ? "Пополнение" : "Вывод")}</span>
                         <strong className={event.kind === "deposit" ? "roi-positive-text" : "roi-negative-text"}>
                           {event.kind === "deposit" ? "+" : ""}{formatMoney(Number(event.amount || 0))}
                         </strong>
                       </div>
-                    )) : <span className="empty">Пополнения и выводы появятся здесь после первой операции с балансом.</span>}
+                    )) : <span className="empty">{t("Пополнения и выводы появятся здесь после первой операции с балансом.")}</span>}
                   </div>
                 </div>
               </section>
@@ -2933,14 +2952,14 @@ export default function Home() {
 
           {sourceBetsOpen ? (
             <div className="calendar-bets-backdrop" role="presentation">
-              <section className="calendar-bets-modal" role="dialog" aria-modal="true" aria-label="Все прогнозы источника">
+              <section className="calendar-bets-modal" role="dialog" aria-modal="true" aria-label={t("Все прогнозы источника")}>
                 <div className="calendar-bets-head">
                   <div>
-                    <span>Все прогнозы</span>
-                    <strong>{sourceStats.find(source => source.id === sourceBetsOpen)?.name || "Источник"}</strong>
+                    <span>{t("Все прогнозы")}</span>
+                    <strong>{t(sourceStats.find(source => source.id === sourceBetsOpen)?.name || "Источник")}</strong>
                   </div>
                   <button
-                    aria-label="Закрыть"
+                    aria-label={t("Закрыть")}
                     onClick={() => setSourceBetsOpen(null)}
                     type="button"
                   >
@@ -2959,7 +2978,7 @@ export default function Home() {
                           dataLoading={dataLoading}
                           editForm={editForm}
                           editingBetId={editingBetId}
-                          extraMeta={formatCalendarDateLabel(betDate)}
+                          extraMeta={formatCalendarDateLabel(betDate, lang)}
                           highlighted={bet.id === highlightBetId}
                           key={bet.id}
                           onAddSource={sourceId => addSourceToBet(bet, sourceId)}
@@ -2979,7 +2998,7 @@ export default function Home() {
                     })}
                   </div>
                 ) : (
-                  <div className="calendar-bets-empty">У этого источника пока нет прогнозов.</div>
+                  <div className="calendar-bets-empty">{t("У этого источника пока нет прогнозов.")}</div>
                 )}
               </section>
             </div>
@@ -2994,12 +3013,12 @@ export default function Home() {
       <aside className="sidebar">
         <div className="brand">Stakeversee</div>
         <div className="brand-caption">control · optimize · profit</div>
-        <nav className="nav" aria-label="Основная навигация">
-          <button className="active">Панель</button>
-          <button>Ставки</button>
-          <button>Источники</button>
-          <button>Банкролл</button>
-          <button>AI анализ</button>
+        <nav className="nav" aria-label={t("Основная навигация")}>
+          <button className="active">{t("Панель")}</button>
+          <button>{t("Ставки")}</button>
+          <button>{t("Источники")}</button>
+          <button>{t("Банкролл")}</button>
+          <button>{t("AI анализ")}</button>
         </nav>
       </aside>
 
@@ -3007,28 +3026,27 @@ export default function Home() {
         <header className="topbar">
           <div className="supabase-ok">
             <span className="status-dot" />
-            Supabase подключён: {supabaseHost}
+            {t("Supabase подключён:")} {supabaseHost}
           </div>
         </header>
 
         <div className="content">
           <section className="hero">
             <div className="panel hero-copy">
-              <div className="eyebrow">Betting command center</div>
-              <h1>Stakeversee держит ставки, банк и аналитику под контролем.</h1>
+              <div className="eyebrow">{t("Betting command center")}</div>
+              <h1>{t("Stakeversee держит ставки, банк и аналитику под контролем.")}</h1>
               <p className="lead">
-                Веб-версия заменит локальное расширение: аккаунты, история ставок,
-                источники, чёрный список, банк и статистика будут храниться онлайн.
+                {t("Веб-версия заменит локальное расширение: аккаунты, история ставок, источники, чёрный список, банк и статистика будут храниться онлайн.")}
               </p>
               <div className="actions">
                 <a className="primary link-button" href="https://stakeversee.vercel.app">
-                  Production
+                  {t("Production")}
                 </a>
-                <button className="secondary">Схема базы готова</button>
+                <button className="secondary">{t("Схема базы готова")}</button>
               </div>
             </div>
 
-            <section className="panel auth-panel" aria-label="Авторизация">
+            <section className="panel auth-panel" aria-label={t("Авторизация")}>
               <>
                   <div className="auth-tabs">
                     <button
@@ -3036,32 +3054,32 @@ export default function Home() {
                       onClick={() => setMode("login")}
                       type="button"
                     >
-                      Вход
+                      {t("Вход")}
                     </button>
                     <button
                       className={mode === "register" ? "active" : ""}
                       onClick={() => setMode("register")}
                       type="button"
                     >
-                      Регистрация
+                      {t("Регистрация")}
                     </button>
                   </div>
 
                   <form className="auth-form" onSubmit={handleAuth}>
                     {mode === "register" ? (
                       <label>
-                        Имя
+                        {t("Имя")}
                         <input
                           autoComplete="name"
                           onChange={event => setDisplayName(event.target.value)}
-                          placeholder="Семик"
+                          placeholder={t("Семик")}
                           value={displayName}
                         />
                       </label>
                     ) : null}
 
                     <label>
-                      Email
+                      {t("Email")}
                       <input
                         autoComplete="email"
                         onChange={event => setEmail(event.target.value)}
@@ -3072,12 +3090,12 @@ export default function Home() {
                     </label>
 
                     <label>
-                      Пароль
+                      {t("Пароль")}
                       <input
                         autoComplete={mode === "login" ? "current-password" : "new-password"}
                         minLength={6}
                         onChange={event => setPassword(event.target.value)}
-                        placeholder="минимум 6 символов"
+                        placeholder={t("минимум 6 символов")}
                         type="password"
                         value={password}
                       />
@@ -3085,10 +3103,10 @@ export default function Home() {
 
                     <button className="primary" disabled={status === "loading"} type="submit">
                       {status === "loading"
-                        ? "Подождите..."
+                        ? t("Подождите...")
                         : mode === "login"
-                          ? "Войти"
-                          : "Создать аккаунт"}
+                          ? t("Войти")
+                          : t("Создать аккаунт")}
                     </button>
 
                     {message ? <p className={`auth-message ${status}`}>{message}</p> : null}
@@ -3099,8 +3117,8 @@ export default function Home() {
           <section className="section-grid">
             {features.map(feature => (
               <article className="panel feature" key={feature.title}>
-                <h2>{feature.title}</h2>
-                <p>{feature.text}</p>
+                <h2>{t(feature.title)}</h2>
+                <p>{t(feature.text)}</p>
               </article>
             ))}
           </section>
