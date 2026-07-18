@@ -2228,8 +2228,6 @@ export default function Home() {
           </div>
 
           <div className="top-actions">
-            <button aria-label="Сохранить" className="icon-button" type="button">💾</button>
-            <button aria-label="Открыть" className="icon-button" type="button">📁</button>
             <button className="assistant-button" type="button">🤖 Ассистент</button>
             <button className="lang-button active" type="button">RU</button>
             <button className="lang-button" type="button">ENG</button>
