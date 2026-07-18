@@ -795,6 +795,29 @@ function BookmakerDropdownField({ onChange, options, placeholder, value }: Bookm
   );
 }
 
+type StatsSortField = "name" | "roi" | "bets" | "wins" | "winrate" | "avgOdds" | "stake" | "avgStake" | "profit";
+
+type SortableThProps = {
+  field: StatsSortField;
+  label: string;
+  onSort: (field: StatsSortField) => void;
+  sort: { field: StatsSortField; direction: "asc" | "desc" };
+};
+
+function SortableTh({ field, label, onSort, sort }: SortableThProps) {
+  const active = sort.field === field;
+  return (
+    <th
+      className={active ? "active" : ""}
+      onClick={() => onSort(field)}
+      role="columnheader"
+      aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
+    >
+      {label} {active ? (sort.direction === "desc" ? "↓" : "↑") : ""}
+    </th>
+  );
+}
+
 type EditBetForm = {
   event_name: string;
   bookmaker: string;
@@ -1023,8 +1046,8 @@ export default function Home() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [calendarDateOpen, setCalendarDateOpen] = useState<Date | null>(null);
   const [sourceBetsOpen, setSourceBetsOpen] = useState<string | null>(null);
-  const [statsSortField, setStatsSortField] = useState<"roi" | "stake">("roi");
-  const [statsSortDirection, setStatsSortDirection] = useState<"asc" | "desc">("desc");
+  const [sourceSort, setSourceSort] = useState<{ field: StatsSortField; direction: "asc" | "desc" }>({ field: "roi", direction: "desc" });
+  const [bookmakerSort, setBookmakerSort] = useState<{ field: StatsSortField; direction: "asc" | "desc" }>({ field: "roi", direction: "desc" });
   const [editingBetId, setEditingBetId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditBetForm | null>(null);
   const [highlightBetId, setHighlightBetId] = useState<string | null>(null);
@@ -1336,32 +1359,48 @@ export default function Home() {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [bankrollEvents]);
 
-  function toggleStatsSort(field: "roi" | "stake") {
-    if (statsSortField === field) {
-      setStatsSortDirection(current => (current === "desc" ? "asc" : "desc"));
-    } else {
-      setStatsSortField(field);
-      setStatsSortDirection("desc");
-    }
+  function toggleColumnSort(
+    setSort: Dispatch<SetStateAction<{ field: StatsSortField; direction: "asc" | "desc" }>>,
+    field: StatsSortField
+  ) {
+    setSort(current => (
+      current.field === field
+        ? { field, direction: current.direction === "desc" ? "asc" : "desc" }
+        : { field, direction: "desc" }
+    ));
   }
 
-  const sortedSourceStats = useMemo(() => {
-    const list = [...sourceStats];
-    list.sort((a, b) => {
-      const diff = statsSortField === "roi" ? a.roi - b.roi : a.stake - b.stake;
-      return statsSortDirection === "asc" ? diff : -diff;
+  function applyStatsSort<T extends {
+    avgOdds: number;
+    avgStake: number;
+    bets: number;
+    name: string;
+    profit?: number;
+    roi: number;
+    stake: number;
+    winrate: number;
+    wins: number;
+  }>(list: T[], sort: { field: StatsSortField; direction: "asc" | "desc" }): T[] {
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      let diff: number;
+      if (sort.field === "name") diff = a.name.localeCompare(b.name, "ru", { sensitivity: "base" });
+      else if (sort.field === "profit") diff = (a.profit ?? 0) - (b.profit ?? 0);
+      else diff = (a[sort.field] as number) - (b[sort.field] as number);
+      return sort.direction === "asc" ? diff : -diff;
     });
-    return list;
-  }, [sourceStats, statsSortField, statsSortDirection]);
+    return sorted;
+  }
 
-  const sortedBookmakerStats = useMemo(() => {
-    const list = [...bookmakerStats];
-    list.sort((a, b) => {
-      const diff = statsSortField === "roi" ? a.roi - b.roi : a.stake - b.stake;
-      return statsSortDirection === "asc" ? diff : -diff;
-    });
-    return list;
-  }, [bookmakerStats, statsSortField, statsSortDirection]);
+  const sortedSourceStats = useMemo(
+    () => applyStatsSort(sourceStats, sourceSort),
+    [sourceStats, sourceSort]
+  );
+
+  const sortedBookmakerStats = useMemo(
+    () => applyStatsSort(bookmakerStats, bookmakerSort),
+    [bookmakerStats, bookmakerSort]
+  );
 
   const sourceRoiById = useMemo(
     () => new Map(sourceStats.map(stat => [stat.id, stat.roi])),
@@ -2666,54 +2705,53 @@ export default function Home() {
                 <div className="rail-title">Статистика источников</div>
                 <button className="stats-modal-close" aria-label="Закрыть статистику" onClick={() => setStatsOpen(false)} type="button">×</button>
 
-                <div className="stats-sort-bar">
-                  <span>Сортировка</span>
-                  <button
-                    className={statsSortField === "roi" ? "active" : ""}
-                    onClick={() => toggleStatsSort("roi")}
-                    type="button"
-                  >
-                    ROI {statsSortField === "roi" ? (statsSortDirection === "desc" ? "↓" : "↑") : ""}
-                  </button>
-                  <button
-                    className={statsSortField === "stake" ? "active" : ""}
-                    onClick={() => toggleStatsSort("stake")}
-                    type="button"
-                  >
-                    Сумма ставок {statsSortField === "stake" ? (statsSortDirection === "desc" ? "↓" : "↑") : ""}
-                  </button>
-                </div>
-
                 <div className="stats-block">
                   <div className="stats-block-head">
                     <strong>Рассчитанные ставки</strong>
                     <span>{settledBets.length}</span>
                   </div>
-                  <div className="source-stat-list">
-                    {sortedSourceStats.length ? sortedSourceStats.map(source => (
-                      <article className={`source-stat-card ${source.is_blacklisted ? "blacklisted" : ""}`} key={source.id}>
-                        <div className="source-stat-top">
-                          <strong>{source.name}</strong>
-                          <span className={source.roi >= 0 ? "roi-positive" : "roi-negative"}>ROI {source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>
-                        </div>
-                        <div className="source-stat-grid">
-                          <div><span>Ставок</span><strong>{source.bets}</strong></div>
-                          <div><span>В/П</span><strong>{source.wins}/{source.losses}</strong></div>
-                          <div><span>Winrate</span><strong>{source.winrate.toFixed(0)}%</strong></div>
-                          <div><span>Ср. кэф</span><strong>{source.avgOdds.toFixed(2)}</strong></div>
-                          <div><span>Сумма</span><strong>{formatMoney(source.stake)}</strong></div>
-                          <div><span>Средняя</span><strong>{formatMoney(source.avgStake)}</strong></div>
-                        </div>
-                        <button
-                          className="source-stat-view-button"
-                          onClick={() => setSourceBetsOpen(source.id)}
-                          type="button"
-                        >
-                          Все прогнозы
-                        </button>
-                      </article>
-                    )) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
-                  </div>
+                  {sortedSourceStats.length ? (
+                    <div className="stats-table-wrap">
+                      <table className="stats-table">
+                        <thead>
+                          <tr>
+                            <SortableTh field="name" label="Источник" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="roi" label="ROI" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="bets" label="Ставок" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="wins" label="В/П" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="winrate" label="% побед" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="avgOdds" label="Ср. кэф" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="stake" label="Сумма" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <SortableTh field="avgStake" label="Средняя" onSort={f => toggleColumnSort(setSourceSort, f)} sort={sourceSort} />
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedSourceStats.map(source => (
+                            <tr className={source.is_blacklisted ? "blacklisted" : ""} key={source.id}>
+                              <td className="stats-table-name">{source.name}</td>
+                              <td><span className={source.roi >= 0 ? "roi-positive" : "roi-negative"}>{source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span></td>
+                              <td>{source.bets}</td>
+                              <td>{source.wins}/{source.losses}</td>
+                              <td>{source.winrate.toFixed(0)}%</td>
+                              <td>{source.avgOdds.toFixed(2)}</td>
+                              <td>{formatMoney(source.stake)}</td>
+                              <td>{formatMoney(source.avgStake)}</td>
+                              <td>
+                                <button
+                                  className="source-stat-view-button"
+                                  onClick={() => setSourceBetsOpen(source.id)}
+                                  type="button"
+                                >
+                                  Все прогнозы
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
                 </div>
 
                 <div className="stats-block">
@@ -2721,24 +2759,38 @@ export default function Home() {
                     <strong>Статистика по букмекерам</strong>
                     <span>{bookmakerStats.length}</span>
                   </div>
-                  <div className="source-stat-list">
-                    {sortedBookmakerStats.length ? sortedBookmakerStats.map(bookmaker => (
-                      <article className="source-stat-card" key={bookmaker.id}>
-                        <div className="source-stat-top">
-                          <strong>{bookmaker.name}</strong>
-                          <span className={bookmaker.roi >= 0 ? "roi-positive" : "roi-negative"}>ROI {bookmaker.roi >= 0 ? "+" : ""}{bookmaker.roi.toFixed(1)}%</span>
-                        </div>
-                        <div className="source-stat-grid">
-                          <div><span>Ставок</span><strong>{bookmaker.bets}</strong></div>
-                          <div><span>В/П</span><strong>{bookmaker.wins}/{bookmaker.losses}</strong></div>
-                          <div><span>Winrate</span><strong>{bookmaker.winrate.toFixed(0)}%</strong></div>
-                          <div><span>Ср. кэф</span><strong>{bookmaker.avgOdds.toFixed(2)}</strong></div>
-                          <div><span>Сумма</span><strong>{formatMoney(bookmaker.stake)}</strong></div>
-                          <div><span>Прибыль</span><strong className={bookmaker.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(bookmaker.profit)}</strong></div>
-                        </div>
-                      </article>
-                    )) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
-                  </div>
+                  {sortedBookmakerStats.length ? (
+                    <div className="stats-table-wrap">
+                      <table className="stats-table">
+                        <thead>
+                          <tr>
+                            <SortableTh field="name" label="Букмекер" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="roi" label="ROI" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="bets" label="Ставок" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="wins" label="В/П" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="winrate" label="% побед" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="avgOdds" label="Ср. кэф" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="stake" label="Сумма" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                            <SortableTh field="profit" label="Прибыль" onSort={f => toggleColumnSort(setBookmakerSort, f)} sort={bookmakerSort} />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedBookmakerStats.map(bookmaker => (
+                            <tr key={bookmaker.id}>
+                              <td className="stats-table-name">{bookmaker.name}</td>
+                              <td><span className={bookmaker.roi >= 0 ? "roi-positive" : "roi-negative"}>{bookmaker.roi >= 0 ? "+" : ""}{bookmaker.roi.toFixed(1)}%</span></td>
+                              <td>{bookmaker.bets}</td>
+                              <td>{bookmaker.wins}/{bookmaker.losses}</td>
+                              <td>{bookmaker.winrate.toFixed(0)}%</td>
+                              <td>{bookmaker.avgOdds.toFixed(2)}</td>
+                              <td>{formatMoney(bookmaker.stake)}</td>
+                              <td className={bookmaker.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(bookmaker.profit)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <span className="empty">Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.</span>}
                 </div>
 
                 <div className="stats-block">
