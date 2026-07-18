@@ -2139,13 +2139,13 @@ export default function Home() {
                 <MatchFilterDropdown
                   onChange={value => { setCountryFilter(value); setLeagueFilter("all"); }}
                   options={Array.from(countryCounts.entries())
-                    .sort((a, b) => b[1] - a[1])
                     .map(([country, count]) => ({
                       count,
                       flag: <FlagIcon country={country} />,
                       label: getCountryLabel(country),
                       value: country
-                    }))}
+                    }))
+                    .sort((a, b) => a.label.localeCompare(b.label, "ru"))}
                   placeholderIcon="🌍"
                   placeholderLabel="Все страны"
                   value={countryFilter}
@@ -2156,8 +2156,8 @@ export default function Home() {
                 <MatchFilterDropdown
                   onChange={setLeagueFilter}
                   options={Array.from(leagueCounts.entries())
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([league, count]) => ({ count, label: league, value: league }))}
+                    .map(([league, count]) => ({ count, label: league, value: league }))
+                    .sort((a, b) => a.label.localeCompare(b.label, "ru"))}
                   placeholderIcon="🏆"
                   placeholderLabel="Все лиги"
                   value={leagueFilter}
