@@ -1118,9 +1118,8 @@ h1 {
   vertical-align: -2px;
 }
 
-.flag-icon-fallback {
-  font-size: 12px;
-  line-height: 1;
+.flag-icon-world {
+  border-radius: 2px;
 }
 
 .match-meta-country {
