@@ -2185,7 +2185,7 @@ export default function Home() {
     const timezoneOffsetMinutes = getUserTimezoneOffsetMinutes(user);
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
-    const pendingRailBets = pendingBets.slice(0, 5);
+    const pendingRailBets = allPendingBetsOpen ? pendingBets : pendingBets.slice(0, 5);
 
     return (
       <main className="workspace-shell">
@@ -2659,7 +2659,7 @@ export default function Home() {
                 <em>ROI {betStats.roi >= 0 ? "+" : ""}{betStats.roi.toFixed(1)}%</em>
               </div>
               {pendingRailBets.length ? (
-                <div className="bank-bet-list">
+                <div className={`bank-bet-list ${allPendingBetsOpen ? "expanded" : ""}`}>
                   {pendingRailBets.map(bet => {
                     const sourceNames = getBetSourceIds(bet).map(id => sourceDisplayName(sourceById.get(id)?.name));
                     const sourceLabel = sourceNames.length ? sourceNames.join(" + ") : "Без источника";
@@ -2683,15 +2683,15 @@ export default function Home() {
                   })}
                 </div>
               ) : null}
-              {pendingBets.length > pendingRailBets.length ? (
+              {pendingBets.length > 5 ? (
                 <button
-                  aria-label="Показать все прогнозы"
+                  aria-label={allPendingBetsOpen ? "Свернуть список" : "Показать все прогнозы"}
                   className="bank-bet-expand-btn"
-                  onClick={() => setAllPendingBetsOpen(true)}
-                  title="Показать все прогнозы"
+                  onClick={() => setAllPendingBetsOpen(current => !current)}
+                  title={allPendingBetsOpen ? "Свернуть список" : "Показать все прогнозы"}
                   type="button"
                 >
-                  ▾
+                  {allPendingBetsOpen ? "▴" : "▾"}
                 </button>
               ) : null}
               {bankEditorOpen ? (
@@ -2974,60 +2974,6 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="calendar-bets-empty">У этого источника пока нет прогнозов.</div>
-                )}
-              </section>
-            </div>
-          ) : null}
-
-          {allPendingBetsOpen ? (
-            <div className="calendar-bets-backdrop" role="presentation">
-              <section className="calendar-bets-modal" role="dialog" aria-modal="true" aria-label="Все прогнозы">
-                <div className="calendar-bets-head">
-                  <div>
-                    <span>Все прогнозы</span>
-                    <strong>Ожидают результата: {pendingBets.length}</strong>
-                  </div>
-                  <button
-                    aria-label="Закрыть"
-                    onClick={() => setAllPendingBetsOpen(false)}
-                    type="button"
-                  >
-                    ×
-                  </button>
-                </div>
-
-                {pendingBets.length ? (
-                  <div className="calendar-bets-list">
-                    {pendingBets.map(bet => {
-                      const betDate = new Date(bet.created_at);
-
-                      return (
-                        <BetCard
-                          bet={bet}
-                          dataLoading={dataLoading}
-                          editForm={editForm}
-                          editingBetId={editingBetId}
-                          extraMeta={formatCalendarDateLabel(betDate)}
-                          highlighted={bet.id === highlightBetId}
-                          key={bet.id}
-                          onAddSource={sourceId => addSourceToBet(bet, sourceId)}
-                          onCancelEdit={cancelEditBet}
-                          onRemoveSource={sourceId => removeSourceFromBet(bet, sourceId)}
-                          onSaveEdit={saveEditBet}
-                          onSettle={settleBet}
-                          onStartEdit={startEditBet}
-                          onToggleSourcePicker={() => setSourcePickerForBetId(current => (current === bet.id ? null : bet.id))}
-                          setEditForm={setEditForm}
-                          sourceById={sourceById}
-                          sourceOptions={sources.filter(source => !source.is_blacklisted)}
-                          sourcePickerOpen={sourcePickerForBetId === bet.id}
-                          timezoneOffsetMinutes={timezoneOffsetMinutes}
-                        />
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="calendar-bets-empty">Ожидающих прогнозов пока нет.</div>
                 )}
               </section>
             </div>

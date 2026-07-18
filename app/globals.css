@@ -1521,6 +1521,28 @@ h1 {
   margin-top: 10px;
 }
 
+.bank-bet-list.expanded {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-color: rgba(0, 229, 255, 0.85) rgba(255, 255, 255, 0.04);
+  scrollbar-width: thin;
+}
+
+.bank-bet-list.expanded::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bank-bet-list.expanded::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+
+.bank-bet-list.expanded::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan), rgba(145, 95, 255, 0.9));
+  border-radius: 999px;
+}
+
 .bank-bet-expand-btn {
   align-items: center;
   background: rgba(255, 255, 255, 0.04);
