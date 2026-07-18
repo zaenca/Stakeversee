@@ -1084,6 +1084,7 @@ export default function Home() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [calendarDateOpen, setCalendarDateOpen] = useState<Date | null>(null);
   const [sourceBetsOpen, setSourceBetsOpen] = useState<string | null>(null);
+  const [allPendingBetsOpen, setAllPendingBetsOpen] = useState(false);
   const [sourceSort, setSourceSort] = useState<{ field: StatsSortField; direction: "asc" | "desc" }>({ field: "roi", direction: "desc" });
   const [bookmakerSort, setBookmakerSort] = useState<{ field: StatsSortField; direction: "asc" | "desc" }>({ field: "roi", direction: "desc" });
   const [editingBetId, setEditingBetId] = useState<string | null>(null);
@@ -2682,6 +2683,17 @@ export default function Home() {
                   })}
                 </div>
               ) : null}
+              {pendingBets.length > pendingRailBets.length ? (
+                <button
+                  aria-label="Показать все прогнозы"
+                  className="bank-bet-expand-btn"
+                  onClick={() => setAllPendingBetsOpen(true)}
+                  title="Показать все прогнозы"
+                  type="button"
+                >
+                  ▾
+                </button>
+              ) : null}
               {bankEditorOpen ? (
                 <div className="bank-modal-backdrop" role="presentation">
                   <form className="bank-modal" onSubmit={handleBankrollSubmit}>
@@ -2962,6 +2974,60 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="calendar-bets-empty">У этого источника пока нет прогнозов.</div>
+                )}
+              </section>
+            </div>
+          ) : null}
+
+          {allPendingBetsOpen ? (
+            <div className="calendar-bets-backdrop" role="presentation">
+              <section className="calendar-bets-modal" role="dialog" aria-modal="true" aria-label="Все прогнозы">
+                <div className="calendar-bets-head">
+                  <div>
+                    <span>Все прогнозы</span>
+                    <strong>Ожидают результата: {pendingBets.length}</strong>
+                  </div>
+                  <button
+                    aria-label="Закрыть"
+                    onClick={() => setAllPendingBetsOpen(false)}
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {pendingBets.length ? (
+                  <div className="calendar-bets-list">
+                    {pendingBets.map(bet => {
+                      const betDate = new Date(bet.created_at);
+
+                      return (
+                        <BetCard
+                          bet={bet}
+                          dataLoading={dataLoading}
+                          editForm={editForm}
+                          editingBetId={editingBetId}
+                          extraMeta={formatCalendarDateLabel(betDate)}
+                          highlighted={bet.id === highlightBetId}
+                          key={bet.id}
+                          onAddSource={sourceId => addSourceToBet(bet, sourceId)}
+                          onCancelEdit={cancelEditBet}
+                          onRemoveSource={sourceId => removeSourceFromBet(bet, sourceId)}
+                          onSaveEdit={saveEditBet}
+                          onSettle={settleBet}
+                          onStartEdit={startEditBet}
+                          onToggleSourcePicker={() => setSourcePickerForBetId(current => (current === bet.id ? null : bet.id))}
+                          setEditForm={setEditForm}
+                          sourceById={sourceById}
+                          sourceOptions={sources.filter(source => !source.is_blacklisted)}
+                          sourcePickerOpen={sourcePickerForBetId === bet.id}
+                          timezoneOffsetMinutes={timezoneOffsetMinutes}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="calendar-bets-empty">Ожидающих прогнозов пока нет.</div>
                 )}
               </section>
             </div>
