@@ -1409,13 +1409,16 @@ export default function Home() {
   }, [lineMatches]);
 
   const leagueCounts = useMemo(() => {
-    const counts = new Map<string, number>();
+    const counts = new Map<string, { count: number; country: string }>();
     for (const match of getUpcomingMatches(lineMatches)) {
       const sportOk = activeSport === "all" || match.sport === activeSport;
       const countryOk = countryFilter === "all" || match.country === countryFilter;
       if (!sportOk || !countryOk) continue;
       const l = match.league;
-      if (l) counts.set(l, (counts.get(l) || 0) + 1);
+      if (!l) continue;
+      const existing = counts.get(l);
+      if (existing) existing.count += 1;
+      else counts.set(l, { count: 1, country: match.country || "World" });
     }
     return counts;
   }, [activeSport, countryFilter, lineMatches]);
@@ -2156,8 +2159,17 @@ export default function Home() {
                 <MatchFilterDropdown
                   onChange={setLeagueFilter}
                   options={Array.from(leagueCounts.entries())
-                    .map(([league, count]) => ({ count, label: league, value: league }))
-                    .sort((a, b) => a.label.localeCompare(b.label, "ru"))}
+                    .sort(([leagueA, infoA], [leagueB, infoB]) => {
+                      const countryCmp = getCountryLabel(infoA.country).localeCompare(getCountryLabel(infoB.country), "ru");
+                      if (countryCmp !== 0) return countryCmp;
+                      return leagueA.localeCompare(leagueB, "ru");
+                    })
+                    .map(([league, info]) => ({
+                      count: info.count,
+                      flag: <FlagIcon country={info.country} />,
+                      label: `${getCountryLabel(info.country)} \u2014 ${league}`,
+                      value: league
+                    }))}
                   placeholderIcon="🏆"
                   placeholderLabel="Все лиги"
                   value={leagueFilter}
