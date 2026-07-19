@@ -1647,9 +1647,9 @@ h1 {
 .bank-bet-row strong {
   color: var(--text);
   font-size: 0.78rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .bank-bet-badges {
