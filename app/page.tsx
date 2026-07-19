@@ -2742,6 +2742,35 @@ export default function Home() {
                           )}
                           <span className="bank-bet-odds">×{Number(bet.odds || 0).toFixed(2)}</span>
                           <em>{sourceLabel}</em>
+                          <div className="calendar-bet-source-add" onClick={event => event.stopPropagation()}>
+                            <button
+                              aria-label={t("Добавить источник")}
+                              className="calendar-bet-add-source-btn"
+                              onClick={() => setSourcePickerForBetId(current => (current === bet.id ? null : bet.id))}
+                              title={t("Добавить ещё один источник")}
+                              type="button"
+                            >
+                              +
+                            </button>
+                            {sourcePickerForBetId === bet.id ? (
+                              <div className="calendar-bet-source-picker" role="listbox">
+                                {sources.filter(source => !source.is_blacklisted && !getBetSourceIds(bet).includes(source.id)).length ? (
+                                  sources
+                                    .filter(source => !source.is_blacklisted && !getBetSourceIds(bet).includes(source.id))
+                                    .map(source => (
+                                      <button
+                                        key={source.id}
+                                        onClick={() => addSourceToBet(bet, source.id)}
+                                        role="option"
+                                        type="button"
+                                      >
+                                        {source.name}
+                                      </button>
+                                    ))
+                                ) : <span className="empty">{t("Больше источников нет")}</span>}
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     );
