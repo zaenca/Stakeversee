@@ -17,6 +17,7 @@ type RawMatch = {
   startsAt: string;
   startMs: number;
   confidence: number;
+  recommendationSide: "home" | "draw" | "away";
   odds: BookmakerOdds;
 };
 
@@ -29,7 +30,13 @@ type ApiMatch = {
   away: string;
   odds: string[];
   confidence: number;
+  recommendationSide: "home" | "draw" | "away";
   startsAt: string;
+};
+
+type Analysis = {
+  confidence: number;
+  recommendationSide: "home" | "draw" | "away";
 };
 
 type PariLikeEvent = Record<string, unknown>;
@@ -238,6 +245,31 @@ function factorOdd(factors: PariLikeEvent[], id: number): number | null {
   return decimalOdd(row?.v);
 }
 
+// Снимаем маржу букмекера (vig) с коэффициентов и получаем реальную
+// вероятность каждого исхода. Это базовый, но честный сигнал —
+// букмекерская линия уже аккумулирует огромный объём информации
+// (составы, травмы, форма), которую мы не можем добыть напрямую.
+function analyzeOdds(odds: BookmakerOdds): Analysis {
+  const rawHome = 1 / odds.home;
+  const rawAway = 1 / odds.away;
+  const rawDraw = odds.draw ? 1 / odds.draw : 0;
+  const overround = rawHome + rawAway + rawDraw;
+
+  const pHome = rawHome / overround;
+  const pAway = rawAway / overround;
+  const pDraw = rawDraw / overround;
+
+  let side: "home" | "draw" | "away" = "home";
+  let prob = pHome;
+  if (pAway > prob) { side = "away"; prob = pAway; }
+  if (pDraw > prob) { side = "draw"; prob = pDraw; }
+
+  return {
+    confidence: Math.round(Math.min(96, Math.max(4, prob * 100))),
+    recommendationSide: side
+  };
+}
+
 function mainOdds(factors: PariLikeEvent[], sport: string, bookmaker: string): BookmakerOdds | null {
   const home = factorOdd(factors, 921);
   const rawDraw = factorOdd(factors, 922);
@@ -276,6 +308,7 @@ function fromBookmakerEvent(data: PariLikeData, item: PariLikeEvent, factorMap: 
   const startMs = startMsFrom(item.startTime, item.startTimestamp, item.timestamp);
   if (!startMs) return null;
   const locale = extractCountryAndLeague(data, item);
+  const analysis = analyzeOdds(odds);
   return {
     id: `${source}-${asString(item.id)}`,
     sport,
@@ -285,7 +318,8 @@ function fromBookmakerEvent(data: PariLikeData, item: PariLikeEvent, factorMap: 
     away,
     startMs,
     startsAt: new Date(startMs).toISOString(),
-    confidence: 0,
+    confidence: analysis.confidence,
+    recommendationSide: analysis.recommendationSide,
     odds
   };
 }
@@ -360,6 +394,7 @@ function featuredFallbackMatches(now: number, horizon: number): RawMatch[] {
       startsAt: new Date(startMs).toISOString(),
       startMs,
       confidence: 68,
+      recommendationSide: "home",
       odds: {
         bookmaker: "featured",
         home: 1.58,
@@ -398,7 +433,14 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
       }
     });
   }
-  return Array.from(byKey.values()).sort((a, b) => a.startMs - b.startMs);
+  // Пересчитываем анализ по итоговым (объединённым) коэффициентам —
+  // после merge odds могли обновиться (взяли лучшую котировку из двух букмекеров).
+  return Array.from(byKey.values())
+    .map((match) => {
+      const analysis = analyzeOdds(match.odds);
+      return { ...match, confidence: analysis.confidence, recommendationSide: analysis.recommendationSide };
+    })
+    .sort((a, b) => a.startMs - b.startMs);
 }
 
 function toApiMatch(match: RawMatch): ApiMatch {
@@ -412,6 +454,7 @@ function toApiMatch(match: RawMatch): ApiMatch {
     away: match.away,
     odds,
     confidence: match.confidence,
+    recommendationSide: match.recommendationSide,
     startsAt: match.startsAt
   };
 }
