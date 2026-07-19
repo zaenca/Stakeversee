@@ -1569,16 +1569,20 @@ export default function Home() {
   }, [lineMatches]);
 
   const leagueCounts = useMemo(() => {
-    const counts = new Map<string, { count: number; country: string }>();
+    const counts = new Map<string, { count: number; country: string; league: string; sport: string }>();
     for (const match of getUpcomingMatches(lineMatches)) {
       const sportOk = activeSport === "all" || match.sport === activeSport;
       const countryOk = countryFilter === "all" || match.country === countryFilter;
       if (!sportOk || !countryOk) continue;
       const l = match.league;
       if (!l) continue;
-      const existing = counts.get(l);
+      // Ключ включает вид спорта, иначе одноимённые лиги разных видов спорта
+      // (например "Премьер-лига" в футболе и в другом спорте) схлопнутся в
+      // одну запись с неоднозначной иконкой вида спорта.
+      const key = `${match.sport}::${l}`;
+      const existing = counts.get(key);
       if (existing) existing.count += 1;
-      else counts.set(l, { count: 1, country: match.country || "World" });
+      else counts.set(key, { count: 1, country: match.country || "World", league: l, sport: match.sport });
     }
     return counts;
   }, [activeSport, countryFilter, lineMatches]);
@@ -2456,17 +2460,19 @@ export default function Home() {
                 <span>{t("Лига:")}</span>
                 <MatchFilterDropdown
                   onChange={setLeagueFilter}
-                  options={Array.from(leagueCounts.entries())
-                    .sort(([leagueA, infoA], [leagueB, infoB]) => {
+                  options={Array.from(leagueCounts.values())
+                    .sort((infoA, infoB) => {
+                      const sportCmp = sportTabs.findIndex(tab => tab.key === infoA.sport) - sportTabs.findIndex(tab => tab.key === infoB.sport);
+                      if (sportCmp !== 0) return sportCmp;
                       const countryCmp = getCountryLabel(infoA.country, lang).localeCompare(getCountryLabel(infoB.country, lang), lang === "en" ? "en" : "ru");
                       if (countryCmp !== 0) return countryCmp;
-                      return leagueA.localeCompare(leagueB, lang === "en" ? "en" : "ru");
+                      return infoA.league.localeCompare(infoB.league, lang === "en" ? "en" : "ru");
                     })
-                    .map(([league, info]) => ({
+                    .map(info => ({
                       count: info.count,
                       flag: <FlagIcon country={info.country} />,
-                      label: `${getCountryLabel(info.country, lang)} \u2014 ${t(league)}`,
-                      value: league
+                      label: `${getSportIcon(info.sport)} ${getCountryLabel(info.country, lang)} \u2014 ${t(info.league)}`,
+                      value: info.league
                     }))}
                   placeholderIcon="🏆"
                   placeholderLabel={t("Все лиги")}

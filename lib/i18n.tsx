@@ -66,7 +66,6 @@ export const translations: Record<string, string> = {
   "⚡ Анализ": "⚡ Analysis",
   "⏳ Анализирую...": "⏳ Analyzing...",
   "✅ Анализ завершён:": "✅ Analysis complete:",
-  "матчей": "matches",
   "Не удалось выполнить анализ.": "Analysis failed.",
   "Ассистент временно недоступен.": "Assistant is temporarily unavailable.",
   "AI Ассистент": "AI Assistant",
