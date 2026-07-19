@@ -2740,6 +2740,7 @@ export default function Home() {
                           ) : (
                             <span>{bet.bookmaker ? translateBookmakerLabel(bet.bookmaker, lang) : "\u2014"}</span>
                           )}
+                          <span className="bank-bet-odds">×{Number(bet.odds || 0).toFixed(2)}</span>
                           <em>{sourceLabel}</em>
                         </div>
                       </div>

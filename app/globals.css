@@ -1691,6 +1691,11 @@ h1 {
   width: 100%;
 }
 
+.bank-bet-row span.bank-bet-odds {
+  background: rgba(0, 229, 255, 0.08);
+  color: #6fe9ff;
+}
+
 .bank-bet-row em {
   border: 1px solid rgba(139, 92, 246, 0.32);
   border-radius: 999px;
