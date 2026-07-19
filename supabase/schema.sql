@@ -75,3 +75,34 @@ create policy "bankroll own rows"
 -- Позволяет прикрепить к одной ставке несколько источников
 -- (source_id остаётся основным/первым источником, остальные - здесь)
 alter table public.bets add column if not exists extra_source_ids uuid[] not null default '{}';
+
+-- ══════════════════════════════════════════════════════════════
+-- AI ПРОГНОЗЫ — хранит рекомендации модели по каждому матчу,
+-- чтобы позже сверить их с реальными результатами
+-- (обучение на ошибках, этап 2).
+-- ══════════════════════════════════════════════════════════════
+create table if not exists public.ai_predictions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  match_id text not null,
+  sport text,
+  league text,
+  home text not null,
+  away text not null,
+  odds text,
+  recommendation_side text not null check (recommendation_side in ('home', 'draw', 'away')),
+  confidence numeric(5, 2) not null,
+  starts_at timestamptz,
+  actual_result text check (actual_result in ('home', 'draw', 'away')),
+  was_correct boolean,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, match_id)
+);
+
+alter table public.ai_predictions enable row level security;
+
+create policy "ai_predictions own rows"
+  on public.ai_predictions for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
