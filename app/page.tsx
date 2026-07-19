@@ -2251,8 +2251,18 @@ export default function Home() {
 
           <div className="top-actions">
             <button className="assistant-button" type="button">🤖 {t("Ассистент")}</button>
-            <button className={`lang-button ${lang === "ru" ? "active" : ""}`} onClick={() => setLang("ru")} type="button">RU</button>
-            <button className={`lang-button ${lang === "en" ? "active" : ""}`} onClick={() => setLang("en")} type="button">ENG</button>
+            <button
+              aria-checked={lang === "en"}
+              aria-label={t("Язык интерфейса")}
+              className={`lang-toggle ${lang}`}
+              onClick={() => setLang(lang === "ru" ? "en" : "ru")}
+              role="switch"
+              type="button"
+            >
+              <span className="lang-toggle-option">RU</span>
+              <span className="lang-toggle-option">EN</span>
+              <span className="lang-toggle-thumb" aria-hidden="true" />
+            </button>
             <button className="logout-button" onClick={handleLogout} type="button">{t("Выйти")}</button>
           </div>
         </header>

@@ -26,6 +26,7 @@ export const translations: Record<string, string> = {
   "Игрок": "Player",
   "Основная навигация": "Main navigation",
   "Виды спорта": "Sports",
+  "Язык интерфейса": "Interface language",
   "Панель": "Dashboard",
   "Ставки": "Bets",
   "Источники": "Sources",
