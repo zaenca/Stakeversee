@@ -1129,19 +1129,19 @@ export default function Home() {
   const [editForm, setEditForm] = useState<EditBetForm | null>(null);
   const [highlightBetId, setHighlightBetId] = useState<string | null>(null);
   const [sourcePickerForBetId, setSourcePickerForBetId] = useState<string | null>(null);
-  const [timezonePickerOpen, setTimezonePickerOpen] = useState(false);
+  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const profilePillRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!timezonePickerOpen) return;
+    if (!settingsPanelOpen) return;
     const handleOutside = (event: MouseEvent) => {
       if (profilePillRef.current && !profilePillRef.current.contains(event.target as Node)) {
-        setTimezonePickerOpen(false);
+        setSettingsPanelOpen(false);
       }
     };
     document.addEventListener("mousedown", handleOutside);
     return () => document.removeEventListener("mousedown", handleOutside);
-  }, [timezonePickerOpen]);
+  }, [settingsPanelOpen]);
   const [countryFilter, setCountryFilter] = useState("all");
   const [leagueFilter, setLeagueFilter] = useState("all");
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
@@ -2207,7 +2207,7 @@ export default function Home() {
 
   async function saveTimezone(offsetMinutes: number) {
     if (!user) return;
-    setTimezonePickerOpen(false);
+    setSettingsPanelOpen(false);
     const { data, error } = await supabase.auth.updateUser({
       data: { timezone_offset_minutes: offsetMinutes }
     });
@@ -2230,27 +2230,47 @@ export default function Home() {
         <header className="workspace-topbar">
           <div className="workspace-brand">Stakeversee</div>
 
-          <div className="profile-pill" onClick={() => setTimezonePickerOpen(current => !current)} ref={profilePillRef}>
+          <div className="profile-pill" onClick={() => setSettingsPanelOpen(current => !current)} ref={profilePillRef}>
             <span>{userName.slice(0, 1).toUpperCase()}</span>
             <div>
               <strong>{userName}</strong>
               <small>{TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes)?.label ? t(TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes)!.label) : t("игрок")}</small>
             </div>
-            {timezonePickerOpen ? (
-              <div className="timezone-picker" onClick={event => event.stopPropagation()} role="listbox">
-                <div className="timezone-picker-title">{t("Часовой пояс")}</div>
-                {TIMEZONE_OPTIONS.map(tz => (
+            {settingsPanelOpen ? (
+              <div className="settings-panel" onClick={event => event.stopPropagation()} role="dialog" aria-label={t("Настройки")}>
+                <div className="settings-section">
+                  <div className="settings-section-title">{t("Язык")}</div>
                   <button
-                    className={tz.offset === timezoneOffsetMinutes ? "active" : ""}
-                    key={tz.offset}
-                    onClick={() => saveTimezone(tz.offset)}
-                    role="option"
-                    aria-selected={tz.offset === timezoneOffsetMinutes}
+                    aria-checked={lang === "en"}
+                    aria-label={t("Язык интерфейса")}
+                    className={`lang-toggle ${lang}`}
+                    onClick={() => setLang(lang === "ru" ? "en" : "ru")}
+                    role="switch"
                     type="button"
                   >
-                    {t(tz.label)}
+                    <span className="lang-toggle-option">RU</span>
+                    <span className="lang-toggle-option">EN</span>
+                    <span className="lang-toggle-thumb" aria-hidden="true" />
                   </button>
-                ))}
+                </div>
+                <div className="settings-divider" />
+                <div className="settings-section">
+                  <div className="settings-section-title">{t("Часовой пояс")}</div>
+                  <div className="settings-timezone-list" role="listbox">
+                    {TIMEZONE_OPTIONS.map(tz => (
+                      <button
+                        className={tz.offset === timezoneOffsetMinutes ? "active" : ""}
+                        key={tz.offset}
+                        onClick={() => saveTimezone(tz.offset)}
+                        role="option"
+                        aria-selected={tz.offset === timezoneOffsetMinutes}
+                        type="button"
+                      >
+                        {t(tz.label)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>
@@ -2268,18 +2288,6 @@ export default function Home() {
 
           <div className="top-actions">
             <button className="assistant-button" type="button">🤖 {t("Ассистент")}</button>
-            <button
-              aria-checked={lang === "en"}
-              aria-label={t("Язык интерфейса")}
-              className={`lang-toggle ${lang}`}
-              onClick={() => setLang(lang === "ru" ? "en" : "ru")}
-              role="switch"
-              type="button"
-            >
-              <span className="lang-toggle-option">RU</span>
-              <span className="lang-toggle-option">EN</span>
-              <span className="lang-toggle-thumb" aria-hidden="true" />
-            </button>
             <button className="logout-button" onClick={handleLogout} type="button">{t("Выйти")}</button>
           </div>
         </header>

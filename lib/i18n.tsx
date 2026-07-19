@@ -27,6 +27,8 @@ export const translations: Record<string, string> = {
   "Основная навигация": "Main navigation",
   "Виды спорта": "Sports",
   "Язык интерфейса": "Interface language",
+  "Настройки": "Settings",
+  "Язык": "Language",
   "Панель": "Dashboard",
   "Ставки": "Bets",
   "Источники": "Sources",
