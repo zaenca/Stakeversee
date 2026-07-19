@@ -50,6 +50,7 @@ type MatchRow = {
   away: string;
   odds: string[];
   confidence: number;
+  recommendationSide: "home" | "draw" | "away";
   startsAt?: string;
 };
 
@@ -428,7 +429,8 @@ const demoMatches: MatchRow[] = [
     home: "Arsenal",
     away: "Chelsea",
     odds: ["1.92", "3.55", "4.20"],
-    confidence: 64
+    confidence: 64,
+    recommendationSide: "home"
   },
   {
     id: "demo-2",
@@ -439,7 +441,8 @@ const demoMatches: MatchRow[] = [
     home: "Елена Рыбакина",
     away: "Марта Костюк",
     odds: ["1.58", "-", "2.46"],
-    confidence: 59
+    confidence: 59,
+    recommendationSide: "home"
   },
   {
     id: "demo-3",
@@ -450,9 +453,28 @@ const demoMatches: MatchRow[] = [
     home: "Boston Celtics",
     away: "New York Knicks",
     odds: ["1.72", "-", "2.12"],
-    confidence: 57
+    confidence: 57,
+    recommendationSide: "away"
   }
 ];
+
+function recommendationSideLabel(match: MatchRow, t: (text: string) => string): string {
+  if (match.recommendationSide === "draw") return t("Ничья");
+  if (match.recommendationSide === "away") return `${t("Победа")} ${match.away}`;
+  return `${t("Победа")} ${match.home}`;
+}
+
+function confidenceTier(confidence: number): "hot" | "good" | "neutral" {
+  if (confidence >= 70) return "hot";
+  if (confidence >= 58) return "good";
+  return "neutral";
+}
+
+function confidenceTierLabel(tier: "hot" | "good" | "neutral", t: (text: string) => string): string {
+  if (tier === "hot") return t("горячо");
+  if (tier === "good") return t("хорошо");
+  return t("нейтрально");
+}
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("ru-RU", {
@@ -1147,6 +1169,11 @@ export default function Home() {
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState<MatchesStatusState>({ kind: "idle" });
+  const [analyzing, setAnalyzing] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantMessages, setAssistantMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
+  const [assistantInput, setAssistantInput] = useState("");
+  const [assistantLoading, setAssistantLoading] = useState(false);
 
   const supabaseHost = useMemo(() => {
     return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.local").host;
@@ -1505,14 +1532,18 @@ export default function Home() {
       const sportOk = activeSport === "all" || match.sport === activeSport;
       const countryOk = countryFilter === "all" || match.country === countryFilter;
       const leagueOk = leagueFilter === "all" || match.league === leagueFilter;
+      const tierOk =
+        matchFilter === "all" ||
+        (matchFilter === "hot" && confidenceTier(match.confidence) === "hot") ||
+        (matchFilter === "good" && confidenceTier(match.confidence) !== "neutral");
       const haystack = searchHaystack(match.home, match.away, match.league, match.country);
       const searchOk =
         !queryGroups.length ||
         queryGroups.every(group => group.some(token => haystack.includes(token)));
 
-      return sportOk && countryOk && leagueOk && searchOk;
+      return sportOk && countryOk && leagueOk && tierOk && searchOk;
     });
-  }, [activeSport, countryFilter, leagueFilter, lineMatches, searchQuery]);
+  }, [activeSport, countryFilter, leagueFilter, matchFilter, lineMatches, searchQuery]);
 
   const matchCounts = useMemo(() => {
     const upcomingMatches = getUpcomingMatches(lineMatches);
@@ -1592,6 +1623,7 @@ export default function Home() {
             away: String(match.away || ""),
             odds: [odds[0] || "-", odds[1] || "-", odds[2] || "-"],
             confidence: Number(match.confidence || 0),
+            recommendationSide: (["home", "draw", "away"].includes(String(match.recommendationSide)) ? match.recommendationSide : "home") as MatchRow["recommendationSide"],
             startsAt
           };
         })
@@ -1605,6 +1637,96 @@ export default function Home() {
       setMatchesStatus({ kind: "unavailable" });
     } finally {
       setMatchesLoading(false);
+    }
+  }
+
+  // ── АНАЛИЗ: пересчитывает рекомендации по свежим коэффициентам и
+  // сохраняет прогнозы в базу, чтобы позже сверить их с результатами
+  // (обучение на ошибках — этап 2).
+  async function runAnalysis() {
+    if (analyzing) return;
+    setAnalyzing(true);
+    setDataMessage("");
+
+    try {
+      await refreshMatchesWindow();
+
+      const freshMatches = readCachedMatches();
+
+      if (user) {
+        const upcoming = freshMatches.slice(0, 60);
+        const rows = upcoming.map(match => ({
+          away: match.away,
+          confidence: match.confidence,
+          home: match.home,
+          league: match.league,
+          match_id: match.id,
+          odds: match.odds.join("/"),
+          recommendation_side: match.recommendationSide,
+          sport: match.sport,
+          starts_at: match.startsAt || null,
+          user_id: user.id
+        }));
+
+        if (rows.length) {
+          const { error } = await supabase
+            .from("ai_predictions")
+            .upsert(rows, { onConflict: "user_id,match_id" });
+          if (error) console.error("ai_predictions upsert failed", error.message);
+        }
+      }
+
+      setDataMessage(`${t("✅ Анализ завершён:")} ${freshMatches.length} ${t("матчей")}`);
+    } catch (error) {
+      setDataMessage(error instanceof Error ? error.message : t("Не удалось выполнить анализ."));
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  // ── АССИСТЕНТ: отправляет вопрос пользователя + контекст текущих
+  // матчей в /api/assistant (сервер сам обращается к Anthropic API,
+  // ключ никогда не попадает в браузер).
+  async function sendAssistantMessage(presetText?: string) {
+    const text = (presetText ?? assistantInput).trim();
+    if (!text || assistantLoading) return;
+
+    setAssistantMessages(current => [...current, { role: "user", text }]);
+    setAssistantInput("");
+    setAssistantLoading(true);
+
+    try {
+      const topMatches = [...activeMatches]
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, 25)
+        .map(match => ({
+          away: match.away,
+          confidence: match.confidence,
+          home: match.home,
+          league: match.league,
+          odds: match.odds,
+          recommendationSide: match.recommendationSide,
+          sport: match.sport
+        }));
+
+      const response = await fetch("/api/assistant", {
+        body: JSON.stringify({ history: assistantMessages, matches: topMatches, message: text }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.error || t("Ассистент временно недоступен."));
+      }
+
+      setAssistantMessages(current => [...current, { role: "assistant", text: String(payload.reply || "") }]);
+    } catch (error) {
+      const replyText = error instanceof Error ? error.message : t("Ассистент временно недоступен.");
+      setAssistantMessages(current => [...current, { role: "assistant", text: replyText }]);
+    } finally {
+      setAssistantLoading(false);
     }
   }
 
@@ -2287,7 +2409,7 @@ export default function Home() {
           </div>
 
           <div className="top-actions">
-            <button className="assistant-button" type="button">🤖 {t("Ассистент")}</button>
+            <button className="assistant-button" onClick={() => setAssistantOpen(true)} type="button">🤖 {t("Ассистент")}</button>
             <button className="logout-button" onClick={handleLogout} type="button">{t("Выйти")}</button>
           </div>
         </header>
@@ -2377,6 +2499,15 @@ export default function Home() {
                 spellCheck={false}
                 value={searchQuery}
               />
+
+              <button
+                className="refresh-button analyze-button"
+                disabled={analyzing || !lineMatches.length}
+                onClick={runAnalysis}
+                type="button"
+              >
+                {analyzing ? t("⏳ Анализирую...") : t("⚡ Анализ")}
+              </button>
             </div>
 
             <div className="matches-area">
@@ -2417,14 +2548,14 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="recommendation-card">
+                    <div className={`recommendation-card tier-${confidenceTier(match.confidence)}`}>
                       <div>
                         <span>{t("Рекомендация")}</span>
-                        <strong>{t("Победа")} {match.home}</strong>
+                        <strong>{recommendationSideLabel(match, t)}</strong>
                       </div>
                       <div>
                         <strong>{match.confidence}%</strong>
-                        <span>{t("хорошо")}</span>
+                        <span>{confidenceTierLabel(confidenceTier(match.confidence), t)}</span>
                       </div>
                     </div>
 
@@ -3073,6 +3204,58 @@ export default function Home() {
                 ) : (
                   <div className="calendar-bets-empty">{t("У этого источника пока нет прогнозов.")}</div>
                 )}
+              </section>
+            </div>
+          ) : null}
+
+          {assistantOpen ? (
+            <div className="assistant-modal-backdrop" onMouseDown={() => setAssistantOpen(false)} role="presentation">
+              <section
+                aria-label={t("AI Ассистент")}
+                aria-modal="true"
+                className="rail-panel assistant-panel"
+                onMouseDown={event => event.stopPropagation()}
+                role="dialog"
+              >
+                <div className="rail-title">🤖 {t("AI Ассистент")}</div>
+                <button className="stats-modal-close" aria-label={t("Закрыть ассистента")} onClick={() => setAssistantOpen(false)} type="button">×</button>
+
+                <div className="assistant-quick-actions">
+                  <button onClick={() => sendAssistantMessage(t("Дай топ-3 самых интересных матча сейчас и объясни почему."))} type="button">🔥 {t("Топ-пики")}</button>
+                  <button onClick={() => sendAssistantMessage(t("Есть ли сейчас явный value bet среди загруженных матчей?"))} type="button">💎 {t("Value bets")}</button>
+                  <button onClick={() => sendAssistantMessage(t("На что обратить внимание — риски и неоднозначные матчи?"))} type="button">⚠️ {t("Риски")}</button>
+                </div>
+
+                <div className="assistant-messages">
+                  {assistantMessages.length ? (
+                    assistantMessages.map((entry, index) => (
+                      <div className={`assistant-msg assistant-msg-${entry.role}`} key={index}>
+                        {entry.text}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="assistant-empty-hint">
+                      {t("Спроси про матчи, попроси топ-пики или разбор конкретной ставки.")}
+                    </div>
+                  )}
+                  {assistantLoading ? <div className="assistant-msg assistant-msg-assistant assistant-msg-thinking">{t("думаю…")}</div> : null}
+                </div>
+
+                <form
+                  className="assistant-input-row"
+                  onSubmit={event => {
+                    event.preventDefault();
+                    sendAssistantMessage();
+                  }}
+                >
+                  <input
+                    disabled={assistantLoading}
+                    onChange={event => setAssistantInput(event.target.value)}
+                    placeholder={t("Спроси про матчи...")}
+                    value={assistantInput}
+                  />
+                  <button disabled={assistantLoading || !assistantInput.trim()} type="submit">➤</button>
+                </form>
               </section>
             </div>
           ) : null}
