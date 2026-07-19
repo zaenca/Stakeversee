@@ -2732,14 +2732,16 @@ export default function Home() {
                         tabIndex={0}
                       >
                         <strong title={formatEventName(bet.event_name)}>{formatEventName(bet.event_name)}</strong>
-                        {getBookmakerLogo(bet.bookmaker) ? (
-                          <span className="bank-bet-bookmaker-logo" title={bet.bookmaker || ""}>
-                            <img alt={bet.bookmaker || ""} src={getBookmakerLogo(bet.bookmaker)!} />
-                          </span>
-                        ) : (
-                          <span>{bet.bookmaker ? translateBookmakerLabel(bet.bookmaker, lang) : "\u2014"}</span>
-                        )}
-                        <em title={sourceLabel}>{sourceLabel}</em>
+                        <div className="bank-bet-badges">
+                          {getBookmakerLogo(bet.bookmaker) ? (
+                            <span className="bank-bet-bookmaker-logo" title={bet.bookmaker || ""}>
+                              <img alt={bet.bookmaker || ""} src={getBookmakerLogo(bet.bookmaker)!} />
+                            </span>
+                          ) : (
+                            <span>{bet.bookmaker ? translateBookmakerLabel(bet.bookmaker, lang) : "\u2014"}</span>
+                          )}
+                          <em>{sourceLabel}</em>
+                        </div>
                       </div>
                     );
                   })}

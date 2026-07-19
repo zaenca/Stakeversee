@@ -1629,15 +1629,12 @@ h1 {
 }
 
 .bank-bet-row {
-  align-items: center;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--line);
   border-radius: 7px;
   cursor: pointer;
   display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 108px);
-  min-height: 38px;
+  gap: 6px;
   padding: 8px 9px;
   transition: background 0.15s, border-color 0.15s;
 }
@@ -1655,6 +1652,13 @@ h1 {
   white-space: nowrap;
 }
 
+.bank-bet-badges {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .bank-bet-row span {
   border: 1px solid rgba(0, 229, 255, 0.22);
   border-radius: 999px;
@@ -1662,10 +1666,7 @@ h1 {
   font-size: 0.62rem;
   font-style: normal;
   font-weight: 800;
-  max-width: 92px;
-  overflow: hidden;
   padding: 3px 7px;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1678,8 +1679,6 @@ h1 {
   flex-shrink: 0;
   height: 22px;
   justify-content: center;
-  max-width: none;
-  overflow: hidden;
   padding: 2px;
   width: 22px;
 }
@@ -1699,11 +1698,7 @@ h1 {
   font-size: 0.62rem;
   font-style: normal;
   font-weight: 800;
-  max-width: 100%;
-  min-width: 0;
-  overflow: hidden;
   padding: 3px 7px;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
