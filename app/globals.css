@@ -1666,7 +1666,7 @@ h1 {
   justify-content: center;
   max-width: none;
   overflow: hidden;
-  padding: 0;
+  padding: 2px;
   width: 22px;
 }
 
@@ -1674,7 +1674,7 @@ h1 {
   border-radius: 50%;
   display: block;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   width: 100%;
 }
 
