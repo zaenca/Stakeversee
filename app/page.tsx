@@ -1152,18 +1152,6 @@ export default function Home() {
   const [highlightBetId, setHighlightBetId] = useState<string | null>(null);
   const [sourcePickerForBetId, setSourcePickerForBetId] = useState<string | null>(null);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
-  const profilePillRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!settingsPanelOpen) return;
-    const handleOutside = (event: MouseEvent) => {
-      if (profilePillRef.current && !profilePillRef.current.contains(event.target as Node)) {
-        setSettingsPanelOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, [settingsPanelOpen]);
   const [countryFilter, setCountryFilter] = useState("all");
   const [leagueFilter, setLeagueFilter] = useState("all");
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
@@ -2356,49 +2344,12 @@ export default function Home() {
         <header className="workspace-topbar">
           <div className="workspace-brand">Stakeversee</div>
 
-          <div className="profile-pill" onClick={() => setSettingsPanelOpen(current => !current)} ref={profilePillRef}>
+          <div className="profile-pill" onClick={() => setSettingsPanelOpen(true)}>
             <span>{userName.slice(0, 1).toUpperCase()}</span>
             <div>
               <strong>{userName}</strong>
               <small>{TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes)?.label ? t(TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes)!.label) : t("игрок")}</small>
             </div>
-            {settingsPanelOpen ? (
-              <div className="settings-panel" onClick={event => event.stopPropagation()} role="dialog" aria-label={t("Настройки")}>
-                <div className="settings-section">
-                  <div className="settings-section-title">{t("Язык")}</div>
-                  <button
-                    aria-checked={lang === "en"}
-                    aria-label={t("Язык интерфейса")}
-                    className={`lang-toggle ${lang}`}
-                    onClick={() => setLang(lang === "ru" ? "en" : "ru")}
-                    role="switch"
-                    type="button"
-                  >
-                    <span className="lang-toggle-option">RU</span>
-                    <span className="lang-toggle-option">EN</span>
-                    <span className="lang-toggle-thumb" aria-hidden="true" />
-                  </button>
-                </div>
-                <div className="settings-divider" />
-                <div className="settings-section">
-                  <div className="settings-section-title">{t("Часовой пояс")}</div>
-                  <div className="settings-timezone-list" role="listbox">
-                    {TIMEZONE_OPTIONS.map(tz => (
-                      <button
-                        className={tz.offset === timezoneOffsetMinutes ? "active" : ""}
-                        key={tz.offset}
-                        onClick={() => saveTimezone(tz.offset)}
-                        role="option"
-                        aria-selected={tz.offset === timezoneOffsetMinutes}
-                        type="button"
-                      >
-                        {t(tz.label)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </div>
 
           <div className="sync-meter">
@@ -2417,6 +2368,59 @@ export default function Home() {
             <button className="logout-button" onClick={handleLogout} type="button">{t("Выйти")}</button>
           </div>
         </header>
+
+        {settingsPanelOpen ? (
+          <div className="settings-modal-backdrop" onMouseDown={() => setSettingsPanelOpen(false)} role="presentation">
+            <section
+              aria-label={t("Настройки")}
+              aria-modal="true"
+              className="settings-modal"
+              onMouseDown={event => event.stopPropagation()}
+              role="dialog"
+            >
+              <div className="settings-modal-head">
+                <strong>{t("Настройки")}</strong>
+                <button aria-label={t("Закрыть")} onClick={() => setSettingsPanelOpen(false)} type="button">×</button>
+              </div>
+
+              <div className="settings-section">
+                <div className="settings-section-title">{t("Язык")}</div>
+                <button
+                  aria-checked={lang === "en"}
+                  aria-label={t("Язык интерфейса")}
+                  className={`lang-toggle ${lang}`}
+                  onClick={() => setLang(lang === "ru" ? "en" : "ru")}
+                  role="switch"
+                  type="button"
+                >
+                  <span className="lang-toggle-option">RU</span>
+                  <span className="lang-toggle-option">EN</span>
+                  <span className="lang-toggle-thumb" aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="settings-divider" />
+
+              <div className="settings-section">
+                <div className="settings-section-title">{t("Часовой пояс")}</div>
+                <div className="settings-timezone-list" role="listbox">
+                  {TIMEZONE_OPTIONS.map(tz => (
+                    <button
+                      className={tz.offset === timezoneOffsetMinutes ? "active" : ""}
+                      key={tz.offset}
+                      onClick={() => saveTimezone(tz.offset)}
+                      role="option"
+                      aria-selected={tz.offset === timezoneOffsetMinutes}
+                      type="button"
+                    >
+                      {t(tz.label)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : null}
 
         <section className="workspace-grid">
           <div className="match-board">
