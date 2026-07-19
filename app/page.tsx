@@ -2707,7 +2707,13 @@ export default function Home() {
                         tabIndex={0}
                       >
                         <strong title={formatEventName(bet.event_name)}>{formatEventName(bet.event_name)}</strong>
-                        <span>{bet.bookmaker ? translateBookmakerLabel(bet.bookmaker, lang) : "\u2014"}</span>
+                        {bet.bookmaker?.trim().toLowerCase() === "fonbet" ? (
+                          <span className="bank-bet-bookmaker-logo" title="Fonbet">
+                            <img alt="Fonbet" src="/bookmakers/fonbet.png" />
+                          </span>
+                        ) : (
+                          <span>{bet.bookmaker ? translateBookmakerLabel(bet.bookmaker, lang) : "\u2014"}</span>
+                        )}
                         <em title={sourceLabel}>{sourceLabel}</em>
                       </div>
                     );

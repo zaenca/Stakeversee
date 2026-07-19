@@ -1655,6 +1655,29 @@ h1 {
   white-space: nowrap;
 }
 
+.bank-bet-row span.bank-bet-bookmaker-logo {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  display: flex;
+  flex-shrink: 0;
+  height: 22px;
+  justify-content: center;
+  max-width: none;
+  overflow: hidden;
+  padding: 0;
+  width: 22px;
+}
+
+.bank-bet-row span.bank-bet-bookmaker-logo img {
+  border-radius: 50%;
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
 .bank-bet-row em {
   border: 1px solid rgba(139, 92, 246, 0.32);
   border-radius: 999px;
