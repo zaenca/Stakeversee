@@ -462,6 +462,19 @@ function formatMoney(value: number) {
   }).format(value);
 }
 
+// Букмекеры с готовым логотипом в public/bookmakers/ - показываются в виде
+// круглого значка вместо текстовой плашки. Чтобы добавить нового букмекера,
+// достаточно положить файл в public/bookmakers/ и дописать сюда одну строку.
+const BOOKMAKER_LOGOS: Record<string, string> = {
+  fonbet: "/bookmakers/fonbet.png",
+  melbet: "/bookmakers/melbet.png"
+};
+
+function getBookmakerLogo(bookmaker: string | null | undefined): string | null {
+  const key = bookmaker?.trim().toLowerCase();
+  return key ? BOOKMAKER_LOGOS[key] || null : null;
+}
+
 function formatCalendarDateLabel(date: Date, lang: Lang) {
   return date.toLocaleDateString(localeFor(lang), {
     day: "2-digit",
@@ -2707,9 +2720,9 @@ export default function Home() {
                         tabIndex={0}
                       >
                         <strong title={formatEventName(bet.event_name)}>{formatEventName(bet.event_name)}</strong>
-                        {bet.bookmaker?.trim().toLowerCase() === "fonbet" ? (
-                          <span className="bank-bet-bookmaker-logo" title="Fonbet">
-                            <img alt="Fonbet" src="/bookmakers/fonbet.png" />
+                        {getBookmakerLogo(bet.bookmaker) ? (
+                          <span className="bank-bet-bookmaker-logo" title={bet.bookmaker || ""}>
+                            <img alt={bet.bookmaker || ""} src={getBookmakerLogo(bet.bookmaker)!} />
                           </span>
                         ) : (
                           <span>{bet.bookmaker ? translateBookmakerLabel(bet.bookmaker, lang) : "\u2014"}</span>
