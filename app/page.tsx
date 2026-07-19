@@ -464,10 +464,14 @@ function formatMoney(value: number) {
 
 // Букмекеры с готовым логотипом в public/bookmakers/ - показываются в виде
 // круглого значка вместо текстовой плашки. Чтобы добавить нового букмекера,
-// достаточно положить файл в public/bookmakers/ и дописать сюда одну строку.
+// достаточно положить файл в public/bookmakers/ и дописать сюда одну строку
+// (при необходимости с несколькими вариантами написания - ставки хранят
+// название буквально так, как оно выбрано в bookmakerOptions, у Мелбет
+// это кириллица, у остальных - латиница).
 const BOOKMAKER_LOGOS: Record<string, string> = {
   fonbet: "/bookmakers/fonbet.png",
-  melbet: "/bookmakers/melbet.png"
+  melbet: "/bookmakers/melbet.png",
+  "мелбет": "/bookmakers/melbet.png"
 };
 
 function getBookmakerLogo(bookmaker: string | null | undefined): string | null {
