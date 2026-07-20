@@ -115,7 +115,11 @@ export const translations: Record<string, string> = {
 
   // ── Bank panel ─────────────────────────────────────────────
   "💰 Банк": "💰 Bank",
-  "↺ Сброс": "↺ Reset",
+  "↺ Пересчитать": "↺ Recalculate",
+  "Пересчитать баланс из ставок": "Recalculate balance from bets",
+  "Пересчитать баланс из текущих ставок? Устаревшие или задвоенные записи о выигрышах/проигрышах будут заменены на актуальные. Пополнения и выводы не изменятся.":
+    "Recalculate the balance from current bets? Stale or duplicate win/loss/return records will be replaced with up-to-date ones. Deposits and withdrawals will not change.",
+  "Баланс пересчитан.": "Balance recalculated.",
   "Ставок": "Bets",
   "Выиграно": "Won",
   "Проиграно": "Lost",

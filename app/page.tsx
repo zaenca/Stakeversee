@@ -1230,11 +1230,19 @@ export default function Home() {
     ? couponRealStake * couponTotalOdds + couponFreebet * (couponTotalOdds - 1)
     : 0;
   const bankrollStats = useMemo(() => {
-    const normalizedEvents = Array.from(bankrollEvents.reduce((map, event) => {
+    const map = new Map<string, BankrollEventRow>();
+    bankrollEvents.forEach(event => {
       const isBetSettlement = Boolean(event.bet_id) && ["win", "loss", "return"].includes(event.kind);
-      map.set(isBetSettlement ? "bet:" + event.bet_id : "event:" + event.id, event);
-      return map;
-    }, new Map<string, BankrollEventRow>()).values());
+      const key = isBetSettlement ? "bet:" + event.bet_id : "event:" + event.id;
+      const existing = map.get(key);
+      // Оставляем самую свежую запись по каждой ставке (не первую в порядке
+      // перебора) - иначе устаревший дубликат может навсегда перекрыть
+      // актуальный пересчёт результата ставки.
+      if (!existing || new Date(event.created_at).getTime() >= new Date(existing.created_at).getTime()) {
+        map.set(key, event);
+      }
+    });
+    const normalizedEvents = Array.from(map.values());
 
     const balance = normalizedEvents.reduce((sum, event) => sum + Number(event.amount || 0), 0);
     const deposits = normalizedEvents
@@ -1260,7 +1268,10 @@ export default function Home() {
     const events = new Map<string, BankrollEventRow>();
     bankrollEvents.forEach(event => {
       if (event.bet_id && ["win", "loss", "return"].includes(event.kind)) {
-        events.set(event.bet_id, event);
+        const existing = events.get(event.bet_id);
+        if (!existing || new Date(event.created_at).getTime() >= new Date(existing.created_at).getTime()) {
+          events.set(event.bet_id, event);
+        }
       }
     });
     return events;
@@ -2313,6 +2324,78 @@ export default function Home() {
     setDataLoading(false);
   }
 
+  // ── Пересчёт банка ──────────────────────────────────────────
+  // Пересобирает bankroll_events для расчётов ставок (win/loss/return)
+  // из текущего состояния таблицы bets - источника истины.
+  // Убирает устаревшие/задвоенные записи, из-за которых баланс мог
+  // разойтись с ROI (см. правку дедупликации выше).
+  // Пополнения/выводы (deposit/withdrawal) не затрагиваются.
+  async function recalculateBankroll() {
+    if (!user) return;
+    const confirmed = window.confirm(
+      t("Пересчитать баланс из текущих ставок? Устаревшие или задвоенные записи о выигрышах/проигрышах будут заменены на актуальные. Пополнения и выводы не изменятся.")
+    );
+    if (!confirmed) return;
+
+    setDataLoading(true);
+
+    const { data: allBets, error: betsError } = await supabase
+      .from("bets")
+      .select("id,event_name,market,selection,odds,stake,result,profit,settled_at,created_at")
+      .eq("user_id", user.id)
+      .neq("result", "pending")
+      .limit(5000);
+
+    if (betsError) {
+      setDataMessage(betsError.message);
+      setDataLoading(false);
+      return;
+    }
+
+    const { error: deleteError } = await supabase
+      .from("bankroll_events")
+      .delete()
+      .eq("user_id", user.id)
+      .in("kind", ["win", "loss", "return"]);
+
+    if (deleteError) {
+      setDataMessage(deleteError.message);
+      setDataLoading(false);
+      return;
+    }
+
+    const rows = (allBets || []).map(row => {
+      const stake = Number(row.stake || 0);
+      const odds = Number(row.odds || 0);
+      const result = row.result as "win" | "loss" | "return";
+      const profit = row.profit !== null && row.profit !== undefined
+        ? Number(row.profit)
+        : result === "win" ? stake * odds - stake : result === "loss" ? -stake : 0;
+
+      return {
+        user_id: user.id,
+        bet_id: row.id,
+        amount: profit,
+        kind: result,
+        note: `${row.event_name} · ${row.market} · ${row.selection}`,
+        created_at: row.settled_at || row.created_at
+      };
+    });
+
+    if (rows.length) {
+      const { error: insertError } = await supabase.from("bankroll_events").insert(rows);
+      if (insertError) {
+        setDataMessage(insertError.message);
+        setDataLoading(false);
+        return;
+      }
+    }
+
+    setDataMessage(t("Баланс пересчитан."));
+    await loadWorkspaceData(user.id);
+    setDataLoading(false);
+  }
+
   async function addSourceToBet(bet: BetRow, sourceId: string) {
     if (!user) return;
     const currentIds = getBetSourceIds(bet);
@@ -2959,7 +3042,7 @@ export default function Home() {
             <section className="rail-panel bank-panel">
               <div className="bank-head">
                 <strong>{t("💰 Банк")}</strong>
-                <button type="button">{t("↺ Сброс")}</button>
+                <button disabled={dataLoading} onClick={recalculateBankroll} type="button" title={t("Пересчитать баланс из ставок")}>{t("↺ Пересчитать")}</button>
               </div>
               <div className="bank-stats">
                 <div><span>{t("Ставок")}</span><strong>{betStats.total}</strong></div>
