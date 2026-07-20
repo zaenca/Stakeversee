@@ -2139,6 +2139,71 @@ h1 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.calendar-bet-edit-result-row {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 2px;
+}
+
+.edit-result-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.65rem;
+  font-weight: 800;
+  min-height: 32px;
+  opacity: 0.55;
+  text-transform: uppercase;
+  transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.edit-result-btn:hover {
+  opacity: 0.85;
+}
+
+.edit-result-btn.win {
+  border-color: rgba(0, 255, 153, 0.46);
+  color: #00ff99;
+}
+
+.edit-result-btn.loss {
+  border-color: rgba(255, 43, 119, 0.46);
+  color: #ff5d93;
+}
+
+.edit-result-btn.return {
+  border-color: rgba(255, 198, 0, 0.46);
+  color: #ffd35a;
+}
+
+.edit-result-btn.pending {
+  border-color: rgba(0, 229, 255, 0.4);
+  color: var(--cyan);
+}
+
+.edit-result-btn.win.active {
+  background: rgba(0, 255, 153, 0.16);
+  opacity: 1;
+}
+
+.edit-result-btn.loss.active {
+  background: rgba(255, 43, 119, 0.14);
+  opacity: 1;
+}
+
+.edit-result-btn.return.active {
+  background: rgba(255, 198, 0, 0.15);
+  opacity: 1;
+}
+
+.edit-result-btn.pending.active {
+  background: rgba(0, 229, 255, 0.12);
+  opacity: 1;
+}
+
 .calendar-bet-edit-actions {
   display: grid;
   gap: 8px;

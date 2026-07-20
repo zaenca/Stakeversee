@@ -914,6 +914,7 @@ type EditBetForm = {
   bookmaker: string;
   odds: string;
   stake: string;
+  result: BetRow["result"];
 };
 
 type BetCardProps = {
@@ -1021,6 +1022,18 @@ function BetCard({
             placeholder={t("Букмекер")}
             value={editForm.bookmaker}
           />
+          <div className="calendar-bet-edit-result-row">
+            {(["win", "loss", "return", "pending"] as const).map(option => (
+              <button
+                className={`edit-result-btn ${option} ${editForm.result === option ? "active" : ""}`}
+                key={option}
+                onClick={() => setEditForm(current => (current ? { ...current, result: option } : current))}
+                type="button"
+              >
+                {option === "win" ? t("Выигрыш") : option === "loss" ? t("Проигрыш") : option === "return" ? t("Возврат") : t("Ожидает")}
+              </button>
+            ))}
+          </div>
           <div className="calendar-bet-edit-actions">
             <button disabled={dataLoading} onClick={onCancelEdit} type="button">{t("Отмена")}</button>
             <button disabled={dataLoading} onClick={onSaveEdit} type="button">{t("Сохранить")}</button>
@@ -2188,7 +2201,8 @@ export default function Home() {
       event_name: formatEventName(bet.event_name),
       bookmaker: bet.bookmaker || "",
       odds: String(bet.odds ?? ""),
-      stake: String(bet.stake ?? "")
+      stake: String(bet.stake ?? ""),
+      result: bet.result
     });
   }
 
@@ -2206,6 +2220,7 @@ export default function Home() {
     const stake = parseFloat(editForm.stake.replace(",", ".")) || 0;
     const eventName = editForm.event_name.trim() || bet.event_name;
     const bookmaker = editForm.bookmaker.trim();
+    const result = editForm.result;
 
     if (odds <= 0 || stake < 0) {
       setDataMessage(t("Проверь коэффициент и сумму ставки."));
@@ -2214,23 +2229,26 @@ export default function Home() {
 
     setDataLoading(true);
 
+    const profit = result === "win" ? stake * odds - stake : result === "loss" ? -stake : result === "return" ? 0 : null;
+    const settledAt = result === "pending" ? null : (bet.settled_at || new Date().toISOString());
+
     const payload: {
       event_name: string;
       bookmaker: string | null;
       odds: number;
       stake: number;
-      profit?: number;
+      result: BetRow["result"];
+      profit: number | null;
+      settled_at: string | null;
     } = {
       event_name: eventName,
       bookmaker: bookmaker || null,
       odds,
-      stake
+      stake,
+      result,
+      profit,
+      settled_at: settledAt
     };
-
-    // Ставка уже рассчитана - пересчитываем выплату под новые кэф/сумму
-    if (bet.result === "win") payload.profit = stake * odds - stake;
-    else if (bet.result === "loss") payload.profit = -stake;
-    else if (bet.result === "return") payload.profit = 0;
 
     const { error } = await supabase
       .from("bets")
@@ -2240,15 +2258,56 @@ export default function Home() {
 
     if (error) {
       setDataMessage(error.message);
-    } else {
-      setBets(current => current.map(currentBet => (
-        currentBet.id === bet.id ? { ...currentBet, ...payload } : currentBet
-      )));
-      setDataMessage("");
-      setEditingBetId(null);
-      setEditForm(null);
-      await loadWorkspaceData(user.id);
+      setDataLoading(false);
+      return;
     }
+
+    // Убираем прежнюю запись расчёта банка по этой ставке (если исход менялся)
+    await supabase
+      .from("bankroll_events")
+      .delete()
+      .eq("bet_id", bet.id)
+      .in("kind", ["win", "loss", "return"]);
+
+    let localSettlementEvent: BankrollEventRow | null = null;
+
+    if (result !== "pending") {
+      const insertedAt = settledAt || new Date().toISOString();
+      const { error: bankrollError } = await supabase.from("bankroll_events").insert({
+        user_id: user.id,
+        bet_id: bet.id,
+        amount: profit ?? 0,
+        kind: result,
+        note: `${eventName} · ${bet.market} · ${bet.selection}`
+      });
+
+      if (bankrollError) {
+        setDataMessage(bankrollError.message);
+      } else {
+        localSettlementEvent = {
+          id: `local-${bet.id}-${insertedAt}`,
+          bet_id: bet.id,
+          amount: profit ?? 0,
+          kind: result,
+          note: `${eventName} - ${bet.market} - ${bet.selection}`,
+          created_at: insertedAt
+        };
+      }
+    }
+
+    setBets(current => current.map(currentBet => (
+      currentBet.id === bet.id ? { ...currentBet, ...payload } : currentBet
+    )));
+
+    setBankrollEvents(current => {
+      const filtered = current.filter(event => !(event.bet_id === bet.id && ["win", "loss", "return"].includes(event.kind)));
+      return localSettlementEvent ? [...filtered, localSettlementEvent] : filtered;
+    });
+
+    setDataMessage("");
+    setEditingBetId(null);
+    setEditForm(null);
+    await loadWorkspaceData(user.id);
 
     setDataLoading(false);
   }
