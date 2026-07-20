@@ -28,6 +28,8 @@ export const translations: Record<string, string> = {
   "Виды спорта": "Sports",
   "Язык интерфейса": "Interface language",
   "Настройки": "Settings",
+  "Аватар": "Avatar",
+  "Изменить фото": "Change photo",
   "Язык": "Language",
   "Панель": "Dashboard",
   "Ставки": "Bets",

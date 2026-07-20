@@ -1165,6 +1165,7 @@ export default function Home() {
   const [highlightBetId, setHighlightBetId] = useState<string | null>(null);
   const [sourcePickerForBetId, setSourcePickerForBetId] = useState<string | null>(null);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [countryFilter, setCountryFilter] = useState("all");
   const [leagueFilter, setLeagueFilter] = useState("all");
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
@@ -2391,8 +2392,48 @@ export default function Home() {
     }
   }
 
+  async function saveAvatar(file: File) {
+    if (!user) return;
+    // Уменьшаем и обрезаем до квадрата на клиенте, чтобы не хранить в
+    // user_metadata оригинал в полном размере (у Supabase Auth есть лимит
+    // на объём metadata, да и загружать/показывать мелкий аватар быстрее).
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Не удалось прочитать изображение"));
+        img.onload = () => {
+          const size = 160;
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { reject(new Error("Canvas недоступен")); return; }
+          const scale = Math.max(size / img.width, size / img.height);
+          const drawWidth = img.width * scale;
+          const drawHeight = img.height * scale;
+          ctx.drawImage(img, (size - drawWidth) / 2, (size - drawHeight) / 2, drawWidth, drawHeight);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        };
+        img.src = String(reader.result);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    const { data, error } = await supabase.auth.updateUser({
+      data: { avatar_url: dataUrl }
+    });
+    if (error) {
+      setDataMessage(error.message);
+    } else if (data.user) {
+      setUser(data.user);
+    }
+  }
+
   if (user) {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || t("Игрок");
+    const avatarUrl: string | null = user.user_metadata?.avatar_url || null;
     const timezoneOffsetMinutes = getUserTimezoneOffsetMinutes(user);
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
@@ -2404,7 +2445,11 @@ export default function Home() {
           <div className="workspace-brand">Stakeversee</div>
 
           <div className="profile-pill" onClick={() => setSettingsPanelOpen(true)}>
-            <span>{userName.slice(0, 1).toUpperCase()}</span>
+            {avatarUrl ? (
+              <img alt="" className="profile-pill-avatar" src={avatarUrl} />
+            ) : (
+              <span>{userName.slice(0, 1).toUpperCase()}</span>
+            )}
             <div>
               <strong>{userName}</strong>
               <small>{TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes)?.label ? t(TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes)!.label) : t("игрок")}</small>
@@ -2441,6 +2486,44 @@ export default function Home() {
                 <strong>{t("Настройки")}</strong>
                 <button aria-label={t("Закрыть")} onClick={() => setSettingsPanelOpen(false)} type="button">×</button>
               </div>
+
+              <div className="settings-section">
+                <div className="settings-section-title">{t("Аватар")}</div>
+                <div className="settings-avatar-row">
+                  {avatarUrl ? (
+                    <img alt="" className="settings-avatar-preview" src={avatarUrl} />
+                  ) : (
+                    <span className="settings-avatar-preview settings-avatar-preview-empty">{userName.slice(0, 1).toUpperCase()}</span>
+                  )}
+                  <input
+                    accept="image/*"
+                    onChange={event => {
+                      const file = event.target.files?.[0];
+                      if (file) saveAvatar(file);
+                      event.target.value = "";
+                    }}
+                    ref={avatarInputRef}
+                    style={{ display: "none" }}
+                    type="file"
+                  />
+                  <button
+                    className="settings-avatar-upload-btn"
+                    onClick={() => avatarInputRef.current?.click()}
+                    type="button"
+                  >
+                    {t("Изменить фото")}
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-divider" />
+
+              <div className="settings-section">
+                <div className="settings-section-title">{t("Email")}</div>
+                <div className="settings-email-value">{user.email}</div>
+              </div>
+
+              <div className="settings-divider" />
 
               <div className="settings-section">
                 <div className="settings-section-title">{t("Язык")}</div>

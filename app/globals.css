@@ -839,6 +839,53 @@ h1 {
   margin: 12px 2px;
 }
 
+.settings-avatar-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.settings-avatar-preview {
+  border-radius: 999px;
+  flex-shrink: 0;
+  height: 56px;
+  object-fit: cover;
+  width: 56px;
+}
+
+.settings-avatar-preview-empty {
+  align-items: center;
+  background: #2979ff;
+  color: white;
+  display: grid;
+  font-size: 1.3rem;
+  font-weight: 900;
+  place-items: center;
+}
+
+.settings-avatar-upload-btn {
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.32);
+  border-radius: 7px;
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 8px 14px;
+}
+
+.settings-avatar-upload-btn:hover {
+  background: rgba(0, 229, 255, 0.14);
+}
+
+.settings-email-value {
+  color: var(--text);
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-timezone-list {
   display: grid;
   gap: 2px;
@@ -879,6 +926,14 @@ h1 {
   font-weight: 900;
   height: 26px;
   place-items: center;
+  width: 26px;
+}
+
+.profile-pill-avatar {
+  border-radius: 999px;
+  flex-shrink: 0;
+  height: 26px;
+  object-fit: cover;
   width: 26px;
 }
 
