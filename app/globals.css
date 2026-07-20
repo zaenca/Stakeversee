@@ -2591,24 +2591,24 @@ h1 {
 
 .bank-action {
   align-items: center;
-  background: #ffffff;
-  border: 2px solid rgba(0, 229, 255, 0.65);
+  background: var(--panel);
+  border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 50%;
-  box-shadow: 0 2px 10px rgba(0, 229, 255, 0.25);
-  color: var(--cyan);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  color: #ffffff;
   cursor: pointer;
   display: inline-grid;
-  font-size: 1.15rem;
+  font-size: 0.95rem;
   font-weight: 900;
-  height: 34px;
+  height: 26px;
   line-height: 1;
   place-items: center;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-  width: 34px;
+  width: 26px;
 }
 
 .bank-action:hover {
-  box-shadow: 0 4px 16px rgba(0, 229, 255, 0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
   transform: translateY(-1px) scale(1.05);
 }
 
@@ -2617,13 +2617,9 @@ h1 {
 }
 
 .bank-minus {
-  border-color: rgba(255, 55, 126, 0.65);
-  box-shadow: 0 2px 10px rgba(255, 55, 126, 0.25);
-  color: var(--pink);
-}
-
-.bank-minus:hover {
-  box-shadow: 0 4px 16px rgba(255, 55, 126, 0.4);
+  background: var(--panel);
+  border-color: rgba(255, 255, 255, 0.85);
+  color: #ffffff;
 }
 
 .bank-modal-backdrop {
