@@ -206,6 +206,12 @@ function getUserTimezoneOffsetMinutes(user: User | null): number {
   return Number.isFinite(parsed) ? parsed : DEFAULT_TIMEZONE_OFFSET;
 }
 
+function getUserFlatStake(user: User | null): number {
+  const raw = user?.user_metadata?.flat_stake_amount;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 function formatBetTime(createdAt: string, offsetMinutes: number): string {
   const utcMs = new Date(createdAt).getTime();
   if (!Number.isFinite(utcMs)) return "--:--";
@@ -1166,6 +1172,15 @@ export default function Home() {
   const [sourcePickerForBetId, setSourcePickerForBetId] = useState<string | null>(null);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [flatStakeInput, setFlatStakeInput] = useState("");
+  const [couponStakePercent, setCouponStakePercent] = useState("");
+
+  useEffect(() => {
+    if (settingsPanelOpen) {
+      const current = getUserFlatStake(user);
+      setFlatStakeInput(current > 0 ? String(current) : "");
+    }
+  }, [settingsPanelOpen, user]);
   const [countryFilter, setCountryFilter] = useState("all");
   const [leagueFilter, setLeagueFilter] = useState("all");
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
@@ -2519,10 +2534,23 @@ export default function Home() {
     }
   }
 
+  async function saveFlatStake(amount: number) {
+    if (!user) return;
+    const { data, error } = await supabase.auth.updateUser({
+      data: { flat_stake_amount: amount }
+    });
+    if (error) {
+      setDataMessage(error.message);
+    } else if (data.user) {
+      setUser(data.user);
+    }
+  }
+
   if (user) {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || t("Игрок");
     const avatarUrl: string | null = user.user_metadata?.avatar_url || null;
     const timezoneOffsetMinutes = getUserTimezoneOffsetMinutes(user);
+    const flatStake = getUserFlatStake(user);
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
     const pendingRailBets = allPendingBetsOpen ? pendingBets : pendingBets.slice(0, 5);
@@ -2609,6 +2637,35 @@ export default function Home() {
               <div className="settings-section">
                 <div className="settings-section-title">{t("Email")}</div>
                 <div className="settings-email-value">{user.email}</div>
+              </div>
+
+              <div className="settings-divider" />
+
+              <div className="settings-section">
+                <div className="settings-section-title">{t("Флэт")}</div>
+                <div className="settings-flat-row">
+                  <input
+                    inputMode="decimal"
+                    onChange={event => setFlatStakeInput(event.target.value)}
+                    placeholder={t("Сумма флэта ₽")}
+                    value={flatStakeInput}
+                  />
+                  <button
+                    className="settings-avatar-upload-btn"
+                    onClick={() => {
+                      const amount = Number(flatStakeInput.replace(",", ".")) || 0;
+                      saveFlatStake(amount);
+                    }}
+                    type="button"
+                  >
+                    {t("Сохранить")}
+                  </button>
+                </div>
+                {flatStake > 0 ? (
+                  <div className="settings-flat-hint">{t("Текущий флэт:")} {formatMoney(flatStake)} · ½ {t("флэта:")} {formatMoney(flatStake / 2)}</div>
+                ) : (
+                  <div className="settings-flat-hint">{t("Задай фиксированную сумму ставки, чтобы быстро выбирать её в купоне.")}</div>
+                )}
               </div>
 
               <div className="settings-divider" />
@@ -2996,6 +3053,45 @@ export default function Home() {
                       placeholder={t("Фрибет")}
                       value={couponDraft.freebet}
                     />
+                  </div>
+
+                  <div className="coupon-stake-quickpick">
+                    <button
+                      disabled={flatStake <= 0}
+                      onClick={() => setCouponDraft(current => ({ ...current, stake: String(flatStake) }))}
+                      title={flatStake > 0 ? formatMoney(flatStake) : t("Задай флэт в настройках профиля")}
+                      type="button"
+                    >
+                      {t("Флэт")}
+                    </button>
+                    <button
+                      disabled={flatStake <= 0}
+                      onClick={() => setCouponDraft(current => ({ ...current, stake: String(Math.round((flatStake / 2) * 100) / 100) }))}
+                      title={flatStake > 0 ? formatMoney(flatStake / 2) : t("Задай флэт в настройках профиля")}
+                      type="button"
+                    >
+                      ½ {t("Флэта")}
+                    </button>
+                    <div className="coupon-stake-percent">
+                      <input
+                        inputMode="decimal"
+                        onChange={event => setCouponStakePercent(event.target.value)}
+                        placeholder="%"
+                        value={couponStakePercent}
+                      />
+                      <button
+                        onClick={() => {
+                          const percent = Number(couponStakePercent.replace(",", ".")) || 0;
+                          if (percent <= 0) return;
+                          const amount = Math.round(displayedBalance * (percent / 100) * 100) / 100;
+                          setCouponDraft(current => ({ ...current, stake: String(amount) }));
+                        }}
+                        title={t("Процент от текущего баланса")}
+                        type="button"
+                      >
+                        % {t("от банка")}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="coupon-summary">

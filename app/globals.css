@@ -886,6 +886,28 @@ h1 {
   white-space: nowrap;
 }
 
+.settings-flat-row {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-flat-row input {
+  background: #111b28;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #eaf6ff;
+  flex: 1;
+  min-height: 38px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.settings-flat-hint {
+  color: var(--muted);
+  font-size: 0.72rem;
+  margin-top: 8px;
+}
+
 .settings-timezone-list {
   display: grid;
   gap: 2px;
@@ -3444,6 +3466,67 @@ h1 {
 .coupon-controls {
   display: grid;
   gap: 8px;
+}
+
+.coupon-stake-quickpick {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.coupon-stake-quickpick > button {
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-radius: 999px;
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.coupon-stake-quickpick > button:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.15);
+}
+
+.coupon-stake-quickpick > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.coupon-stake-percent {
+  display: flex;
+  gap: 4px;
+}
+
+.coupon-stake-percent input {
+  background: #111b28;
+  border: 1px solid var(--line);
+  border-radius: 999px 0 0 999px;
+  color: #eaf6ff;
+  min-height: 30px;
+  padding: 0 10px;
+  width: 52px;
+}
+
+.coupon-stake-percent button {
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-left: none;
+  border-radius: 0 999px 999px 0;
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.coupon-stake-percent button:hover {
+  background: rgba(0, 229, 255, 0.15);
 }
 
 /* ── Custom source dropdown (replaces native <select> to avoid overflow) ── */
