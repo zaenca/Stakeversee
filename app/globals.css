@@ -1443,25 +1443,76 @@ h1 {
   width: 100%;
 }
 
-.assistant-quick-actions {
+.assistant-feed {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 46%;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.assistant-feed-item {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+}
+
+.assistant-feed-item.tier-hot {
+  background: rgba(0, 224, 150, 0.07);
+  border-color: rgba(0, 224, 150, 0.35);
+}
+
+.assistant-feed-item.tier-good {
+  background: rgba(255, 204, 0, 0.05);
+  border-color: rgba(255, 204, 0, 0.28);
+}
+
+.assistant-feed-teams {
+  color: var(--text);
+  display: flex;
+  font-size: 13px;
+  font-weight: 800;
   gap: 6px;
 }
 
-.assistant-quick-actions button {
-  background: rgba(138, 91, 255, 0.1);
-  border: 1px solid rgba(138, 91, 255, 0.32);
-  border-radius: 999px;
-  color: #d8c7ff;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 5px 11px;
+.assistant-feed-vs {
+  color: var(--muted);
+  font-weight: 500;
 }
 
-.assistant-quick-actions button:hover {
-  background: rgba(138, 91, 255, 0.22);
+.assistant-feed-meta {
+  color: var(--muted);
+  display: flex;
+  font-size: 11px;
+  gap: 8px;
+  justify-content: space-between;
+  margin-top: 3px;
+}
+
+.assistant-feed-odds {
+  font-family: "JetBrains Mono", monospace;
+}
+
+.assistant-feed-rec {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.assistant-feed-rec strong {
+  color: var(--cyan);
+}
+
+.assistant-feed-item.tier-hot .assistant-feed-rec strong {
+  color: #00e096;
+}
+
+.assistant-feed-item.tier-good .assistant-feed-rec strong {
+  color: #ffcc00;
 }
 
 .assistant-messages {
