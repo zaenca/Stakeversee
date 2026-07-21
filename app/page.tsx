@@ -1173,6 +1173,7 @@ export default function Home() {
   const [matchesStatus, setMatchesStatus] = useState<MatchesStatusState>({ kind: "idle" });
   const [analyzing, setAnalyzing] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [analyzedMatches, setAnalyzedMatches] = useState<MatchRow[]>([]);
   const [assistantMessages, setAssistantMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
   const [assistantInput, setAssistantInput] = useState("");
   const [assistantLoading, setAssistantLoading] = useState(false);
@@ -1692,6 +1693,10 @@ export default function Home() {
           if (error) console.error("ai_predictions upsert failed", error.message);
         }
       }
+
+      const sortedForAssistant = [...freshMatches].sort((a, b) => b.confidence - a.confidence).slice(0, 60);
+      setAnalyzedMatches(sortedForAssistant);
+      setAssistantOpen(true);
 
       setDataMessage(`${t("✅ Анализ завершён:")} ${freshMatches.length} ${t("матчей")}`);
     } catch (error) {
@@ -3455,10 +3460,30 @@ export default function Home() {
                 <div className="rail-title">🤖 {t("AI Ассистент")}</div>
                 <button className="stats-modal-close" aria-label={t("Закрыть ассистента")} onClick={() => setAssistantOpen(false)} type="button">×</button>
 
-                <div className="assistant-quick-actions">
-                  <button onClick={() => sendAssistantMessage(t("Дай топ-3 самых интересных матча сейчас и объясни почему."))} type="button">🔥 {t("Топ-пики")}</button>
-                  <button onClick={() => sendAssistantMessage(t("Есть ли сейчас явный value bet среди загруженных матчей?"))} type="button">💎 {t("Value bets")}</button>
-                  <button onClick={() => sendAssistantMessage(t("На что обратить внимание — риски и неоднозначные матчи?"))} type="button">⚠️ {t("Риски")}</button>
+                <div className="assistant-feed">
+                  {analyzedMatches.length ? (
+                    analyzedMatches.map(match => (
+                      <div className={`assistant-feed-item tier-${confidenceTier(match.confidence)}`} key={match.id}>
+                        <div className="assistant-feed-teams">
+                          <span>{match.home}</span>
+                          <span className="assistant-feed-vs">—</span>
+                          <span>{match.away}</span>
+                        </div>
+                        <div className="assistant-feed-meta">
+                          <span className="assistant-feed-league">{match.league}</span>
+                          <span className="assistant-feed-odds">{match.odds.join(" / ")}</span>
+                        </div>
+                        <div className="assistant-feed-rec">
+                          <strong>{recommendationSideLabel(match, t)}</strong>
+                          <span>{match.confidence}%</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="assistant-empty-hint">
+                      {t("Нажми «⚡ Анализ», чтобы загрузить проанализированные матчи сюда.")}
+                    </div>
+                  )}
                 </div>
 
                 <div className="assistant-messages">
@@ -3468,11 +3493,7 @@ export default function Home() {
                         {entry.text}
                       </div>
                     ))
-                  ) : (
-                    <div className="assistant-empty-hint">
-                      {t("Спроси про матчи, попроси топ-пики или разбор конкретной ставки.")}
-                    </div>
-                  )}
+                  ) : null}
                   {assistantLoading ? <div className="assistant-msg assistant-msg-assistant assistant-msg-thinking">{t("думаю…")}</div> : null}
                 </div>
 
