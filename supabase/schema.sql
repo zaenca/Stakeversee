@@ -106,3 +106,6 @@ create policy "ai_predictions own rows"
   on public.ai_predictions for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- Фиксированная сумма ставки для источника (авто-подстановка в купон при выборе)
+alter table public.sources add column if not exists fixed_stake numeric;

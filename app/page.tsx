@@ -12,6 +12,7 @@ type SourceRow = {
   id: string;
   name: string;
   is_blacklisted: boolean;
+  fixed_stake: number | null;
 };
 
 type BetRow = {
@@ -1170,6 +1171,29 @@ export default function Home() {
   const [editForm, setEditForm] = useState<EditBetForm | null>(null);
   const [highlightBetId, setHighlightBetId] = useState<string | null>(null);
   const [sourcePickerForBetId, setSourcePickerForBetId] = useState<string | null>(null);
+  const [fixedStakePopoverFor, setFixedStakePopoverFor] = useState<string | null>(null);
+  const [sourceFixedStakeInput, setSourceFixedStakeInput] = useState("");
+
+  function toggleFixedStakePopover(sourceId: string) {
+    setFixedStakePopoverFor(current => {
+      if (current === sourceId) return null;
+      const source = sources.find(row => row.id === sourceId);
+      setSourceFixedStakeInput(source?.fixed_stake ? String(source.fixed_stake) : "");
+      return sourceId;
+    });
+  }
+
+  useEffect(() => {
+    if (!fixedStakePopoverFor) return;
+    const handleOutside = (event: MouseEvent) => {
+      if (!(event.target as HTMLElement).closest(".stats-fixed-stake-wrap")) {
+        setFixedStakePopoverFor(null);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [fixedStakePopoverFor]);
+
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [flatStakeInput, setFlatStakeInput] = useState("");
@@ -1819,7 +1843,7 @@ export default function Home() {
     const [sourcesResult, betsResult, bankrollResult] = await Promise.all([
       supabase
         .from("sources")
-        .select("id,name,is_blacklisted")
+        .select("id,name,is_blacklisted,fixed_stake")
         .eq("user_id", userId)
         .order("name", { ascending: true }),
       supabase
@@ -1954,6 +1978,27 @@ export default function Home() {
     } else {
       await loadWorkspaceData(user.id);
     }
+    setDataLoading(false);
+  }
+
+  async function saveSourceFixedStake(sourceId: string, amount: number | null) {
+    if (!user) return;
+
+    setDataLoading(true);
+    const { error } = await supabase
+      .from("sources")
+      .update({ fixed_stake: amount })
+      .eq("id", sourceId)
+      .eq("user_id", user.id);
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      setSources(current => current.map(source => (
+        source.id === sourceId ? { ...source, fixed_stake: amount } : source
+      )));
+    }
+    setFixedStakePopoverFor(null);
     setDataLoading(false);
   }
 
@@ -2934,7 +2979,10 @@ export default function Home() {
                     <button
                       className={source.is_blacklisted ? "blacklisted" : ""}
                       key={source.id}
-                      onClick={() => toggleSourceBlacklist(source)}
+                      onClick={() => {
+                        const actualSource = sources.find(row => row.id === source.id);
+                        if (actualSource) toggleSourceBlacklist(actualSource);
+                      }}
                       type="button"
                     >
                       <span>{t(source.name)}</span>
@@ -3031,7 +3079,14 @@ export default function Home() {
                   <div className="coupon-controls">
                     <SourceDropdownField
                       onAddSource={() => setSourcePopupOpen(true)}
-                      onChange={sourceId => setCouponDraft(current => ({ ...current, sourceId }))}
+                      onChange={sourceId => {
+                        const selectedSource = sources.find(source => source.id === sourceId);
+                        setCouponDraft(current => ({
+                          ...current,
+                          sourceId,
+                          stake: selectedSource?.fixed_stake ? String(selectedSource.fixed_stake) : ""
+                        }));
+                      }}
                       roiById={sourceRoiById}
                       sources={sources.filter(source => !source.is_blacklisted)}
                       value={couponDraft.sourceId}
@@ -3383,7 +3438,46 @@ export default function Home() {
                         <tbody>
                           {sortedSourceStats.map(source => (
                             <tr className={source.is_blacklisted ? "blacklisted" : ""} key={source.id}>
-                              <td className="stats-table-name">{t(source.name)}</td>
+                              <td className="stats-table-name">
+                                <div className="stats-source-name-cell">
+                                  <span>{t(source.name)}</span>
+                                  <div className="stats-fixed-stake-wrap">
+                                    <button
+                                      aria-label={t("Фиксированная ставка")}
+                                      className={`stats-fixed-stake-btn ${sources.find(row => row.id === source.id)?.fixed_stake ? "set" : ""}`}
+                                      onClick={() => toggleFixedStakePopover(source.id)}
+                                      title={
+                                        sources.find(row => row.id === source.id)?.fixed_stake
+                                          ? `${t("Фикс. ставка:")} ${formatMoney(Number(sources.find(row => row.id === source.id)?.fixed_stake))}`
+                                          : t("Задать фиксированную ставку для этого источника")
+                                      }
+                                      type="button"
+                                    >
+                                      +
+                                    </button>
+                                    {fixedStakePopoverFor === source.id ? (
+                                      <div className="stats-fixed-stake-popover" onClick={event => event.stopPropagation()}>
+                                        <input
+                                          autoFocus
+                                          inputMode="decimal"
+                                          onChange={event => setSourceFixedStakeInput(event.target.value)}
+                                          placeholder={t("Сумма ₽")}
+                                          value={sourceFixedStakeInput}
+                                        />
+                                        <button
+                                          onClick={() => {
+                                            const amount = Number(sourceFixedStakeInput.replace(",", "."));
+                                            saveSourceFixedStake(source.id, Number.isFinite(amount) && amount > 0 ? amount : null);
+                                          }}
+                                          type="button"
+                                        >
+                                          {t("Сохранить")}
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </td>
                               <td>
                                 <span className={source.roi >= 0 ? "roi-positive" : "roi-negative"}>{source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>
                                 <span className={`stats-roi-amount ${source.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}`}>{source.profit >= 0 ? "+" : ""}{formatMoney(source.profit)}</span>

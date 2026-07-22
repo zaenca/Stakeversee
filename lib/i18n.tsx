@@ -162,6 +162,9 @@ export const translations: Record<string, string> = {
   "Сумма": "Stake",
   "Средняя": "Average",
   "Все прогнозы": "All predictions",
+  "Фиксированная ставка": "Fixed stake",
+  "Фикс. ставка:": "Fixed stake:",
+  "Задать фиксированную ставку для этого источника": "Set a fixed stake for this source",
   "Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.":
     "Settled bets will appear here after a win, loss, or return.",
   "Статистика по букмекерам": "Bookmaker statistics",
