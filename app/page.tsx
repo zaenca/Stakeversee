@@ -1567,7 +1567,7 @@ export default function Home() {
   }
 
   const sortedSourceStats = useMemo(
-    () => applyStatsSort(sourceStats, sourceSort),
+    () => applyStatsSort(sourceStats.filter(source => !source.is_blacklisted), sourceSort),
     [sourceStats, sourceSort]
   );
 
@@ -1953,6 +1953,14 @@ export default function Home() {
     const name = sourceName.trim();
     if (!name) return;
 
+    const blacklistedMatch = sources.find(
+      source => source.is_blacklisted && source.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (blacklistedMatch) {
+      window.alert(t("Этот источник в чёрном списке и не может быть добавлен снова."));
+      return;
+    }
+
     setDataLoading(true);
     const { error } = await supabase
       .from("sources")
@@ -2156,6 +2164,14 @@ export default function Home() {
 
     const name = sourceName.trim();
     if (!name) return;
+
+    const blacklistedMatch = sources.find(
+      source => source.is_blacklisted && source.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (blacklistedMatch) {
+      window.alert(t("Этот источник в чёрном списке и не может быть добавлен снова."));
+      return;
+    }
 
     setDataLoading(true);
     const { data, error } = await supabase
@@ -3480,6 +3496,18 @@ export default function Home() {
                                       </div>
                                     ) : null}
                                   </div>
+                                  <button
+                                    aria-label={t("Добавить в чёрный список")}
+                                    className="stats-blacklist-btn"
+                                    onClick={() => {
+                                      const actualSource = sources.find(row => row.id === source.id);
+                                      if (actualSource) toggleSourceBlacklist(actualSource);
+                                    }}
+                                    title={t("Добавить в чёрный список")}
+                                    type="button"
+                                  >
+                                    🚫
+                                  </button>
                                 </div>
                               </td>
                               <td>

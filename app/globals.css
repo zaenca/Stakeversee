@@ -2951,6 +2951,29 @@ h1 {
   color: var(--cyan);
 }
 
+.stats-blacklist-btn {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  width: 20px;
+}
+
+.stats-blacklist-btn:hover {
+  background: rgba(255, 55, 126, 0.14);
+  border-color: rgba(255, 55, 126, 0.5);
+  border-style: solid;
+  color: var(--pink);
+}
+
 .stats-fixed-stake-popover {
   background: #0b111b;
   border: 1px solid var(--line);
