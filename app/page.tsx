@@ -500,7 +500,8 @@ function formatMoney(value: number) {
 const BOOKMAKER_LOGOS: Record<string, string> = {
   fonbet: "/bookmakers/fonbet.png",
   melbet: "/bookmakers/melbet.png",
-  "мелбет": "/bookmakers/melbet.png"
+  "мелбет": "/bookmakers/melbet.png",
+  winline: "/bookmakers/winline.png"
 };
 
 function getBookmakerLogo(bookmaker: string | null | undefined): string | null {
