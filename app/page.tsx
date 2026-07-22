@@ -89,6 +89,7 @@ const bookmakerOptions = [
   "Мелбет",
   "BetBoom",
   "Winline",
+  "Leon",
   "Лига Ставок",
   "Марафон",
   "Тестовая ставка"
@@ -501,7 +502,8 @@ const BOOKMAKER_LOGOS: Record<string, string> = {
   fonbet: "/bookmakers/fonbet.png",
   melbet: "/bookmakers/melbet.png",
   "мелбет": "/bookmakers/melbet.png",
-  winline: "/bookmakers/winline.png"
+  winline: "/bookmakers/winline.png",
+  leon: "/bookmakers/leon.png"
 };
 
 function getBookmakerLogo(bookmaker: string | null | undefined): string | null {
