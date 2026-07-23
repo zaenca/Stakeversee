@@ -2720,29 +2720,34 @@ export default function Home() {
               <div className="settings-section">
                 <div className="settings-section-title">{t("Аватар")}</div>
                 <div className="settings-avatar-row">
-                  {avatarUrl ? (
-                    <img alt="" className="settings-avatar-preview" src={avatarUrl} />
-                  ) : (
-                    <span className="settings-avatar-preview settings-avatar-preview-empty">{userName.slice(0, 1).toUpperCase()}</span>
-                  )}
-                  <input
-                    accept="image/*"
-                    onChange={event => {
-                      const file = event.target.files?.[0];
-                      if (file) saveAvatar(file);
-                      event.target.value = "";
-                    }}
-                    ref={avatarInputRef}
-                    style={{ display: "none" }}
-                    type="file"
-                  />
-                  <button
-                    className="settings-avatar-upload-btn"
-                    onClick={() => avatarInputRef.current?.click()}
-                    type="button"
-                  >
-                    {t("Изменить фото")}
-                  </button>
+                  <div className="settings-avatar-wrap">
+                    {avatarUrl ? (
+                      <img alt="" className="settings-avatar-preview" src={avatarUrl} />
+                    ) : (
+                      <span className="settings-avatar-preview settings-avatar-preview-empty">{userName.slice(0, 1).toUpperCase()}</span>
+                    )}
+                    <input
+                      accept="image/*"
+                      onChange={event => {
+                        const file = event.target.files?.[0];
+                        if (file) saveAvatar(file);
+                        event.target.value = "";
+                      }}
+                      ref={avatarInputRef}
+                      style={{ display: "none" }}
+                      type="file"
+                    />
+                    <button
+                      aria-label={t("Изменить фото")}
+                      className="settings-avatar-edit-btn"
+                      onClick={() => avatarInputRef.current?.click()}
+                      title={t("Изменить фото")}
+                      type="button"
+                    >
+                      ✏️
+                    </button>
+                  </div>
+                  <strong className="settings-avatar-name">{userName}</strong>
                 </div>
               </div>
 
