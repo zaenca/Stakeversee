@@ -3054,6 +3054,12 @@ h1 {
   z-index: 60;
 }
 
+.stats-popover-floating {
+  margin-top: 0;
+  position: fixed;
+  z-index: 400;
+}
+
 .stats-fixed-stake-popover input {
   background: #111b28;
   border: 1px solid var(--line);

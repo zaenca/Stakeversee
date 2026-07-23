@@ -1180,22 +1180,29 @@ export default function Home() {
   const [sourceFixedStakeInput, setSourceFixedStakeInput] = useState("");
   const [renamingSourceId, setRenamingSourceId] = useState<string | null>(null);
   const [renameSourceInput, setRenameSourceInput] = useState("");
+  const [statsPopoverPos, setStatsPopoverPos] = useState<{ left: number; top: number } | null>(null);
 
-  function toggleFixedStakePopover(sourceId: string) {
+  function toggleFixedStakePopover(sourceId: string, anchor: HTMLElement) {
     setFixedStakePopoverFor(current => {
       if (current === sourceId) return null;
       const source = sources.find(row => row.id === sourceId);
       setSourceFixedStakeInput(source?.fixed_stake ? String(source.fixed_stake) : "");
+      const rect = anchor.getBoundingClientRect();
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - 220));
+      setStatsPopoverPos({ left, top: rect.bottom + 4 });
       return sourceId;
     });
     setRenamingSourceId(null);
   }
 
-  function toggleRenameSourcePopover(sourceId: string) {
+  function toggleRenameSourcePopover(sourceId: string, anchor: HTMLElement) {
     setRenamingSourceId(current => {
       if (current === sourceId) return null;
       const source = sources.find(row => row.id === sourceId);
       setRenameSourceInput(source?.name || "");
+      const rect = anchor.getBoundingClientRect();
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - 220));
+      setStatsPopoverPos({ left, top: rect.bottom + 4 });
       return sourceId;
     });
     setFixedStakePopoverFor(null);
@@ -1205,11 +1212,23 @@ export default function Home() {
     if (!fixedStakePopoverFor && !renamingSourceId) return;
     const handleOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (!target.closest(".stats-fixed-stake-wrap")) setFixedStakePopoverFor(null);
-      if (!target.closest(".stats-rename-wrap")) setRenamingSourceId(null);
+      if (!target.closest(".stats-fixed-stake-wrap") && !target.closest(".stats-popover-floating")) {
+        setFixedStakePopoverFor(null);
+      }
+      if (!target.closest(".stats-rename-wrap") && !target.closest(".stats-popover-floating")) {
+        setRenamingSourceId(null);
+      }
+    };
+    const handleScroll = () => {
+      setFixedStakePopoverFor(null);
+      setRenamingSourceId(null);
     };
     document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
+    document.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("scroll", handleScroll, true);
+    };
   }, [fixedStakePopoverFor, renamingSourceId]);
 
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
@@ -3519,14 +3538,18 @@ export default function Home() {
                                     <button
                                       aria-label={t("Переименовать источник")}
                                       className="stats-rename-btn"
-                                      onClick={() => toggleRenameSourcePopover(source.id)}
+                                      onClick={event => toggleRenameSourcePopover(source.id, event.currentTarget)}
                                       title={t("Переименовать источник")}
                                       type="button"
                                     >
                                       ✏️
                                     </button>
-                                    {renamingSourceId === source.id ? (
-                                      <div className="stats-fixed-stake-popover" onClick={event => event.stopPropagation()}>
+                                    {renamingSourceId === source.id && statsPopoverPos ? (
+                                      <div
+                                        className="stats-fixed-stake-popover stats-popover-floating"
+                                        onClick={event => event.stopPropagation()}
+                                        style={{ left: statsPopoverPos.left, top: statsPopoverPos.top }}
+                                      >
                                         <input
                                           autoFocus
                                           onChange={event => setRenameSourceInput(event.target.value)}
@@ -3549,7 +3572,7 @@ export default function Home() {
                                     <button
                                       aria-label={t("Фиксированная ставка")}
                                       className={`stats-fixed-stake-btn ${sources.find(row => row.id === source.id)?.fixed_stake ? "set" : ""}`}
-                                      onClick={() => toggleFixedStakePopover(source.id)}
+                                      onClick={event => toggleFixedStakePopover(source.id, event.currentTarget)}
                                       title={
                                         sources.find(row => row.id === source.id)?.fixed_stake
                                           ? `${t("Фикс. ставка:")} ${formatMoney(Number(sources.find(row => row.id === source.id)?.fixed_stake))}`
@@ -3559,8 +3582,12 @@ export default function Home() {
                                     >
                                       +
                                     </button>
-                                    {fixedStakePopoverFor === source.id ? (
-                                      <div className="stats-fixed-stake-popover" onClick={event => event.stopPropagation()}>
+                                    {fixedStakePopoverFor === source.id && statsPopoverPos ? (
+                                      <div
+                                        className="stats-fixed-stake-popover stats-popover-floating"
+                                        onClick={event => event.stopPropagation()}
+                                        style={{ left: statsPopoverPos.left, top: statsPopoverPos.top }}
+                                      >
                                         <input
                                           autoFocus
                                           inputMode="decimal"
