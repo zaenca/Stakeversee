@@ -1219,16 +1219,8 @@ export default function Home() {
         setRenamingSourceId(null);
       }
     };
-    const handleScroll = () => {
-      setFixedStakePopoverFor(null);
-      setRenamingSourceId(null);
-    };
     document.addEventListener("mousedown", handleOutside);
-    document.addEventListener("scroll", handleScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", handleOutside);
-      document.removeEventListener("scroll", handleScroll, true);
-    };
+    return () => document.removeEventListener("mousedown", handleOutside);
   }, [fixedStakePopoverFor, renamingSourceId]);
 
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
