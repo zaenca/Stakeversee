@@ -504,7 +504,8 @@ const BOOKMAKER_LOGOS: Record<string, string> = {
   "мелбет": "/bookmakers/melbet.png",
   winline: "/bookmakers/winline.png",
   leon: "/bookmakers/leon.png",
-  "лига ставок": "/bookmakers/liga-stavok.png"
+  "лига ставок": "/bookmakers/liga-stavok.png",
+  pari: "/bookmakers/pari.png"
 };
 
 function getBookmakerLogo(bookmaker: string | null | undefined): string | null {
