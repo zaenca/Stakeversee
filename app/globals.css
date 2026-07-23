@@ -2974,6 +2974,33 @@ h1 {
   color: var(--pink);
 }
 
+.stats-rename-wrap {
+  position: relative;
+}
+
+.stats-rename-btn {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  width: 20px;
+}
+
+.stats-rename-btn:hover {
+  background: rgba(0, 229, 255, 0.12);
+  border-color: rgba(0, 229, 255, 0.4);
+  border-style: solid;
+  color: var(--cyan);
+}
+
 .stats-fixed-stake-popover {
   background: #0b111b;
   border: 1px solid var(--line);

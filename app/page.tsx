@@ -1177,6 +1177,8 @@ export default function Home() {
   const [sourcePickerForBetId, setSourcePickerForBetId] = useState<string | null>(null);
   const [fixedStakePopoverFor, setFixedStakePopoverFor] = useState<string | null>(null);
   const [sourceFixedStakeInput, setSourceFixedStakeInput] = useState("");
+  const [renamingSourceId, setRenamingSourceId] = useState<string | null>(null);
+  const [renameSourceInput, setRenameSourceInput] = useState("");
 
   function toggleFixedStakePopover(sourceId: string) {
     setFixedStakePopoverFor(current => {
@@ -1185,18 +1187,29 @@ export default function Home() {
       setSourceFixedStakeInput(source?.fixed_stake ? String(source.fixed_stake) : "");
       return sourceId;
     });
+    setRenamingSourceId(null);
+  }
+
+  function toggleRenameSourcePopover(sourceId: string) {
+    setRenamingSourceId(current => {
+      if (current === sourceId) return null;
+      const source = sources.find(row => row.id === sourceId);
+      setRenameSourceInput(source?.name || "");
+      return sourceId;
+    });
+    setFixedStakePopoverFor(null);
   }
 
   useEffect(() => {
-    if (!fixedStakePopoverFor) return;
+    if (!fixedStakePopoverFor && !renamingSourceId) return;
     const handleOutside = (event: MouseEvent) => {
-      if (!(event.target as HTMLElement).closest(".stats-fixed-stake-wrap")) {
-        setFixedStakePopoverFor(null);
-      }
+      const target = event.target as HTMLElement;
+      if (!target.closest(".stats-fixed-stake-wrap")) setFixedStakePopoverFor(null);
+      if (!target.closest(".stats-rename-wrap")) setRenamingSourceId(null);
     };
     document.addEventListener("mousedown", handleOutside);
     return () => document.removeEventListener("mousedown", handleOutside);
-  }, [fixedStakePopoverFor]);
+  }, [fixedStakePopoverFor, renamingSourceId]);
 
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
@@ -2011,6 +2024,41 @@ export default function Home() {
       )));
     }
     setFixedStakePopoverFor(null);
+    setDataLoading(false);
+  }
+
+  async function saveSourceRename(sourceId: string, rawName: string) {
+    if (!user) return;
+    const name = rawName.trim();
+    if (!name) return;
+
+    const duplicate = sources.find(
+      source => source.id !== sourceId && source.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (duplicate) {
+      window.alert(
+        duplicate.is_blacklisted
+          ? t("Этот источник в чёрном списке и не может быть добавлен снова.")
+          : t("Источник с таким названием уже существует.")
+      );
+      return;
+    }
+
+    setDataLoading(true);
+    const { error } = await supabase
+      .from("sources")
+      .update({ name })
+      .eq("id", sourceId)
+      .eq("user_id", user.id);
+
+    if (error) {
+      setDataMessage(error.message);
+    } else {
+      setSources(current => current.map(source => (
+        source.id === sourceId ? { ...source, name } : source
+      )));
+    }
+    setRenamingSourceId(null);
     setDataLoading(false);
   }
 
@@ -3461,6 +3509,36 @@ export default function Home() {
                               <td className="stats-table-name">
                                 <div className="stats-source-name-cell">
                                   <span>{t(source.name)}</span>
+                                  <div className="stats-rename-wrap">
+                                    <button
+                                      aria-label={t("Переименовать источник")}
+                                      className="stats-rename-btn"
+                                      onClick={() => toggleRenameSourcePopover(source.id)}
+                                      title={t("Переименовать источник")}
+                                      type="button"
+                                    >
+                                      ✏️
+                                    </button>
+                                    {renamingSourceId === source.id ? (
+                                      <div className="stats-fixed-stake-popover" onClick={event => event.stopPropagation()}>
+                                        <input
+                                          autoFocus
+                                          onChange={event => setRenameSourceInput(event.target.value)}
+                                          onKeyDown={event => {
+                                            if (event.key === "Enter") saveSourceRename(source.id, renameSourceInput);
+                                          }}
+                                          placeholder={t("Название источника")}
+                                          value={renameSourceInput}
+                                        />
+                                        <button
+                                          onClick={() => saveSourceRename(source.id, renameSourceInput)}
+                                          type="button"
+                                        >
+                                          {t("Сохранить")}
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
                                   <div className="stats-fixed-stake-wrap">
                                     <button
                                       aria-label={t("Фиксированная ставка")}
