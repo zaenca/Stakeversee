@@ -1904,7 +1904,7 @@ export default function Home() {
 
     if (!cleanEmail || !password || (mode === "register" && !cleanName)) {
       setStatus("error");
-      setMessage(t("Заполни email, пароль и имя для регистрации."));
+      setMessage(t("Заполни email, пароль и никнейм для регистрации."));
       return;
     }
 
@@ -3881,9 +3881,9 @@ export default function Home() {
                   <form className="auth-form" onSubmit={handleAuth}>
                     {mode === "register" ? (
                       <label>
-                        {t("Имя")}
+                        {t("Никнейм")}
                         <input
-                          autoComplete="name"
+                          autoComplete="nickname"
                           onChange={event => setDisplayName(event.target.value)}
                           placeholder={t("Семик")}
                           value={displayName}
