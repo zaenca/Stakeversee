@@ -203,10 +203,12 @@ export const translations: Record<string, string> = {
   "Создать аккаунт": "Create account",
   "Подождите...": "Please wait...",
   "Имя": "Name",
+  "Никнейм": "Nickname",
   "Email": "Email",
   "Пароль": "Password",
   "минимум 6 символов": "minimum 6 characters",
   "Заполни email, пароль и имя для регистрации.": "Fill in email, password, and name to register.",
+  "Заполни email, пароль и никнейм для регистрации.": "Fill in email, password, and nickname to register.",
   "Вход выполнен.": "Logged in.",
   "Аккаунт создан. Если Supabase просит подтверждение почты, открой письмо.":
     "Account created. If Supabase asks for email confirmation, check your inbox.",
