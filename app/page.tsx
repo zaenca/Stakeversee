@@ -1201,7 +1201,7 @@ export default function Home() {
       const source = sources.find(row => row.id === sourceId);
       setRenameSourceInput(source?.name || "");
       const rect = anchor.getBoundingClientRect();
-      const left = Math.max(8, Math.min(rect.left, window.innerWidth - 220));
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - 360));
       setStatsPopoverPos({ left, top: rect.bottom + 4 });
       return sourceId;
     });
@@ -1594,6 +1594,14 @@ export default function Home() {
   const sortedSourceStats = useMemo(
     () => applyStatsSort(sourceStats.filter(source => !source.is_blacklisted), sourceSort),
     [sourceStats, sourceSort]
+  );
+
+  const blacklistedSourceStats = useMemo(
+    () => sourceStats
+      .filter(source => source.is_blacklisted)
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, "ru")),
+    [sourceStats]
   );
 
   const sortedBookmakerStats = useMemo(
@@ -3538,7 +3546,7 @@ export default function Home() {
                                     </button>
                                     {renamingSourceId === source.id && statsPopoverPos ? (
                                       <div
-                                        className="stats-fixed-stake-popover stats-popover-floating"
+                                        className="stats-fixed-stake-popover stats-popover-floating stats-rename-popover"
                                         onClick={event => event.stopPropagation()}
                                         style={{ left: statsPopoverPos.left, top: statsPopoverPos.top }}
                                       >
@@ -3639,6 +3647,37 @@ export default function Home() {
                     </div>
                   ) : <span className="empty">{t("Рассчитанные ставки появятся здесь после выигрыша, проигрыша или возврата.")}</span>}
                 </div>
+
+                {blacklistedSourceStats.length ? (
+                  <div className="stats-block stats-block-blacklist">
+                    <div className="stats-block-head">
+                      <strong>{t("🚫 Чёрный список")}</strong>
+                      <span>{blacklistedSourceStats.length}</span>
+                    </div>
+                    <div className="stats-blacklist-list">
+                      {blacklistedSourceStats.map(source => (
+                        <div className="stats-blacklist-row" key={source.id}>
+                          <span className="stats-blacklist-name">{t(source.name)}</span>
+                          <span className={source.roi >= 0 ? "roi-positive" : "roi-negative"}>
+                            {source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%
+                          </span>
+                          <span className="stats-blacklist-bets">{source.bets} {t("ставок")}</span>
+                          <button
+                            className="stats-blacklist-restore-btn"
+                            onClick={() => {
+                              const actualSource = sources.find(row => row.id === source.id);
+                              if (actualSource) toggleSourceBlacklist(actualSource);
+                            }}
+                            title={t("Убрать из чёрного списка")}
+                            type="button"
+                          >
+                            {t("↺ Восстановить")}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="stats-block">
                   <div className="stats-block-head">

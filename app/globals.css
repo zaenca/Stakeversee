@@ -3085,6 +3085,10 @@ h1 {
   background: rgba(0, 229, 255, 0.18);
 }
 
+.stats-rename-popover input {
+  width: 280px;
+}
+
 .stats-block {
   display: grid;
   gap: 10px;
@@ -3113,6 +3117,65 @@ h1 {
   font-size: 0.7rem;
   font-weight: 900;
   padding: 2px 8px;
+}
+
+.stats-block-blacklist .stats-block-head strong {
+  color: var(--pink);
+}
+
+.stats-block-blacklist .stats-block-head span {
+  background: rgba(255, 55, 126, 0.12);
+  border-color: rgba(255, 55, 126, 0.3);
+  color: var(--pink);
+}
+
+.stats-blacklist-list {
+  display: grid;
+  gap: 6px;
+}
+
+.stats-blacklist-row {
+  align-items: center;
+  background: rgba(255, 55, 126, 0.05);
+  border: 1px solid rgba(255, 55, 126, 0.18);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+}
+
+.stats-blacklist-name {
+  color: var(--muted);
+  flex: 1;
+  font-weight: 700;
+  overflow: hidden;
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 55, 126, 0.5);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats-blacklist-bets {
+  color: var(--muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.stats-blacklist-restore-btn {
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 6px;
+  color: var(--cyan);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.stats-blacklist-restore-btn:hover {
+  background: rgba(0, 229, 255, 0.18);
 }
 
 .roi-positive-text {
