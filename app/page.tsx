@@ -1225,6 +1225,7 @@ export default function Home() {
 
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const settingsSourceStakeRefs = useRef<Record<string, HTMLInputElement>>({});
   const [flatStakeInput, setFlatStakeInput] = useState("");
   const [couponStakePercent, setCouponStakePercent] = useState("");
 
@@ -2803,6 +2804,48 @@ export default function Home() {
                   <div className="settings-flat-hint">{t("Текущий флэт:")} {formatMoney(flatStake)} · ½ {t("флэта:")} {formatMoney(flatStake / 2)}</div>
                 ) : (
                   <div className="settings-flat-hint">{t("Задай фиксированную сумму ставки, чтобы быстро выбирать её в купоне.")}</div>
+                )}
+              </div>
+
+              <div className="settings-divider" />
+
+              <div className="settings-section">
+                <div className="settings-section-title">{t("Фиксированная ставка")}</div>
+                <div className="settings-flat-hint" style={{ marginTop: 0, marginBottom: 8 }}>
+                  {t("Задай фиксированную ставку для конкретного источника - она подставится в купон при его выборе.")}
+                </div>
+                {sources.filter(source => !source.is_blacklisted).length ? (
+                  <div className="settings-source-stake-list">
+                    {sources.filter(source => !source.is_blacklisted).map(source => (
+                      <div className="settings-source-stake-row" key={source.id}>
+                        <span title={t(source.name)}>{t(source.name)}</span>
+                        <input
+                          defaultValue={source.fixed_stake ? String(source.fixed_stake) : ""}
+                          inputMode="decimal"
+                          onKeyDown={event => {
+                            if (event.key !== "Enter") return;
+                            const raw = (event.target as HTMLInputElement).value;
+                            const amount = Number(raw.replace(",", "."));
+                            saveSourceFixedStake(source.id, Number.isFinite(amount) && amount > 0 ? amount : null);
+                          }}
+                          placeholder={t("Сумма ₽")}
+                          ref={element => { if (element) settingsSourceStakeRefs.current[source.id] = element; }}
+                        />
+                        <button
+                          onClick={() => {
+                            const raw = settingsSourceStakeRefs.current[source.id]?.value || "";
+                            const amount = Number(raw.replace(",", "."));
+                            saveSourceFixedStake(source.id, Number.isFinite(amount) && amount > 0 ? amount : null);
+                          }}
+                          type="button"
+                        >
+                          {t("Сохранить")}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="settings-flat-hint">{t("Источники появятся после добавления.")}</div>
                 )}
               </div>
 

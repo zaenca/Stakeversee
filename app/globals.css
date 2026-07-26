@@ -945,6 +945,58 @@ h1 {
   margin-top: 8px;
 }
 
+.settings-source-stake-list {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-color: rgba(0, 229, 255, 0.85) rgba(255, 255, 255, 0.04);
+  scrollbar-width: thin;
+}
+
+.settings-source-stake-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 90px auto;
+}
+
+.settings-source-stake-row > span {
+  color: var(--text);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-source-stake-row input {
+  background: #111b28;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #eaf6ff;
+  min-height: 34px;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.settings-source-stake-row button {
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-radius: 7px;
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0 10px;
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+.settings-source-stake-row button:hover {
+  background: rgba(0, 229, 255, 0.15);
+}
+
 .settings-timezone-list {
   display: grid;
   gap: 2px;

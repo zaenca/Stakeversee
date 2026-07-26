@@ -163,6 +163,7 @@ export const translations: Record<string, string> = {
   "Средняя": "Average",
   "Все прогнозы": "All predictions",
   "Фиксированная ставка": "Fixed stake",
+  "Задай фиксированную ставку для конкретного источника - она подставится в купон при его выборе.": "Set a fixed stake for a specific source - it will auto-fill the coupon when you pick that source.",
   "Добавить в чёрный список": "Add to blacklist",
   "Этот источник в чёрном списке и не может быть добавлен снова.": "This source is blacklisted and can't be added again.",
   "Источник с таким названием уже существует.": "A source with this name already exists.",
