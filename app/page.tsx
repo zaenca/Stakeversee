@@ -1152,6 +1152,7 @@ export default function Home() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordRecoveryMode, setPasswordRecoveryMode] = useState(false);
+  const [passwordEditorOpen, setPasswordEditorOpen] = useState(false);
 
   const [sources, setSources] = useState<SourceRow[]>([]);
   const [bets, setBets] = useState<BetRow[]>([]);
@@ -1888,6 +1889,7 @@ export default function Home() {
       setUser(session?.user ?? null);
       if (event === "PASSWORD_RECOVERY") {
         setPasswordRecoveryMode(true);
+        setPasswordEditorOpen(true);
         setSettingsPanelOpen(true);
         setPasswordMessage("Введи новый пароль два раза, чтобы завершить восстановление.");
       }
@@ -1923,6 +1925,7 @@ export default function Home() {
       setNewPasswordInput("");
       setRepeatPasswordInput("");
       setPasswordMessage("");
+      setPasswordEditorOpen(false);
       return;
     }
 
@@ -2079,7 +2082,7 @@ export default function Home() {
   }
 
   async function sendPasswordReset() {
-    const cleanEmail = email.trim();
+    const cleanEmail = (user?.email || email).trim();
     if (!cleanEmail) {
       setStatus("error");
       setMessage("Укажи email, чтобы отправить письмо для смены пароля.");
@@ -2097,9 +2100,11 @@ export default function Home() {
     if (error) {
       setStatus("error");
       setMessage(error.message);
+      if (user) setPasswordMessage(error.message);
     } else {
       setStatus("ok");
       setMessage("Письмо для смены пароля отправлено на почту.");
+      if (user) setPasswordMessage("Письмо для смены пароля отправлено на почту.");
     }
 
     setResetSending(false);
@@ -2927,6 +2932,7 @@ export default function Home() {
       setNewPasswordInput("");
       setRepeatPasswordInput("");
       setPasswordRecoveryMode(false);
+      setPasswordEditorOpen(false);
       setPasswordMessage("Пароль успешно изменён.");
     }
 
@@ -2997,30 +3003,6 @@ export default function Home() {
               <div className="settings-section">
                 <div className="settings-section-title">{t("Профиль")}</div>
                 <div className="settings-avatar-row">
-                  <div className="settings-profile-meta">
-                    {profileLogin ? (
-                      <strong className="settings-avatar-name">{profileLogin}</strong>
-                    ) : (
-                      <div className="settings-inline-login">
-                        <input
-                          autoFocus={loginRequired}
-                          onChange={event => setLoginDraft(event.target.value)}
-                          placeholder="Semik"
-                          value={loginDraft}
-                        />
-                        <button
-                          className="settings-avatar-upload-btn"
-                          disabled={loginSaving}
-                          onClick={saveLogin}
-                          type="button"
-                        >
-                          {loginSaving ? "Проверяю..." : "Сохранить"}
-                        </button>
-                      </div>
-                    )}
-                    <span className="settings-profile-email">{user.email}</span>
-                    {loginMessage && !profileLogin ? <span className="settings-login-message">{loginMessage}</span> : null}
-                  </div>
                   <div className="settings-avatar-wrap">
                     {avatarUrl ? (
                       <img alt="" className="settings-avatar-preview" src={avatarUrl} />
@@ -3048,6 +3030,30 @@ export default function Home() {
                       ✏️
                     </button>
                   </div>
+                  <div className="settings-profile-meta">
+                    {profileLogin ? (
+                      <strong className="settings-avatar-name">{profileLogin}</strong>
+                    ) : (
+                      <div className="settings-inline-login">
+                        <input
+                          autoFocus={loginRequired}
+                          onChange={event => setLoginDraft(event.target.value)}
+                          placeholder="Semik"
+                          value={loginDraft}
+                        />
+                        <button
+                          className="settings-avatar-upload-btn"
+                          disabled={loginSaving}
+                          onClick={saveLogin}
+                          type="button"
+                        >
+                          {loginSaving ? "Проверяю..." : "Сохранить"}
+                        </button>
+                      </div>
+                    )}
+                    <span className="settings-profile-email">{user.email}</span>
+                    {loginMessage && !profileLogin ? <span className="settings-login-message">{loginMessage}</span> : null}
+                  </div>
                 </div>
               </div>
 
@@ -3055,42 +3061,61 @@ export default function Home() {
 
               <div className="settings-section">
                 <div className="settings-section-title">Пароль</div>
+                <div className="settings-password-actions">
+                  <button
+                    className="settings-avatar-upload-btn"
+                    onClick={() => setPasswordEditorOpen(open => !open)}
+                    type="button"
+                  >
+                    {passwordEditorOpen || passwordRecoveryMode ? "Скрыть смену пароля" : "Изменить пароль"}
+                  </button>
+                  <button
+                    className="settings-secondary-button"
+                    disabled={resetSending}
+                    onClick={sendPasswordReset}
+                    type="button"
+                  >
+                    {resetSending ? "Отправляю..." : "Забыли пароль?"}
+                  </button>
+                </div>
                 {passwordRecoveryMode ? (
                   <div className="settings-flat-hint">Режим восстановления: введи новый пароль два раза.</div>
                 ) : null}
-                <div className="settings-password-grid">
-                  {!passwordRecoveryMode ? (
+                {passwordEditorOpen || passwordRecoveryMode ? (
+                  <div className="settings-password-grid">
+                    {!passwordRecoveryMode ? (
+                      <input
+                        autoComplete="current-password"
+                        onChange={event => setCurrentPasswordInput(event.target.value)}
+                        placeholder="Текущий пароль"
+                        type="password"
+                        value={currentPasswordInput}
+                      />
+                    ) : null}
                     <input
-                      autoComplete="current-password"
-                      onChange={event => setCurrentPasswordInput(event.target.value)}
-                      placeholder="Текущий пароль"
+                      autoComplete="new-password"
+                      onChange={event => setNewPasswordInput(event.target.value)}
+                      placeholder="Новый пароль"
                       type="password"
-                      value={currentPasswordInput}
+                      value={newPasswordInput}
                     />
-                  ) : null}
-                  <input
-                    autoComplete="new-password"
-                    onChange={event => setNewPasswordInput(event.target.value)}
-                    placeholder="Новый пароль"
-                    type="password"
-                    value={newPasswordInput}
-                  />
-                  <input
-                    autoComplete="new-password"
-                    onChange={event => setRepeatPasswordInput(event.target.value)}
-                    placeholder="Повтори новый пароль"
-                    type="password"
-                    value={repeatPasswordInput}
-                  />
-                  <button
-                    className="settings-avatar-upload-btn"
-                    disabled={passwordSaving}
-                    onClick={changePassword}
-                    type="button"
-                  >
-                    {passwordSaving ? "Сохраняю..." : "Изменить пароль"}
-                  </button>
-                </div>
+                    <input
+                      autoComplete="new-password"
+                      onChange={event => setRepeatPasswordInput(event.target.value)}
+                      placeholder="Повтори новый пароль"
+                      type="password"
+                      value={repeatPasswordInput}
+                    />
+                    <button
+                      className="settings-avatar-upload-btn"
+                      disabled={passwordSaving}
+                      onClick={changePassword}
+                      type="button"
+                    >
+                      {passwordSaving ? "Сохраняю..." : "Сохранить пароль"}
+                    </button>
+                  </div>
+                ) : null}
                 {passwordMessage ? <div className="settings-flat-hint settings-login-message">{passwordMessage}</div> : null}
               </div>
 

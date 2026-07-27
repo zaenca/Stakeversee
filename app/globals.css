@@ -900,6 +900,22 @@ h1 {
   background: rgba(0, 229, 255, 0.14);
 }
 
+.settings-secondary-button {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 8px 14px;
+}
+
+.settings-secondary-button:hover {
+  border-color: rgba(0, 229, 255, 0.32);
+  color: var(--cyan);
+}
+
 .settings-avatar-wrap {
   flex-shrink: 0;
   position: relative;
@@ -995,6 +1011,14 @@ h1 {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(3, minmax(160px, 1fr)) auto;
+  margin-top: 10px;
+}
+
+.settings-password-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .settings-flat-hint {
