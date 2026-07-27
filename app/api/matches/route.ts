@@ -66,6 +66,17 @@ const FONBET_LINE_URLS = [
   "https://line51w.bk6bba-resources.com/events/list?lang=ru&version=0&scopeMarket=1600"
 ];
 
+const TENNISI_CATEGORIES: { categoryId: number; path: string; sport: string }[] = [
+  { categoryId: 137, path: "football", sport: "football" },
+  { categoryId: 139, path: "tennis", sport: "tennis" },
+  { categoryId: 140, path: "basketball", sport: "basketball" },
+  { categoryId: 138, path: "hockey", sport: "ice-hockey" },
+  { categoryId: 9027116, path: "volleyball", sport: "volleyball" },
+  { categoryId: 439908280, path: "cybersport", sport: "esports" },
+  { categoryId: 5662396, path: "handball", sport: "handball" },
+  { categoryId: 326835, path: "baseball", sport: "baseball" }
+];
+
 const REQUEST_HEADERS = {
   accept: "application/json,text/plain,*/*",
   "accept-language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -96,6 +107,33 @@ function asString(value: unknown): string {
 function asNumber(value: unknown): number {
   const parsed = Number(asString(value).replace(",", "."));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function decodeHtml(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&numero;/gi, "№")
+    .replace(/&mdash;|&#8212;/gi, "—")
+    .replace(/&ndash;|&#8211;/gi, "-")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+}
+
+function stripTags(value: string): string {
+  return decodeHtml(value)
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitTeams(value: string): [string, string] | null {
+  const parts = stripTags(value).split(/\s+(?:-|—|–)\s+/).map((part) => part.trim()).filter(Boolean);
+  return parts.length >= 2 ? [parts[0], parts.slice(1).join(" - ")] : null;
 }
 
 function decimalOdd(value: unknown): number | null {
@@ -382,6 +420,129 @@ async function fetchPariLike(urls: string[], source: "pari" | "fonbet" | "tennis
   return [];
 }
 
+async function fetchTennisiCategory(category: { categoryId: number; path: string; sport: string }): Promise<RawMatch[]> {
+  const url = `https://tennisi.bet/rt/cgi/!rt_home.CategoryInfo?mcmd=cat&mcmdparam=${category.path}&gameid=5&categoryid=${category.categoryId}&lang=rus&more=today`;
+  const response = await fetch(url, {
+    headers: { ...REQUEST_HEADERS, referer: `https://tennisi.bet/sport/${category.path}` },
+    cache: "no-store"
+  });
+  if (!response.ok) throw new Error(`Tennisi ${category.path}: HTTP ${response.status}`);
+
+  const html = new TextDecoder("windows-1251").decode(await response.arrayBuffer());
+  return parseTennisiHtml(html, category.sport);
+}
+
+function parseTennisiHtml(html: string, sport: string): RawMatch[] {
+  const serverDate = html.match(/server_time">(\d{1,2})\s+([А-ЯЁ]+)\s+(\d{4})/i);
+  const monthNames: Record<string, number> = {
+    "ЯНВАРЯ": 0,
+    "ФЕВРАЛЯ": 1,
+    "МАРТА": 2,
+    "АПРЕЛЯ": 3,
+    "МАЯ": 4,
+    "ИЮНЯ": 5,
+    "ИЮЛЯ": 6,
+    "АВГУСТА": 7,
+    "СЕНТЯБРЯ": 8,
+    "ОКТЯБРЯ": 9,
+    "НОЯБРЯ": 10,
+    "ДЕКАБРЯ": 11
+  };
+  const baseDay = serverDate ? Number(serverDate[1]) : new Date().getUTCDate();
+  const baseMonth = serverDate ? monthNames[serverDate[2].toUpperCase()] ?? new Date().getUTCMonth() : new Date().getUTCMonth();
+  const baseYear = serverDate ? Number(serverDate[3]) : new Date().getUTCFullYear();
+  const matches: RawMatch[] = [];
+  let league = "Tennisi";
+  let country = "World";
+  let columns: string[] = [];
+  let dayOffset = 0;
+
+  for (const row of html.matchAll(/<tr\b[\s\S]*?<\/tr>/gi)) {
+    const rowHtml = row[0];
+    const headerText = stripTags(rowHtml);
+    const leagueMatch = headerText.match(/^(.+?)\s*::\s*(.+)$/);
+    if (leagueMatch) {
+      country = normalizeCountryName(leagueMatch[1]);
+      league = leagueMatch[2].trim();
+      columns = [];
+      continue;
+    }
+    if (/^Сегодня$/i.test(headerText)) {
+      dayOffset = 0;
+      continue;
+    }
+    if (/^Завтра$/i.test(headerText)) {
+      dayOffset = 1;
+      continue;
+    }
+
+    const headerCells = [...rowHtml.matchAll(/<t[hd]\b[\s\S]*?<\/t[hd]>/gi)].map((cell) => stripTags(cell[0]));
+    if (headerCells.includes("Событие") && headerCells.some((cell) => /П\s*1|П1/i.test(cell)) && headerCells.some((cell) => /П\s*2|П2/i.test(cell))) {
+      columns = headerCells.slice(headerCells.findIndex((cell) => cell === "Событие") + 1);
+      continue;
+    }
+
+    if (!/id="el\d+"/i.test(rowHtml) || !columns.length) continue;
+    const cells = [...rowHtml.matchAll(/<td\b[\s\S]*?<\/td>/gi)].map((cell) => cell[0]);
+    if (cells.length < 5) continue;
+
+    const time = stripTags(cells[1]).match(/\d{1,2}:\d{2}/)?.[0];
+    const teams = splitTeams(cells[2]);
+    if (!time || !teams) continue;
+
+    const [home, away] = teams;
+    const oddsCells = cells.slice(3);
+    let homeOdd: number | null = null;
+    let drawOdd: number | null = null;
+    let awayOdd: number | null = null;
+
+    columns.forEach((column, index) => {
+      const odd = decimalOdd(stripTags(oddsCells[index] || ""));
+      if (!odd) return;
+      if (/^x$|^х$/i.test(column)) drawOdd = odd;
+      else if (/П\s*1|П1/i.test(column)) homeOdd = odd;
+      else if (/П\s*2|П2/i.test(column)) awayOdd = odd;
+    });
+
+    if (!homeOdd || !awayOdd) continue;
+    const [hour, minute] = time.split(":").map(Number);
+    const startMs = Date.UTC(baseYear, baseMonth, baseDay + dayOffset, hour - 3, minute);
+    const odds: BookmakerOdds = {
+      bookmaker: "Tennisi",
+      home: homeOdd,
+      away: awayOdd,
+      draw: ["football", "ice-hockey", "handball"].includes(sport) ? drawOdd : null
+    };
+    const analysis = analyzeOdds(odds);
+    const eventId = rowHtml.match(/id="el(\d+)"/i)?.[1] || `${home}-${away}-${time}`;
+
+    matches.push({
+      id: `tennisi-${eventId}`,
+      sport,
+      country,
+      league,
+      home,
+      away,
+      startMs,
+      startsAt: new Date(startMs).toISOString(),
+      confidence: analysis.confidence,
+      recommendationSide: analysis.recommendationSide,
+      odds,
+      bookmakerOdds: { tennisi: odds }
+    });
+  }
+
+  return matches;
+}
+
+async function fetchTennisiMatches(): Promise<RawMatch[]> {
+  const settled = await Promise.allSettled(TENNISI_CATEGORIES.map(fetchTennisiCategory));
+  settled
+    .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+    .forEach((result) => console.warn("[matches] tennisi source failed", result.reason));
+  return settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+}
+
 function normalizedName(value: string): string {
   return value
     .toLowerCase()
@@ -508,11 +669,12 @@ function toApiMatch(match: RawMatch): ApiMatch {
 async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[]; debug: Record<string, unknown> }> {
   const now = Date.now();
   const horizon = now + Math.max(1, hours) * 60 * 60 * 1000;
-  const [pari, fonbet] = await Promise.all([
+  const [pari, fonbet, tennisi] = await Promise.all([
     fetchPariLike(PARI_LINE_URLS, "pari"),
-    fetchPariLike(FONBET_LINE_URLS, "fonbet")
+    fetchPariLike(FONBET_LINE_URLS, "fonbet"),
+    fetchTennisiMatches()
   ]);
-  const raw = [...pari, ...fonbet, ...featuredFallbackMatches(now, horizon)]
+  const raw = [...pari, ...fonbet, ...tennisi, ...featuredFallbackMatches(now, horizon)]
     .filter((match) => match.startMs > now && match.startMs <= horizon);
   const merged = mergeMatches(raw).map(toApiMatch);
   return {
@@ -520,7 +682,7 @@ async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[
     debug: {
       pari: pari.length,
       fonbet: fonbet.length,
-      tennisi: 0,
+      tennisi: tennisi.length,
       raw: raw.length,
       merged: merged.length
     }
