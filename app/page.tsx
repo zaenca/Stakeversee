@@ -1917,9 +1917,11 @@ export default function Home() {
         }
       }
 
-      const sortedForAssistant = [...matches].sort((a, b) => b.confidence - a.confidence);
-      setAnalyzedMatches(sortedForAssistant);
-      setAssistantTab("analysis");
+      setAnalyzedMatches(current => {
+        const byId = new Map(current.map(match => [match.id, match]));
+        matches.forEach(match => byId.set(match.id, match));
+        return Array.from(byId.values()).sort((a, b) => b.confidence - a.confidence);
+      });
       if (openAssistant) setAssistantOpen(true);
 
       setDataMessage(`${t("✅ Анализ завершён:")} ${matches.length} ${t("матчей")}`);
@@ -1928,11 +1930,6 @@ export default function Home() {
     } finally {
       setAnalyzing(false);
     }
-  }
-
-  async function runAnalysis() {
-    const freshMatches = getUpcomingMatches(readCachedMatches());
-    await analyzeMatches(freshMatches.length ? freshMatches : activeMatches, true);
   }
 
   // ── АССИСТЕНТ: отправляет вопрос пользователя + контекст текущих
@@ -4386,9 +4383,6 @@ export default function Home() {
                   <>
                     <div className="assistant-section-head">
                       <span>{analyzing ? t("Анализирую линию...") : `${analyzedMatches.length} ${t("матчей")}`}</span>
-                      <button disabled={analyzing || !lineMatches.length} onClick={runAnalysis} type="button">
-                        {analyzing ? t("Идёт анализ") : t("Обновить анализ")}
-                      </button>
                     </div>
 
                     <div className="assistant-feed">
