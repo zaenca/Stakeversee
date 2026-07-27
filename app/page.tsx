@@ -3342,7 +3342,10 @@ export default function Home() {
 
             <div className="matches-area">
               {shownMatches.length ? (
-                shownMatches.map(match => (
+                shownMatches.map(match => {
+                  const hasDrawOdds = Boolean(match.odds[1] && match.odds[1] !== "-");
+
+                  return (
                   <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
                     <div className="match-meta">
                       <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country, lang)}</span>
@@ -3351,15 +3354,17 @@ export default function Home() {
                       <time>{match.time}</time>
                     </div>
 
-                    <div className="odds-strip">
+                    <div className={`odds-strip ${hasDrawOdds ? "" : "odds-strip-two-way"}`}>
                       <button type="button">
                         <strong>{match.odds[0]}</strong>
                         <span>{t("П1 · лучший")}</span>
                       </button>
-                      <button type="button">
-                        <strong>{match.odds[1]}</strong>
-                        <span>{t("Х")}</span>
-                      </button>
+                      {hasDrawOdds ? (
+                        <button type="button">
+                          <strong>{match.odds[1]}</strong>
+                          <span>{t("Х")}</span>
+                        </button>
+                      ) : null}
                       <button type="button">
                         <strong>{match.odds[2]}</strong>
                         <span>{t("П2 · лучший")}</span>
@@ -3396,7 +3401,8 @@ export default function Home() {
                       <button onClick={() => toggleCouponMatch(match)} type="button">{couponItems.some(item => item.matchId === match.id) ? t("✓ В купоне") : t("+ Добавить в купон")}</button>
                     </div>
                   </article>
-                ))
+                  );
+                })
               ) : (
                 <div className="empty-board">
                   <strong>{matchesLoading ? t("Загружаю матчи") : t("Матчи не найдены")}</strong>
