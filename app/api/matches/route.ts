@@ -554,9 +554,19 @@ function normalizedName(value: string): string {
     .trim();
 }
 
+function normalizedMatchParticipant(match: RawMatch, value: string): string {
+  const normalized = normalizedName(value);
+  if (match.sport !== "tennis") return normalized;
+
+  return normalized
+    .split(" ")
+    .filter((part, index, parts) => part.length > 1 || index === 0 || parts.length === 1)
+    .join(" ");
+}
+
 function dedupeKey(match: RawMatch): string {
   const bucket = Math.round(match.startMs / (15 * 60 * 1000));
-  const teams = [normalizedName(match.home), normalizedName(match.away)].sort().join("~");
+  const teams = [normalizedMatchParticipant(match, match.home), normalizedMatchParticipant(match, match.away)].sort().join("~");
   return `${match.sport}|${bucket}|${teams}`;
 }
 
