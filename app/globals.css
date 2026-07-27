@@ -764,13 +764,13 @@ h1 {
 }
 
 .settings-modal-backdrop {
-  align-items: center;
+  align-items: stretch;
   background: rgba(2, 8, 14, 0.72);
   backdrop-filter: blur(6px);
   display: flex;
   inset: 0;
   justify-content: center;
-  padding: 16px;
+  padding: 18px;
   position: fixed;
   z-index: 1200;
 }
@@ -782,11 +782,12 @@ h1 {
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.52);
   color: var(--text);
   display: grid;
-  gap: 6px;
-  max-height: calc(100dvh - 32px);
+  gap: 10px;
+  grid-auto-rows: max-content;
+  max-height: none;
   overflow-y: auto;
-  padding: 20px;
-  width: min(380px, calc(100vw - 32px));
+  padding: 24px;
+  width: min(1180px, calc(100vw - 36px));
 }
 
 .settings-modal-head {
@@ -823,6 +824,25 @@ h1 {
   display: grid;
   gap: 8px;
   padding: 4px 2px;
+}
+
+.settings-login-required {
+  background: rgba(0, 229, 255, 0.075);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 10px;
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.settings-login-required strong {
+  color: var(--cyan);
+  font-size: 1rem;
+}
+
+.settings-login-required span,
+.settings-login-message {
+  color: #a9bdd4;
 }
 
 .settings-section-title {
@@ -926,6 +946,10 @@ h1 {
 .settings-flat-row {
   display: flex;
   gap: 8px;
+}
+
+.settings-login-row {
+  max-width: 520px;
 }
 
 .settings-flat-row input {
@@ -4088,4 +4112,3 @@ h1 {
     width: auto;
   }
 }
-

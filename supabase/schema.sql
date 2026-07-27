@@ -2,9 +2,15 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
   display_name text,
+  login text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles add column if not exists login text;
+create unique index if not exists profiles_login_unique_idx
+  on public.profiles (lower(login))
+  where login is not null;
 
 create table if not exists public.sources (
   id uuid primary key default gen_random_uuid(),

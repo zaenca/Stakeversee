@@ -15,6 +15,10 @@ type SourceRow = {
   fixed_stake: number | null;
 };
 
+type ProfileRow = {
+  login: string | null;
+};
+
 type BetRow = {
   id: string;
   source_id: string | null;
@@ -228,6 +232,14 @@ function sourceDisplayName(value?: string | null): string {
     .replace(/\s*(?:\.{2,}|…|â€¦)\s*$/g, "")
     .trim();
   return name || "Источник —";
+}
+
+function normalizeLogin(value: string): string {
+  return value.trim().replace(/\s+/g, "");
+}
+
+function isValidLogin(value: string): boolean {
+  return /^[A-Za-z0-9_-]{3,24}$/.test(value);
 }
 
 function resultLabel(result: BetRow["result"], lang: Lang): string {
@@ -1129,6 +1141,10 @@ export default function Home() {
   const [displayName, setDisplayName] = useState("");
   const [status, setStatus] = useState<AuthStatus>("idle");
   const [message, setMessage] = useState("");
+  const [profileLogin, setProfileLogin] = useState("");
+  const [loginDraft, setLoginDraft] = useState("");
+  const [loginMessage, setLoginMessage] = useState("");
+  const [loginSaving, setLoginSaving] = useState(false);
 
   const [sources, setSources] = useState<SourceRow[]>([]);
   const [bets, setBets] = useState<BetRow[]>([]);
@@ -1235,6 +1251,16 @@ export default function Home() {
       setFlatStakeInput(current > 0 ? String(current) : "");
     }
   }, [settingsPanelOpen, user]);
+
+  useEffect(() => {
+    if (!profileLogin || couponDraft.sourceId) return;
+    const loginSource = sources.find(source => (
+      !source.is_blacklisted && source.name.trim().toLowerCase() === profileLogin.trim().toLowerCase()
+    ));
+    if (loginSource) {
+      setCouponDraft(current => ({ ...current, sourceId: loginSource.id }));
+    }
+  }, [couponDraft.sourceId, profileLogin, sources]);
   const [countryFilter, setCountryFilter] = useState("all");
   const [leagueFilter, setLeagueFilter] = useState("all");
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
@@ -1254,6 +1280,20 @@ export default function Home() {
   const sourceById = useMemo(() => {
     return new Map(sources.map(source => [source.id, source]));
   }, [sources]);
+
+  const couponSourceOptions = useMemo(() => {
+    const activeSources = sources.filter(source => !source.is_blacklisted);
+    const loginKey = profileLogin.trim().toLowerCase();
+    if (!loginKey) return activeSources;
+
+    return [...activeSources].sort((a, b) => {
+      const aIsProfile = a.name.trim().toLowerCase() === loginKey;
+      const bIsProfile = b.name.trim().toLowerCase() === loginKey;
+      if (aIsProfile && !bIsProfile) return -1;
+      if (!aIsProfile && bIsProfile) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [profileLogin, sources]);
 
   const betStats = useMemo(() => {
     const closed = bets.filter(bet => bet.result !== "pending");
@@ -1862,17 +1902,64 @@ export default function Home() {
       setSources([]);
       setBets([]);
       setBankrollEvents([]);
+      setProfileLogin("");
+      setLoginDraft("");
+      setLoginMessage("");
       return;
     }
 
-    supabase.from("profiles").upsert({
-      id: user.id,
-      email: user.email,
-      display_name: user.user_metadata?.display_name || user.email.split("@")[0]
-    }).then();
-
+    syncUserProfile(user);
     loadWorkspaceData(user.id);
   }, [user]);
+
+  async function syncUserProfile(currentUser: User) {
+    if (!currentUser.email) return;
+
+    const fallbackName = currentUser.user_metadata?.display_name || currentUser.email.split("@")[0];
+    const { data, error } = await supabase
+      .from("profiles")
+      .upsert({
+        id: currentUser.id,
+        email: currentUser.email,
+        display_name: fallbackName
+      }, { onConflict: "id" })
+      .select("login")
+      .single<ProfileRow>();
+
+    if (error) {
+      setLoginMessage(error.message);
+      setLoginDraft(fallbackName);
+      return;
+    }
+
+    const login = data?.login || "";
+    setProfileLogin(login);
+    setLoginDraft(login || fallbackName);
+    setLoginMessage("");
+    if (login) {
+      await ensureLoginSource(currentUser.id, login);
+    }
+  }
+
+  async function ensureLoginSource(userId: string, login: string): Promise<string | null> {
+    const { data, error } = await supabase
+      .from("sources")
+      .upsert({ user_id: userId, name: login }, { onConflict: "user_id,name" })
+      .select("id")
+      .single();
+
+    if (error) {
+      setDataMessage(error.message);
+      return null;
+    }
+
+    if (data?.id) {
+      setCouponDraft(current => current.sourceId ? current : { ...current, sourceId: data.id });
+      return data.id;
+    }
+
+    return null;
+  }
 
   async function loadWorkspaceData(userId: string) {
     setDataLoading(true);
@@ -2680,6 +2767,72 @@ export default function Home() {
     }
   }
 
+  async function saveLogin() {
+    if (!user?.email) return;
+
+    const login = normalizeLogin(loginDraft);
+    setLoginMessage("");
+
+    if (!isValidLogin(login)) {
+      setLoginMessage("Логин: 3-24 символа, латинские буквы, цифры, _ или -.");
+      return;
+    }
+
+    setLoginSaving(true);
+
+    const { data: existing, error: existingError } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("login", login)
+      .neq("id", user.id)
+      .maybeSingle();
+
+    if (existingError) {
+      setLoginMessage(existingError.message);
+      setLoginSaving(false);
+      return;
+    }
+
+    if (existing) {
+      setLoginMessage("Этот логин уже занят. Придумай другой.");
+      setLoginSaving(false);
+      return;
+    }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert({
+        id: user.id,
+        email: user.email,
+        display_name: login,
+        login
+      }, { onConflict: "id" });
+
+    if (profileError) {
+      setLoginMessage(profileError.message);
+      setLoginSaving(false);
+      return;
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.updateUser({
+      data: { display_name: login }
+    });
+
+    if (authError) {
+      setLoginMessage(authError.message);
+      setLoginSaving(false);
+      return;
+    }
+
+    setProfileLogin(login);
+    setLoginDraft(login);
+    if (authData.user) setUser(authData.user);
+    await ensureLoginSource(user.id, login);
+    await loadWorkspaceData(user.id);
+    setLoginMessage("Логин сохранён. Он добавлен первым источником купона.");
+    setLoginSaving(false);
+  }
+
   if (user) {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || t("Игрок");
     const avatarUrl: string | null = user.user_metadata?.avatar_url || null;
@@ -2688,6 +2841,7 @@ export default function Home() {
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
     const pendingRailBets = allPendingBetsOpen ? pendingBets : pendingBets.slice(0, 5);
+    const loginRequired = !profileLogin;
 
     return (
       <main className="workspace-shell">
@@ -2723,8 +2877,8 @@ export default function Home() {
           </div>
         </header>
 
-        {settingsPanelOpen ? (
-          <div className="settings-modal-backdrop" onMouseDown={() => setSettingsPanelOpen(false)} role="presentation">
+        {settingsPanelOpen || loginRequired ? (
+          <div className="settings-modal-backdrop" onMouseDown={() => { if (!loginRequired) setSettingsPanelOpen(false); }} role="presentation">
             <section
               aria-label={t("Настройки")}
               aria-modal="true"
@@ -2734,8 +2888,17 @@ export default function Home() {
             >
               <div className="settings-modal-head">
                 <strong>{t("Настройки")}</strong>
-                <button aria-label={t("Закрыть")} onClick={() => setSettingsPanelOpen(false)} type="button">×</button>
+                {!loginRequired ? (
+                  <button aria-label={t("Закрыть")} onClick={() => setSettingsPanelOpen(false)} type="button">×</button>
+                ) : null}
               </div>
+
+              {loginRequired ? (
+                <div className="settings-login-required">
+                  <strong>Придумай уникальный логин</strong>
+                  <span>Он будет именем профиля и первым источником в купоне.</span>
+                </div>
+              ) : null}
 
               <div className="settings-section">
                 <div className="settings-section-title">{t("Аватар")}</div>
@@ -2768,6 +2931,32 @@ export default function Home() {
                     </button>
                   </div>
                   <strong className="settings-avatar-name">{userName}</strong>
+                </div>
+              </div>
+
+              <div className="settings-divider" />
+
+              <div className="settings-section">
+                <div className="settings-section-title">Логин</div>
+                <div className="settings-flat-row settings-login-row">
+                  <input
+                    autoFocus={loginRequired}
+                    disabled={Boolean(profileLogin)}
+                    onChange={event => setLoginDraft(event.target.value)}
+                    placeholder="Semik"
+                    value={loginDraft}
+                  />
+                  <button
+                    className="settings-avatar-upload-btn"
+                    disabled={loginSaving || Boolean(profileLogin)}
+                    onClick={saveLogin}
+                    type="button"
+                  >
+                    {loginSaving ? "Проверяю..." : profileLogin ? "Сохранён" : "Сохранить"}
+                  </button>
+                </div>
+                <div className={`settings-flat-hint ${loginMessage ? "settings-login-message" : ""}`}>
+                  {loginMessage || (profileLogin ? "Логин закреплён за аккаунтом и защищён от дублей." : "Можно использовать 3-24 символа: A-Z, 0-9, _ и -.")}
                 </div>
               </div>
 
@@ -2814,9 +3003,9 @@ export default function Home() {
                 <div className="settings-flat-hint" style={{ marginTop: 0, marginBottom: 8 }}>
                   {t("Задай фиксированную ставку для конкретного источника - она подставится в купон при его выборе.")}
                 </div>
-                {sources.filter(source => !source.is_blacklisted).length ? (
+                {couponSourceOptions.length ? (
                   <div className="settings-source-stake-list">
-                    {sources.filter(source => !source.is_blacklisted).map(source => (
+                    {couponSourceOptions.map(source => (
                       <div className="settings-source-stake-row" key={source.id}>
                         <span title={t(source.name)}>{t(source.name)}</span>
                         <input
@@ -3066,7 +3255,7 @@ export default function Home() {
                     onChange={sourceId => setBetForm(current => ({ ...current, sourceId }))}
                     placeholder={t("Источник")}
                     roiById={sourceRoiById}
-                    sources={sources.filter(source => !source.is_blacklisted)}
+                    sources={couponSourceOptions}
                     value={betForm.sourceId}
                   />
                   <input
@@ -3224,7 +3413,7 @@ export default function Home() {
                         }));
                       }}
                       roiById={sourceRoiById}
-                      sources={sources.filter(source => !source.is_blacklisted)}
+                      sources={couponSourceOptions}
                       value={couponDraft.sourceId}
                     />
                     <BookmakerDropdownField
@@ -3524,7 +3713,7 @@ export default function Home() {
                           onToggleSourcePicker={() => setSourcePickerForBetId(current => (current === bet.id ? null : bet.id))}
                           setEditForm={setEditForm}
                           sourceById={sourceById}
-                          sourceOptions={sources.filter(source => !source.is_blacklisted)}
+                          sourceOptions={couponSourceOptions}
                           sourcePickerOpen={sourcePickerForBetId === bet.id}
                           timezoneOffsetMinutes={timezoneOffsetMinutes}
                         />
@@ -3841,7 +4030,7 @@ export default function Home() {
                           onToggleSourcePicker={() => setSourcePickerForBetId(current => (current === bet.id ? null : bet.id))}
                           setEditForm={setEditForm}
                           sourceById={sourceById}
-                          sourceOptions={sources.filter(source => !source.is_blacklisted)}
+                          sourceOptions={couponSourceOptions}
                           sourcePickerOpen={sourcePickerForBetId === bet.id}
                           timezoneOffsetMinutes={timezoneOffsetMinutes}
                         />
