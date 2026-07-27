@@ -640,6 +640,7 @@ function shouldDropMatch(match: RawMatch): boolean {
   if (match.sport === "ice-hockey" && /(magnitka|магнитка|cyber|esport|virtual|simulation|3x3|3x4|4x4|3 на 3|3 на 4|4 на 4|nhl \d|лига про|liga pro)/i.test(full)) return true;
   if (match.sport === "esports" && /(fc\s*\d{2}|fifa|efootball|nhl\s*\d|nba\s*\d|h2h.*liga|liga.*h2h|h2h.*2x4|2x4.*h2h|2x4|2\s*x\s*4|h2h.*2x2|2x2.*h2h|2x2|2\s*x\s*2)/i.test(full)) return true;
   if (match.sport === "tennis" && /(double faults|aces|statistics|stats|двойн.*ошиб|эйс|статист)/i.test(full)) return true;
+  if (match.sport === "volleyball" && /(belarus|беларус).*(amateur|любительск)|(?:amateur|любительск).*(belarus|беларус)/i.test(full)) return true;
   if (match.sport === "baseball" && /(basketball|баскет|nba|euroleague|баскетбол)/i.test(full)) return true;
   return false;
 }
