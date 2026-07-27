@@ -1145,6 +1145,13 @@ export default function Home() {
   const [loginDraft, setLoginDraft] = useState("");
   const [loginMessage, setLoginMessage] = useState("");
   const [loginSaving, setLoginSaving] = useState(false);
+  const [resetSending, setResetSending] = useState(false);
+  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [repeatPasswordInput, setRepeatPasswordInput] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordRecoveryMode, setPasswordRecoveryMode] = useState(false);
 
   const [sources, setSources] = useState<SourceRow[]>([]);
   const [bets, setBets] = useState<BetRow[]>([]);
@@ -1877,8 +1884,13 @@ export default function Home() {
       if (mounted) setUser(data.user);
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+      if (event === "PASSWORD_RECOVERY") {
+        setPasswordRecoveryMode(true);
+        setSettingsPanelOpen(true);
+        setPasswordMessage("Введи новый пароль два раза, чтобы завершить восстановление.");
+      }
     });
 
     return () => {
@@ -1906,6 +1918,11 @@ export default function Home() {
       setProfileLogin("");
       setLoginDraft("");
       setLoginMessage("");
+      setPasswordRecoveryMode(false);
+      setCurrentPasswordInput("");
+      setNewPasswordInput("");
+      setRepeatPasswordInput("");
+      setPasswordMessage("");
       return;
     }
 
@@ -2059,6 +2076,33 @@ export default function Home() {
 
     setStatus("ok");
     setMessage(t("Аккаунт создан. Если Supabase просит подтверждение почты, открой письмо."));
+  }
+
+  async function sendPasswordReset() {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setStatus("error");
+      setMessage("Укажи email, чтобы отправить письмо для смены пароля.");
+      return;
+    }
+
+    setResetSending(true);
+    setStatus("loading");
+    setMessage("");
+
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: typeof window !== "undefined" ? window.location.origin : undefined
+    });
+
+    if (error) {
+      setStatus("error");
+      setMessage(error.message);
+    } else {
+      setStatus("ok");
+      setMessage("Письмо для смены пароля отправлено на почту.");
+    }
+
+    setResetSending(false);
   }
 
   async function handleLogout() {
@@ -2834,6 +2878,61 @@ export default function Home() {
     setLoginSaving(false);
   }
 
+  async function changePassword() {
+    if (!user?.email) return;
+
+    setPasswordMessage("");
+
+    if (!passwordRecoveryMode && !currentPasswordInput) {
+      setPasswordMessage("Заполни текущий пароль.");
+      return;
+    }
+
+    if (!newPasswordInput || !repeatPasswordInput) {
+      setPasswordMessage("Введи новый пароль два раза.");
+      return;
+    }
+
+    if (newPasswordInput.length < 6) {
+      setPasswordMessage("Новый пароль должен быть минимум 6 символов.");
+      return;
+    }
+
+    if (newPasswordInput !== repeatPasswordInput) {
+      setPasswordMessage("Новые пароли не совпадают.");
+      return;
+    }
+
+    setPasswordSaving(true);
+
+    if (!passwordRecoveryMode) {
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPasswordInput
+      });
+
+      if (authError) {
+        setPasswordMessage("Текущий пароль введён неверно.");
+        setPasswordSaving(false);
+        return;
+      }
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPasswordInput });
+
+    if (error) {
+      setPasswordMessage(error.message);
+    } else {
+      setCurrentPasswordInput("");
+      setNewPasswordInput("");
+      setRepeatPasswordInput("");
+      setPasswordRecoveryMode(false);
+      setPasswordMessage("Пароль успешно изменён.");
+    }
+
+    setPasswordSaving(false);
+  }
+
   if (user) {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || t("Игрок");
     const avatarUrl: string | null = user.user_metadata?.avatar_url || null;
@@ -2895,16 +2994,33 @@ export default function Home() {
                 ) : null}
               </div>
 
-              {loginRequired ? (
-                <div className="settings-login-required">
-                  <strong>Придумай уникальный логин</strong>
-                  <span>Он будет именем профиля и первым источником в купоне.</span>
-                </div>
-              ) : null}
-
               <div className="settings-section">
-                <div className="settings-section-title">{t("Аватар")}</div>
+                <div className="settings-section-title">{t("Профиль")}</div>
                 <div className="settings-avatar-row">
+                  <div className="settings-profile-meta">
+                    {profileLogin ? (
+                      <strong className="settings-avatar-name">{profileLogin}</strong>
+                    ) : (
+                      <div className="settings-inline-login">
+                        <input
+                          autoFocus={loginRequired}
+                          onChange={event => setLoginDraft(event.target.value)}
+                          placeholder="Semik"
+                          value={loginDraft}
+                        />
+                        <button
+                          className="settings-avatar-upload-btn"
+                          disabled={loginSaving}
+                          onClick={saveLogin}
+                          type="button"
+                        >
+                          {loginSaving ? "Проверяю..." : "Сохранить"}
+                        </button>
+                      </div>
+                    )}
+                    <span className="settings-profile-email">{user.email}</span>
+                    {loginMessage && !profileLogin ? <span className="settings-login-message">{loginMessage}</span> : null}
+                  </div>
                   <div className="settings-avatar-wrap">
                     {avatarUrl ? (
                       <img alt="" className="settings-avatar-preview" src={avatarUrl} />
@@ -2932,41 +3048,50 @@ export default function Home() {
                       ✏️
                     </button>
                   </div>
-                  <strong className="settings-avatar-name">{userName}</strong>
                 </div>
               </div>
 
               <div className="settings-divider" />
 
               <div className="settings-section">
-                <div className="settings-section-title">Логин</div>
-                <div className="settings-flat-row settings-login-row">
+                <div className="settings-section-title">Пароль</div>
+                {passwordRecoveryMode ? (
+                  <div className="settings-flat-hint">Режим восстановления: введи новый пароль два раза.</div>
+                ) : null}
+                <div className="settings-password-grid">
+                  {!passwordRecoveryMode ? (
+                    <input
+                      autoComplete="current-password"
+                      onChange={event => setCurrentPasswordInput(event.target.value)}
+                      placeholder="Текущий пароль"
+                      type="password"
+                      value={currentPasswordInput}
+                    />
+                  ) : null}
                   <input
-                    autoFocus={loginRequired}
-                    disabled={Boolean(profileLogin)}
-                    onChange={event => setLoginDraft(event.target.value)}
-                    placeholder="Semik"
-                    value={loginDraft}
+                    autoComplete="new-password"
+                    onChange={event => setNewPasswordInput(event.target.value)}
+                    placeholder="Новый пароль"
+                    type="password"
+                    value={newPasswordInput}
+                  />
+                  <input
+                    autoComplete="new-password"
+                    onChange={event => setRepeatPasswordInput(event.target.value)}
+                    placeholder="Повтори новый пароль"
+                    type="password"
+                    value={repeatPasswordInput}
                   />
                   <button
                     className="settings-avatar-upload-btn"
-                    disabled={loginSaving || Boolean(profileLogin)}
-                    onClick={saveLogin}
+                    disabled={passwordSaving}
+                    onClick={changePassword}
                     type="button"
                   >
-                    {loginSaving ? "Проверяю..." : profileLogin ? "Сохранён" : "Сохранить"}
+                    {passwordSaving ? "Сохраняю..." : "Изменить пароль"}
                   </button>
                 </div>
-                <div className={`settings-flat-hint ${loginMessage ? "settings-login-message" : ""}`}>
-                  {loginMessage || (profileLogin ? "Логин закреплён за аккаунтом и защищён от дублей." : "Можно использовать 3-24 символа: A-Z, 0-9, _ и -.")}
-                </div>
-              </div>
-
-              <div className="settings-divider" />
-
-              <div className="settings-section">
-                <div className="settings-section-title">{t("Email")}</div>
-                <div className="settings-email-value">{user.email}</div>
+                {passwordMessage ? <div className="settings-flat-hint settings-login-message">{passwordMessage}</div> : null}
               </div>
 
               <div className="settings-divider" />
@@ -4221,6 +4346,17 @@ export default function Home() {
                         value={password}
                       />
                     </label>
+
+                    {mode === "login" ? (
+                      <button
+                        className="forgot-password-button"
+                        disabled={resetSending || status === "loading"}
+                        onClick={sendPasswordReset}
+                        type="button"
+                      >
+                        {resetSending ? "Отправляю..." : "Забыл пароль?"}
+                      </button>
+                    ) : null}
 
                     <button className="primary" disabled={status === "loading"} type="submit">
                       {status === "loading"

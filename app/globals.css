@@ -261,6 +261,22 @@ h1 {
   opacity: 0.68;
 }
 
+.forgot-password-button {
+  align-self: start;
+  background: transparent;
+  border: 0;
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0;
+  text-align: left;
+}
+
+.forgot-password-button:hover {
+  text-decoration: underline;
+}
+
 .auth-message {
   margin: 0;
   border: 1px solid var(--line);
@@ -827,21 +843,6 @@ h1 {
   padding: 4px 2px;
 }
 
-.settings-login-required {
-  background: rgba(0, 229, 255, 0.075);
-  border: 1px solid rgba(0, 229, 255, 0.25);
-  border-radius: 10px;
-  display: grid;
-  gap: 6px;
-  padding: 14px;
-}
-
-.settings-login-required strong {
-  color: var(--cyan);
-  font-size: 1rem;
-}
-
-.settings-login-required span,
 .settings-login-message {
   color: #a9bdd4;
 }
@@ -863,7 +864,7 @@ h1 {
 .settings-avatar-row {
   align-items: center;
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 
 .settings-avatar-preview {
@@ -929,13 +930,22 @@ h1 {
 
 .settings-avatar-name {
   color: var(--text);
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 800;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.settings-profile-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  min-width: 0;
+}
+
+.settings-profile-email,
 .settings-email-value {
   color: var(--text);
   font-size: 0.85rem;
@@ -944,13 +954,19 @@ h1 {
   white-space: nowrap;
 }
 
-.settings-flat-row {
+.settings-profile-email {
+  color: var(--muted);
+}
+
+.settings-inline-login {
+  align-items: center;
   display: flex;
   gap: 8px;
 }
 
-.settings-login-row {
-  max-width: 520px;
+.settings-flat-row {
+  display: flex;
+  gap: 8px;
 }
 
 .settings-flat-row input {
@@ -962,6 +978,23 @@ h1 {
   min-height: 38px;
   min-width: 0;
   padding: 0 12px;
+}
+
+.settings-inline-login input,
+.settings-password-grid input {
+  background: #111b28;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #eaf6ff;
+  min-height: 38px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.settings-password-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(160px, 1fr)) auto;
 }
 
 .settings-flat-hint {
@@ -3664,6 +3697,10 @@ h1 {
 
   .stats-panel .source-stat-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .settings-password-grid {
+    grid-template-columns: 1fr;
   }
 }
 
