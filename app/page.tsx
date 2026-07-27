@@ -547,6 +547,16 @@ function matchOddsForBookmaker(match: MatchRow, bookmaker: MatchBookmakerKey): {
   };
 }
 
+function hasBookmakerOdds(match: MatchRow, bookmaker: MatchBookmakerKey): boolean {
+  if (bookmaker === "best") return true;
+  const odds = match.bookmakerOdds?.[bookmaker];
+  return Boolean(odds?.some(odd => odd && odd !== "-"));
+}
+
+function matchBookmakerOptions(match: MatchRow): typeof MATCH_BOOKMAKER_OPTIONS {
+  return MATCH_BOOKMAKER_OPTIONS.filter(option => hasBookmakerOdds(match, option.key));
+}
+
 function recommendedOutcomeDetails(match: MatchRow, t: (text: string) => string, odds = match.odds, bookmaker = ""): string {
   const outcome = recommendedOutcome(match, odds);
   const label = match.recommendationSide === "draw" ? t("Ничья") : `${t("Победа")} ${outcome.selection}`;
@@ -3522,7 +3532,9 @@ export default function Home() {
             <div className="matches-area">
               {shownMatches.length ? (
                 shownMatches.map(match => {
-                  const selectedBookmaker = matchBookmakerChoice[match.id] || "best";
+                  const availableBookmakers = matchBookmakerOptions(match);
+                  const preferredBookmaker = matchBookmakerChoice[match.id] || "best";
+                  const selectedBookmaker = availableBookmakers.some(option => option.key === preferredBookmaker) ? preferredBookmaker : "best";
                   const oddsView = matchOddsForBookmaker(match, selectedBookmaker);
                   const hasDrawOdds = Boolean(oddsView.odds[1] && oddsView.odds[1] !== "-");
                   const recommendedSource = oddsView.labels[recommendedOutcomeIndex(match)] || MATCH_BOOKMAKER_LABELS[selectedBookmaker];
@@ -3543,7 +3555,7 @@ export default function Home() {
                           onChange={event => setMatchBookmakerChoice(current => ({ ...current, [match.id]: event.target.value as MatchBookmakerKey }))}
                           value={selectedBookmaker}
                         >
-                          {MATCH_BOOKMAKER_OPTIONS.map(option => (
+                          {availableBookmakers.map(option => (
                             <option key={option.key} value={option.key}>{option.label}</option>
                           ))}
                         </select>
