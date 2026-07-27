@@ -1244,6 +1244,7 @@ export default function Home() {
   const settingsSourceStakeRefs = useRef<Record<string, HTMLInputElement>>({});
   const [flatStakeInput, setFlatStakeInput] = useState("");
   const [couponStakePercent, setCouponStakePercent] = useState("");
+  const [timezonePickerOpen, setTimezonePickerOpen] = useState(false);
 
   useEffect(() => {
     if (settingsPanelOpen) {
@@ -2705,7 +2706,7 @@ export default function Home() {
 
   async function saveTimezone(offsetMinutes: number) {
     if (!user) return;
-    setSettingsPanelOpen(false);
+    setTimezonePickerOpen(false);
     const { data, error } = await supabase.auth.updateUser({
       data: { timezone_offset_minutes: offsetMinutes }
     });
@@ -2842,6 +2843,7 @@ export default function Home() {
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
     const pendingRailBets = allPendingBetsOpen ? pendingBets : pendingBets.slice(0, 5);
     const loginRequired = !profileLogin;
+    const selectedTimezone = TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes) || TIMEZONE_OPTIONS[1];
 
     return (
       <main className="workspace-shell">
@@ -3060,20 +3062,31 @@ export default function Home() {
 
               <div className="settings-section">
                 <div className="settings-section-title">{t("Часовой пояс")}</div>
-                <div className="settings-timezone-list" role="listbox">
-                  {TIMEZONE_OPTIONS.map(tz => (
-                    <button
-                      className={tz.offset === timezoneOffsetMinutes ? "active" : ""}
-                      key={tz.offset}
-                      onClick={() => saveTimezone(tz.offset)}
-                      role="option"
-                      aria-selected={tz.offset === timezoneOffsetMinutes}
-                      type="button"
-                    >
-                      {t(tz.label)}
-                    </button>
-                  ))}
-                </div>
+                <button
+                  aria-expanded={timezonePickerOpen}
+                  className="settings-timezone-current"
+                  onClick={() => setTimezonePickerOpen(current => !current)}
+                  type="button"
+                >
+                  <span>{t(selectedTimezone.label)}</span>
+                  <strong>{timezonePickerOpen ? "Скрыть" : "Изменить"}</strong>
+                </button>
+                {timezonePickerOpen ? (
+                  <div className="settings-timezone-list" role="listbox">
+                    {TIMEZONE_OPTIONS.map(tz => (
+                      <button
+                        className={tz.offset === timezoneOffsetMinutes ? "active" : ""}
+                        key={tz.offset}
+                        onClick={() => saveTimezone(tz.offset)}
+                        role="option"
+                        aria-selected={tz.offset === timezoneOffsetMinutes}
+                        type="button"
+                      >
+                        {t(tz.label)}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </section>
           </div>
