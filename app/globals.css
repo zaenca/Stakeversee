@@ -1663,11 +1663,68 @@ h1 {
 
 .assistant-feed {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 7px;
-  max-height: 46%;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.assistant-tabs {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 4px;
+}
+
+.assistant-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 6px;
+}
+
+.assistant-tabs button.active {
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--cyan);
+}
+
+.assistant-section-head {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.assistant-section-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.assistant-section-head button {
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.32);
+  border-radius: 8px;
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
+.assistant-section-head button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .assistant-feed-item {
@@ -1685,6 +1742,58 @@ h1 {
 .assistant-feed-item.tier-good {
   background: rgba(255, 204, 0, 0.05);
   border-color: rgba(255, 204, 0, 0.28);
+}
+
+.assistant-stat-bet.result-win {
+  border-color: rgba(0, 224, 150, 0.32);
+}
+
+.assistant-stat-bet.result-loss {
+  border-color: rgba(255, 76, 106, 0.32);
+}
+
+.assistant-stats {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.assistant-stat-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.assistant-stat-grid div {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px;
+}
+
+.assistant-stat-grid span,
+.assistant-stat-grid strong {
+  display: block;
+}
+
+.assistant-stat-grid span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.assistant-stat-grid strong {
+  color: var(--text);
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+.assistant-stats-list {
+  max-height: none;
 }
 
 .assistant-feed-teams {

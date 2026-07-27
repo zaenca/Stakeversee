@@ -1277,6 +1277,7 @@ export default function Home() {
   const [matchesStatus, setMatchesStatus] = useState<MatchesStatusState>({ kind: "idle" });
   const [analyzing, setAnalyzing] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantTab, setAssistantTab] = useState<"chat" | "analysis" | "stats">("chat");
   const [analyzedMatches, setAnalyzedMatches] = useState<MatchRow[]>([]);
   const [assistantMessages, setAssistantMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
   const [assistantInput, setAssistantInput] = useState("");
@@ -1424,6 +1425,34 @@ export default function Home() {
       ))
     );
   }, [resolvedBets, settledBets, settlementEventsByBetId]);
+
+  const assistantSettledBets = useMemo(() => (
+    uniqueBetsByLooseSignature(settledBets)
+      .slice()
+      .sort((a, b) => new Date(b.settled_at || b.created_at).getTime() - new Date(a.settled_at || a.created_at).getTime())
+  ), [settledBets]);
+
+  const assistantForecastStats = useMemo(() => {
+    const stake = assistantSettledBets.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
+    const oddsSum = assistantSettledBets.reduce((sum, bet) => sum + Number(bet.odds || 0), 0);
+    const profit = assistantSettledBets.reduce((sum, bet) => {
+      if (bet.profit !== null && bet.profit !== undefined) return sum + Number(bet.profit || 0);
+      if (bet.result === "win") return sum + Number(bet.stake || 0) * Number(bet.odds || 0) - Number(bet.stake || 0);
+      if (bet.result === "loss") return sum - Number(bet.stake || 0);
+      return sum;
+    }, 0);
+
+    return {
+      avgOdds: assistantSettledBets.length ? oddsSum / assistantSettledBets.length : 0,
+      losses: assistantSettledBets.filter(bet => bet.result === "loss").length,
+      profit,
+      roi: stake > 0 ? (profit / stake) * 100 : 0,
+      returns: assistantSettledBets.filter(bet => bet.result === "return").length,
+      stake,
+      total: assistantSettledBets.length,
+      wins: assistantSettledBets.filter(bet => bet.result === "win").length
+    };
+  }, [assistantSettledBets]);
 
   const calendarDays = useMemo(() => makeCalendarDays(), []);
 
@@ -1774,8 +1803,10 @@ export default function Home() {
         .filter((match: MatchRow) => match.home && match.away);
 
       writeCachedMatches(normalizedMatches);
-      setLineMatches(getUpcomingMatches(normalizedMatches));
+      const upcomingMatches = getUpcomingMatches(normalizedMatches);
+      setLineMatches(upcomingMatches);
       setMatchesStatus({ kind: "live", count: normalizedMatches.length });
+      await analyzeMatches(upcomingMatches);
     } catch {
       if (!cachedMatches.length) setLineMatches([]);
       setMatchesStatus({ kind: "unavailable" });
@@ -1787,19 +1818,15 @@ export default function Home() {
   // ── АНАЛИЗ: пересчитывает рекомендации по свежим коэффициентам и
   // сохраняет прогнозы в базу, чтобы позже сверить их с результатами
   // (обучение на ошибках — этап 2).
-  async function runAnalysis() {
+  async function analyzeMatches(matches: MatchRow[], openAssistant = false) {
     if (analyzing) return;
+    if (!matches.length) return;
     setAnalyzing(true);
     setDataMessage("");
 
     try {
-      await refreshMatchesWindow();
-
-      const freshMatches = readCachedMatches();
-
       if (user) {
-        const upcoming = freshMatches.slice(0, 60);
-        const rows = upcoming.map(match => ({
+        const rows = matches.map(match => ({
           away: match.away,
           confidence: match.confidence,
           home: match.home,
@@ -1820,16 +1847,22 @@ export default function Home() {
         }
       }
 
-      const sortedForAssistant = [...freshMatches].sort((a, b) => b.confidence - a.confidence).slice(0, 60);
+      const sortedForAssistant = [...matches].sort((a, b) => b.confidence - a.confidence);
       setAnalyzedMatches(sortedForAssistant);
-      setAssistantOpen(true);
+      setAssistantTab("analysis");
+      if (openAssistant) setAssistantOpen(true);
 
-      setDataMessage(`${t("✅ Анализ завершён:")} ${freshMatches.length} ${t("матчей")}`);
+      setDataMessage(`${t("✅ Анализ завершён:")} ${matches.length} ${t("матчей")}`);
     } catch (error) {
       setDataMessage(error instanceof Error ? error.message : t("Не удалось выполнить анализ."));
     } finally {
       setAnalyzing(false);
     }
+  }
+
+  async function runAnalysis() {
+    const freshMatches = getUpcomingMatches(readCachedMatches());
+    await analyzeMatches(freshMatches.length ? freshMatches : activeMatches, true);
   }
 
   // ── АССИСТЕНТ: отправляет вопрос пользователя + контекст текущих
@@ -3330,14 +3363,6 @@ export default function Home() {
                 value={searchQuery}
               />
 
-              <button
-                className="refresh-button analyze-button"
-                disabled={analyzing || !lineMatches.length}
-                onClick={runAnalysis}
-                type="button"
-              >
-                {analyzing ? t("⏳ Анализирую...") : t("⚡ Анализ")}
-              </button>
             </div>
 
             <div className="matches-area">
@@ -4225,58 +4250,129 @@ export default function Home() {
                 <div className="rail-title">🤖 {t("AI Ассистент")}</div>
                 <button className="stats-modal-close" aria-label={t("Закрыть ассистента")} onClick={() => setAssistantOpen(false)} type="button">×</button>
 
-                <div className="assistant-feed">
-                  {analyzedMatches.length ? (
-                    analyzedMatches.map(match => (
-                      <div className={`assistant-feed-item tier-${confidenceTier(match.confidence)}`} key={match.id}>
-                        <div className="assistant-feed-teams">
-                          <span>{match.home}</span>
-                          <span className="assistant-feed-vs">—</span>
-                          <span>{match.away}</span>
-                        </div>
-                        <div className="assistant-feed-meta">
-                          <span className="assistant-feed-league">{match.league}</span>
-                          <span className="assistant-feed-odds">{match.odds.join(" / ")}</span>
-                        </div>
-                        <div className="assistant-feed-rec">
-                          <strong>{recommendationSideLabel(match, t)}</strong>
-                          <span>{match.confidence}%</span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="assistant-empty-hint">
-                      {t("Нажми «⚡ Анализ», чтобы загрузить проанализированные матчи сюда.")}
+                <div className="assistant-tabs">
+                  {[
+                    ["chat", "Чат"],
+                    ["analysis", "Анализ"],
+                    ["stats", "Статистика"]
+                  ].map(([key, label]) => (
+                    <button
+                      className={assistantTab === key ? "active" : ""}
+                      key={key}
+                      onClick={() => setAssistantTab(key as "chat" | "analysis" | "stats")}
+                      type="button"
+                    >
+                      {t(label)}
+                    </button>
+                  ))}
+                </div>
+
+                {assistantTab === "analysis" ? (
+                  <>
+                    <div className="assistant-section-head">
+                      <span>{analyzing ? t("Анализирую линию...") : `${analyzedMatches.length} ${t("матчей")}`}</span>
+                      <button disabled={analyzing || !lineMatches.length} onClick={runAnalysis} type="button">
+                        {analyzing ? t("Идёт анализ") : t("Обновить анализ")}
+                      </button>
                     </div>
-                  )}
-                </div>
 
-                <div className="assistant-messages">
-                  {assistantMessages.length ? (
-                    assistantMessages.map((entry, index) => (
-                      <div className={`assistant-msg assistant-msg-${entry.role}`} key={index}>
-                        {entry.text}
-                      </div>
-                    ))
-                  ) : null}
-                  {assistantLoading ? <div className="assistant-msg assistant-msg-assistant assistant-msg-thinking">{t("думаю…")}</div> : null}
-                </div>
+                    <div className="assistant-feed">
+                      {analyzedMatches.length ? (
+                        analyzedMatches.map(match => (
+                          <div className={`assistant-feed-item tier-${confidenceTier(match.confidence)}`} key={match.id}>
+                            <div className="assistant-feed-teams">
+                              <span>{match.home}</span>
+                              <span className="assistant-feed-vs">—</span>
+                              <span>{match.away}</span>
+                            </div>
+                            <div className="assistant-feed-meta">
+                              <span className="assistant-feed-league">{match.league}</span>
+                              <span className="assistant-feed-odds">{match.odds.filter(odd => odd && odd !== "-").join(" / ")}</span>
+                            </div>
+                            <div className="assistant-feed-rec">
+                              <strong>{recommendationSideLabel(match, t)}</strong>
+                              <span>{match.confidence}%</span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="assistant-empty-hint">
+                          {t("Анализ запустится автоматически после загрузки актуальных матчей.")}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : null}
 
-                <form
-                  className="assistant-input-row"
-                  onSubmit={event => {
-                    event.preventDefault();
-                    sendAssistantMessage();
-                  }}
-                >
-                  <input
-                    disabled={assistantLoading}
-                    onChange={event => setAssistantInput(event.target.value)}
-                    placeholder={t("Спроси про матчи...")}
-                    value={assistantInput}
-                  />
-                  <button disabled={assistantLoading || !assistantInput.trim()} type="submit">➤</button>
-                </form>
+                {assistantTab === "stats" ? (
+                  <div className="assistant-stats">
+                    <div className="assistant-stat-grid">
+                      <div><span>{t("Прогнозов")}</span><strong>{assistantForecastStats.total}</strong></div>
+                      <div><span>{t("Выиграло")}</span><strong className="roi-positive-text">{assistantForecastStats.wins}</strong></div>
+                      <div><span>{t("Проиграло")}</span><strong className="roi-negative-text">{assistantForecastStats.losses}</strong></div>
+                      <div><span>{t("Средний кэф")}</span><strong>{assistantForecastStats.avgOdds.toFixed(2)}</strong></div>
+                      <div><span>{t("ROI")}</span><strong className={assistantForecastStats.roi >= 0 ? "roi-positive-text" : "roi-negative-text"}>{assistantForecastStats.roi.toFixed(1)}%</strong></div>
+                      <div><span>{t("Профит")}</span><strong className={assistantForecastStats.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(assistantForecastStats.profit)}</strong></div>
+                    </div>
+
+                    <div className="assistant-feed assistant-stats-list">
+                      {assistantSettledBets.length ? (
+                        assistantSettledBets.map(bet => (
+                          <div className={`assistant-feed-item assistant-stat-bet result-${bet.result}`} key={bet.id}>
+                            <div className="assistant-feed-teams">
+                              <span>{bet.event_name}</span>
+                            </div>
+                            <div className="assistant-feed-meta">
+                              <span>{translateBetMarket(bet.market, lang)} · {translateBetSelectionLine(bet.selection, lang)}</span>
+                              <span className="assistant-feed-odds">×{Number(bet.odds || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="assistant-feed-rec">
+                              <strong>
+                                {bet.result === "win" ? t("Прогноз выиграл") : bet.result === "loss" ? t("Прогноз проиграл") : t("Возврат")}
+                              </strong>
+                              <span className={Number(bet.profit || 0) >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(Number(bet.profit || 0))}</span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="assistant-empty-hint">{t("Здесь появится статистика после завершения ставок.")}</div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {assistantTab === "chat" ? (
+                  <>
+                    <div className="assistant-messages">
+                      {assistantMessages.length ? (
+                        assistantMessages.map((entry, index) => (
+                          <div className={`assistant-msg assistant-msg-${entry.role}`} key={index}>
+                            {entry.text}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="assistant-empty-hint">{t("Спроси ассистента про текущую линию или открытые прогнозы.")}</div>
+                      )}
+                      {assistantLoading ? <div className="assistant-msg assistant-msg-assistant assistant-msg-thinking">{t("думаю…")}</div> : null}
+                    </div>
+
+                    <form
+                      className="assistant-input-row"
+                      onSubmit={event => {
+                        event.preventDefault();
+                        sendAssistantMessage();
+                      }}
+                    >
+                      <input
+                        disabled={assistantLoading}
+                        onChange={event => setAssistantInput(event.target.value)}
+                        placeholder={t("Спроси про матчи...")}
+                        value={assistantInput}
+                      />
+                      <button disabled={assistantLoading || !assistantInput.trim()} type="submit">➤</button>
+                    </form>
+                  </>
+                ) : null}
               </section>
             </div>
           ) : null}
