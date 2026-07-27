@@ -650,6 +650,24 @@ function betOutcomeSignature(bet: Pick<BetRow, "event_name" | "market" | "select
   return [normalizedEvent, normalizedMarket, normalizedSelection].join("|");
 }
 
+function analysisParticipantKey(match: MatchRow, value: string): string {
+  const normalized = safeNormalizeForBetSignature(value);
+  if (match.sport !== "tennis") return normalized;
+
+  const surname = normalized
+    .split(" ")
+    .filter(part => part.length > 1)[0] || normalized;
+
+  return surname.replace(/[aeiouаеёиоуыэюяьъ]/g, "") || surname;
+}
+
+function analysisMatchKey(match: MatchRow): string {
+  const startsAt = match.startsAt ? new Date(match.startsAt).getTime() : 0;
+  const timeBucket = startsAt ? Math.round(startsAt / (15 * 60 * 1000)) : safeNormalizeForBetSignature(match.time || "");
+  const participants = [analysisParticipantKey(match, match.home), analysisParticipantKey(match, match.away)].sort().join("~");
+  return [match.sport, timeBucket, participants].join("|");
+}
+
 function uniqueBetsByOutcome(bets: BetRow[]): BetRow[] {
   const latestByOutcome = new Map<string, BetRow>();
 
@@ -1947,13 +1965,20 @@ export default function Home() {
     setDataMessage("");
 
     try {
+      const uniqueMatches = Array.from(
+        matches.reduce((byKey, match) => {
+          byKey.set(analysisMatchKey(match), match);
+          return byKey;
+        }, new Map<string, MatchRow>()).values()
+      );
+
       if (user) {
-        const rows = matches.map(match => ({
+        const rows = uniqueMatches.map(match => ({
           away: match.away,
           confidence: match.confidence,
           home: match.home,
           league: match.league,
-          match_id: match.id,
+          match_id: analysisMatchKey(match),
           odds: match.odds.join("/"),
           recommendation_side: match.recommendationSide,
           sport: match.sport,
@@ -1970,9 +1995,9 @@ export default function Home() {
       }
 
       setAnalyzedMatches(current => {
-        const byId = new Map(current.map(match => [match.id, match]));
-        matches.forEach(match => byId.set(match.id, match));
-        return Array.from(byId.values()).sort((a, b) => b.confidence - a.confidence);
+        const byKey = new Map(current.map(match => [analysisMatchKey(match), match]));
+        uniqueMatches.forEach(match => byKey.set(analysisMatchKey(match), match));
+        return Array.from(byKey.values()).sort((a, b) => b.confidence - a.confidence);
       });
       if (openAssistant) setAssistantOpen(true);
 
