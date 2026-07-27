@@ -564,10 +564,69 @@ function normalizedMatchParticipant(match: RawMatch, value: string): string {
     .join(" ");
 }
 
+function compactParticipantName(match: RawMatch, value: string): string {
+  const normalized = normalizedMatchParticipant(match, value);
+  const parts = normalized.split(" ").filter(Boolean);
+  const primary = match.sport === "tennis" ? parts.find(part => part.length > 1) || parts[0] || normalized : normalized;
+  return primary.replace(/[aeiouаеёиоуыэюяьъ]/g, "") || primary;
+}
+
+function editDistance(a: string, b: string): number {
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  const current = Array(b.length + 1).fill(0);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    current[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      current[j] = a[i - 1] === b[j - 1]
+        ? previous[j - 1]
+        : Math.min(previous[j - 1], previous[j], current[j - 1]) + 1;
+    }
+    for (let j = 0; j <= b.length; j += 1) previous[j] = current[j];
+  }
+
+  return previous[b.length];
+}
+
+function areSimilarParticipants(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const maxLength = Math.max(a.length, b.length);
+  if (maxLength < 4) return false;
+  return editDistance(a, b) <= Math.max(1, Math.floor(maxLength * 0.34));
+}
+
+function sameParticipants(left: RawMatch, right: RawMatch): boolean {
+  const leftHome = compactParticipantName(left, left.home);
+  const leftAway = compactParticipantName(left, left.away);
+  const rightHome = compactParticipantName(right, right.home);
+  const rightAway = compactParticipantName(right, right.away);
+
+  return (areSimilarParticipants(leftHome, rightHome) && areSimilarParticipants(leftAway, rightAway))
+    || (areSimilarParticipants(leftHome, rightAway) && areSimilarParticipants(leftAway, rightHome));
+}
+
 function dedupeKey(match: RawMatch): string {
   const bucket = Math.round(match.startMs / (15 * 60 * 1000));
   const teams = [normalizedMatchParticipant(match, match.home), normalizedMatchParticipant(match, match.away)].sort().join("~");
   return `${match.sport}|${bucket}|${teams}`;
+}
+
+function mergeTimeToleranceMs(sport: string): number {
+  return sport === "tennis" ? 90 * 60 * 1000 : 45 * 60 * 1000;
+}
+
+function findMergeKey(byKey: Map<string, RawMatch>, match: RawMatch): string | null {
+  const exactKey = dedupeKey(match);
+  if (byKey.has(exactKey)) return exactKey;
+
+  for (const [key, current] of byKey) {
+    if (current.sport !== match.sport) continue;
+    if (Math.abs(current.startMs - match.startMs) > mergeTimeToleranceMs(match.sport)) continue;
+    if (sameParticipants(current, match)) return key;
+  }
+
+  return null;
 }
 
 function shouldDropMatch(match: RawMatch): boolean {
@@ -626,7 +685,7 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
   const byKey = new Map<string, RawMatch>();
   for (const match of matches) {
     if (shouldDropMatch(match)) continue;
-    const key = dedupeKey(match);
+    const key = findMergeKey(byKey, match) || dedupeKey(match);
     const current = byKey.get(key);
     if (!current) {
       byKey.set(key, match);
