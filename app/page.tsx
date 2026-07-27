@@ -218,6 +218,12 @@ function getUserFlatStake(user: User | null): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function getUserAssistantStake(user: User | null): number {
+  const raw = user?.user_metadata?.assistant_stake_amount;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 function formatBetTime(createdAt: string, offsetMinutes: number): string {
   const utcMs = new Date(createdAt).getTime();
   if (!Number.isFinite(utcMs)) return "--:--";
@@ -586,6 +592,30 @@ function betLooseSignature(bet: BetRow): string {
   const stake = Math.round(Number(bet.stake || 0) * 100) / 100;
   const odds = Math.round(Number(bet.odds || 0) * 100) / 100;
   return [normalizedEvent, normalizedMarket, normalizedSelection, stake, odds].join("|");
+}
+
+function betOutcomeSignature(bet: Pick<BetRow, "event_name" | "market" | "selection">): string {
+  const normalizedEvent = safeNormalizeForBetSignature(bet.event_name || "");
+  const normalizedMarket = safeNormalizeForBetSignature(bet.market || "");
+  const normalizedSelection = safeNormalizeForBetSignature(bet.selection || "");
+  return [normalizedEvent, normalizedMarket, normalizedSelection].join("|");
+}
+
+function uniqueBetsByOutcome(bets: BetRow[]): BetRow[] {
+  const latestByOutcome = new Map<string, BetRow>();
+
+  bets.forEach(bet => {
+    const signature = betOutcomeSignature(bet);
+    const existing = latestByOutcome.get(signature);
+    const betTime = new Date(bet.settled_at || bet.created_at).getTime() || 0;
+    const existingTime = existing ? new Date(existing.settled_at || existing.created_at).getTime() || 0 : -1;
+
+    if (!existing || betTime >= existingTime) {
+      latestByOutcome.set(signature, bet);
+    }
+  });
+
+  return Array.from(latestByOutcome.values());
 }
 
 function uniqueBetsByLooseSignature(bets: BetRow[]): BetRow[] {
@@ -1307,11 +1337,21 @@ export default function Home() {
   const [matchesStatus, setMatchesStatus] = useState<MatchesStatusState>({ kind: "idle" });
   const [analyzing, setAnalyzing] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [assistantTab, setAssistantTab] = useState<"chat" | "analysis" | "stats">("chat");
+  const [assistantTab, setAssistantTab] = useState<"settings" | "analysis" | "stats">("settings");
   const [analyzedMatches, setAnalyzedMatches] = useState<MatchRow[]>([]);
   const [assistantMessages, setAssistantMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
   const [assistantInput, setAssistantInput] = useState("");
   const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantStakeInput, setAssistantStakeInput] = useState("");
+  const [assistantStakeSaving, setAssistantStakeSaving] = useState(false);
+  const [assistantSettingsMessage, setAssistantSettingsMessage] = useState("");
+
+  useEffect(() => {
+    if (assistantOpen) {
+      const current = getUserAssistantStake(user);
+      setAssistantStakeInput(current > 0 ? String(current) : "");
+    }
+  }, [assistantOpen, user]);
 
   const supabaseHost = useMemo(() => {
     return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.local").host;
@@ -1457,7 +1497,7 @@ export default function Home() {
   }, [resolvedBets, settledBets, settlementEventsByBetId]);
 
   const assistantSettledBets = useMemo(() => (
-    uniqueBetsByLooseSignature(settledBets)
+    uniqueBetsByOutcome(settledBets)
       .slice()
       .sort((a, b) => new Date(b.settled_at || b.created_at).getTime() - new Date(a.settled_at || a.created_at).getTime())
   ), [settledBets]);
@@ -2354,6 +2394,10 @@ export default function Home() {
 
       setCouponOpen(true);
       setDataMessage("");
+      const assistantStake = getUserAssistantStake(user);
+      if (assistantStake > 0) {
+        setCouponDraft(draft => ({ ...draft, stake: String(assistantStake), freebet: "" }));
+      }
       return [...current, buildCouponItem(match)];
     });
   }
@@ -2390,6 +2434,18 @@ export default function Home() {
     }
 
     const bookmaker = freebet > 0 && stake <= 0 ? `${couponDraft.bookmaker} · Фрибет` : couponDraft.bookmaker;
+    const existingOutcomeSignatures = new Set(resolvedBets.map(bet => betOutcomeSignature(bet)));
+    const duplicateOutcome = couponItems.find(item => existingOutcomeSignatures.has(betOutcomeSignature({
+      event_name: item.eventName,
+      market: item.market,
+      selection: item.selection
+    })));
+
+    if (duplicateOutcome) {
+      setDataMessage(`${t("Этот исход уже сохранён:")} ${duplicateOutcome.eventName} · ${duplicateOutcome.market} ${duplicateOutcome.selection}`);
+      return;
+    }
+
     const payload = couponItems.length === 1
       ? {
           event_name: couponItems[0].eventName,
@@ -2880,6 +2936,32 @@ export default function Home() {
     } else if (data.user) {
       setUser(data.user);
     }
+  }
+
+  async function saveAssistantStake() {
+    if (!user) return;
+
+    const amount = Number(assistantStakeInput.replace(",", ".")) || 0;
+    if (amount <= 0) {
+      setAssistantSettingsMessage("Укажи фиксированную сумму больше 0.");
+      return;
+    }
+
+    setAssistantStakeSaving(true);
+    setAssistantSettingsMessage("");
+
+    const { data, error } = await supabase.auth.updateUser({
+      data: { assistant_stake_amount: amount }
+    });
+
+    if (error) {
+      setAssistantSettingsMessage(error.message);
+    } else {
+      if (data.user) setUser(data.user);
+      setAssistantSettingsMessage("Фиксированная сумма для прогнозов ассистента сохранена.");
+    }
+
+    setAssistantStakeSaving(false);
   }
 
   async function saveLogin() {
@@ -4285,14 +4367,14 @@ export default function Home() {
 
                 <div className="assistant-tabs">
                   {[
-                    ["chat", "Чат"],
+                    ["settings", "Настройки"],
                     ["analysis", "Анализ"],
                     ["stats", "Статистика"]
                   ].map(([key, label]) => (
                     <button
                       className={assistantTab === key ? "active" : ""}
                       key={key}
-                      onClick={() => setAssistantTab(key as "chat" | "analysis" | "stats")}
+                      onClick={() => setAssistantTab(key as "settings" | "analysis" | "stats")}
                       type="button"
                     >
                       {t(label)}
@@ -4374,36 +4456,33 @@ export default function Home() {
                   </div>
                 ) : null}
 
-                {assistantTab === "chat" ? (
+                {assistantTab === "settings" ? (
                   <>
-                    <div className="assistant-messages">
-                      {assistantMessages.length ? (
-                        assistantMessages.map((entry, index) => (
-                          <div className={`assistant-msg assistant-msg-${entry.role}`} key={index}>
-                            {entry.text}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="assistant-empty-hint">{t("Спроси ассистента про текущую линию или открытые прогнозы.")}</div>
-                      )}
-                      {assistantLoading ? <div className="assistant-msg assistant-msg-assistant assistant-msg-thinking">{t("думаю…")}</div> : null}
+                    <div className="assistant-settings">
+                      <div className="assistant-setting-card">
+                        <span>{t("Фиксированная ставка")}</span>
+                        <strong>{getUserAssistantStake(user) > 0 ? formatMoney(getUserAssistantStake(user)) : t("Не задана")}</strong>
+                        <p>{t("Эта сумма будет автоматически подставляться в купон для прогнозов AI ассистента. Перед сохранением купона её можно изменить вручную.")}</p>
+                      </div>
+                      <label className="assistant-setting-field">
+                        {t("Сумма ставки")}
+                        <input
+                          inputMode="decimal"
+                          onChange={event => setAssistantStakeInput(event.target.value)}
+                          placeholder={t("Например 100 ₽")}
+                          value={assistantStakeInput}
+                        />
+                      </label>
+                      <button
+                        className="assistant-save-settings"
+                        disabled={assistantStakeSaving}
+                        onClick={saveAssistantStake}
+                        type="button"
+                      >
+                        {assistantStakeSaving ? t("Сохраняю...") : t("Сохранить сумму")}
+                      </button>
+                      {assistantSettingsMessage ? <div className="assistant-settings-message">{assistantSettingsMessage}</div> : null}
                     </div>
-
-                    <form
-                      className="assistant-input-row"
-                      onSubmit={event => {
-                        event.preventDefault();
-                        sendAssistantMessage();
-                      }}
-                    >
-                      <input
-                        disabled={assistantLoading}
-                        onChange={event => setAssistantInput(event.target.value)}
-                        placeholder={t("Спроси про матчи...")}
-                        value={assistantInput}
-                      />
-                      <button disabled={assistantLoading || !assistantInput.trim()} type="submit">➤</button>
-                    </form>
                   </>
                 ) : null}
               </section>

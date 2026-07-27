@@ -1803,6 +1803,80 @@ h1 {
   max-height: none;
 }
 
+.assistant-settings {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.assistant-setting-card {
+  background: rgba(0, 229, 255, 0.06);
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.assistant-setting-card span,
+.assistant-setting-field {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.assistant-setting-card strong {
+  color: var(--cyan);
+  display: block;
+  font-size: 20px;
+  margin-top: 4px;
+}
+
+.assistant-setting-card p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+  text-transform: none;
+}
+
+.assistant-setting-field {
+  display: grid;
+  gap: 7px;
+}
+
+.assistant-setting-field input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  font-size: 14px;
+  padding: 10px 12px;
+}
+
+.assistant-save-settings {
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.32);
+  border-radius: 9px;
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 10px 12px;
+}
+
+.assistant-save-settings:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.assistant-settings-message {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .assistant-feed-teams {
   color: var(--text);
   display: flex;
