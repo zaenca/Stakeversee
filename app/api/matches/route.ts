@@ -90,6 +90,39 @@ const memoryCache = globalThis as typeof globalThis & {
 };
 
 const API_VERSION = "bookmakers-v3";
+const MLB_TEAM_ALIASES: [string, string[]][] = [
+  ["Техас Рейнджерс", ["texas", "техас", "texas rangers", "техас рейнджерс"]],
+  ["Сиэтл Маринерс", ["seattle", "сиэтл", "seattle mariners", "сиэтл маринерс"]],
+  ["Детройт Тайгерс", ["detroit", "детройт", "detroit tigers", "детройт тайгерс"]],
+  ["Балтимор Ориолс", ["baltimore", "балтимор", "baltimore orioles", "балтимор ориолс"]],
+  ["Питтсбург Пайретс", ["pittsburgh", "питтсбург", "pittsburgh pirates", "питтсбург пайретс"]],
+  ["Аризона Даймондбэкс", ["arizona", "аризона", "arizona diamondbacks", "аризона даймондбэкс"]],
+  ["Нью-Йорк Янкиз", ["ny yankees", "new york yankees", "нью йорк янкиз"]],
+  ["Нью-Йорк Метс", ["ny mets", "new york mets", "нью йорк метс"]],
+  ["Лос-Анджелес Доджерс", ["la dodgers", "los angeles dodgers", "лос анджелес доджерс"]],
+  ["Лос-Анджелес Энджелс", ["la angels", "los angeles angels", "лос анджелес энджелс"]],
+  ["Бостон Ред Сокс", ["boston", "бостон", "boston red sox", "бостон ред сокс"]],
+  ["Торонто Блю Джейс", ["toronto", "торонто", "toronto blue jays", "торонто блю джейс"]],
+  ["Хьюстон Астрос", ["houston", "хьюстон", "houston astros", "хьюстон астрос"]],
+  ["Атланта Брэйвз", ["atlanta", "атланта", "atlanta braves", "атланта брэйвз"]],
+  ["Чикаго Кабс", ["chicago cubs", "чикаго кабс"]],
+  ["Чикаго Уайт Сокс", ["chicago white sox", "чикаго уайт сокс"]],
+  ["Кливленд Гардианс", ["cleveland", "кливленд", "cleveland guardians", "кливленд гардианс"]],
+  ["Миннесота Твинс", ["minnesota", "миннесота", "minnesota twins", "миннесота твинс"]],
+  ["Канзас-Сити Роялс", ["kansas city", "канзас сити", "kansas city royals", "канзас сити роялс"]],
+  ["Окленд Атлетикс", ["oakland", "окленд", "athletics", "oakland athletics", "окленд атлетикс"]],
+  ["Майами Марлинс", ["miami", "майами", "miami marlins", "майами марлинс"]],
+  ["Филадельфия Филлис", ["philadelphia", "филадельфия", "philadelphia phillies", "филадельфия филлис"]],
+  ["Вашингтон Нэшионалс", ["washington", "вашингтон", "washington nationals", "вашингтон нэшионалс"]],
+  ["Милуоки Брюэрс", ["milwaukee", "милуоки", "milwaukee brewers", "милуоки брюэрс"]],
+  ["Сент-Луис Кардиналс", ["st louis", "st. louis", "сент луис", "st louis cardinals", "сент луис кардиналс"]],
+  ["Цинциннати Редс", ["cincinnati", "цинциннати", "cincinnati reds", "цинциннати редс"]],
+  ["Колорадо Рокиз", ["colorado", "колорадо", "colorado rockies", "колорадо рокиз"]],
+  ["Сан-Диего Падрес", ["san diego", "сан диего", "san diego padres", "сан диего падрес"]],
+  ["Сан-Франциско Джайентс", ["san francisco", "сан франциско", "san francisco giants", "сан франциско джайентс"]],
+  ["Тампа-Бэй Рэйс", ["tampa bay", "тампа бэй", "tampa bay rays", "тампа бэй рэйс"]]
+];
+const MLB_TEAM_NAME_BY_ALIAS = new Map(MLB_TEAM_ALIASES.flatMap(([fullName, aliases]) => aliases.map(alias => [alias, fullName] as const)));
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   Pragma: "no-cache",
@@ -554,7 +587,13 @@ function normalizedName(value: string): string {
     .trim();
 }
 
+function displayTeamName(match: RawMatch, value: string): string {
+  if (match.sport !== "baseball") return value;
+  return MLB_TEAM_NAME_BY_ALIAS.get(normalizedName(value)) || value;
+}
+
 function normalizedMatchParticipant(match: RawMatch, value: string): string {
+  if (match.sport === "baseball") return normalizedName(displayTeamName(match, value));
   const normalized = normalizedName(value);
   if (match.sport !== "tennis") return normalized;
 
@@ -699,8 +738,8 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
       id: `${current.id}+${match.id}`,
       country: current.country !== "World" ? current.country : match.country,
       league: current.league !== "World" ? current.league : match.league,
-      home: /[а-яё]/i.test(current.home) ? current.home : match.home,
-      away: /[а-яё]/i.test(current.away) ? current.away : match.away,
+      home: displayTeamName(current, /[а-яё]/i.test(current.home) ? current.home : match.home),
+      away: displayTeamName(current, /[а-яё]/i.test(current.away) ? current.away : match.away),
       bookmakerOdds,
       odds
     });
@@ -725,8 +764,8 @@ function toApiMatch(match: RawMatch): ApiMatch {
     sport: match.sport,
     country: match.country,
     league: match.league,
-    home: match.home,
-    away: match.away,
+    home: displayTeamName(match, match.home),
+    away: displayTeamName(match, match.away),
     odds,
     bookmakerOdds,
     bestBookmakers: bestBookmakersByOutcome(match.bookmakerOdds, match.odds),

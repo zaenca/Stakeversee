@@ -61,6 +61,18 @@ type MatchRow = {
   startsAt?: string;
 };
 
+type StandingRow = {
+  id: string;
+  rank: number;
+  league: string;
+  division: string;
+  team: string;
+  wins: number;
+  losses: number;
+  pct: string;
+  gamesBack: string;
+};
+
 type MatchBookmakerKey = "best" | "pari" | "fonbet" | "tennisi";
 
 type CouponItem = {
@@ -1401,6 +1413,10 @@ export default function Home() {
   const [leagueFilter, setLeagueFilter] = useState("all");
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
   const [matchBookmakerChoice, setMatchBookmakerChoice] = useState<Record<string, MatchBookmakerKey>>({});
+  const [standingsOpen, setStandingsOpen] = useState(false);
+  const [standingsRows, setStandingsRows] = useState<StandingRow[]>([]);
+  const [standingsLoading, setStandingsLoading] = useState(false);
+  const [standingsMessage, setStandingsMessage] = useState("");
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState<MatchesStatusState>({ kind: "idle" });
   const [analyzing, setAnalyzing] = useState(false);
@@ -1894,6 +1910,20 @@ export default function Home() {
     return counts;
   }, [activeSport, countryFilter, lineMatches]);
 
+  const standingsGroups = useMemo(() => {
+    const groups = new Map<string, StandingRow[]>();
+    standingsRows.forEach(row => {
+      const key = `${row.league} · ${row.division}`;
+      const group = groups.get(key);
+      if (group) group.push(row);
+      else groups.set(key, [row]);
+    });
+    return Array.from(groups.entries()).map(([title, rows]) => ({
+      title,
+      rows: rows.slice().sort((a, b) => a.rank - b.rank)
+    }));
+  }, [standingsRows]);
+
   async function refreshMatchesWindow() {
     const cachedMatches = readCachedMatches();
     if (cachedMatches.length) {
@@ -1958,6 +1988,35 @@ export default function Home() {
   // ── АНАЛИЗ: пересчитывает рекомендации по свежим коэффициентам и
   // сохраняет прогнозы в базу, чтобы позже сверить их с результатами
   // (обучение на ошибках — этап 2).
+  async function openStandings(match: MatchRow) {
+    setStandingsOpen(true);
+    setStandingsLoading(true);
+    setStandingsMessage("");
+
+    try {
+      const response = await fetch(`/api/standings?sport=${encodeURIComponent(match.sport)}&league=${encodeURIComponent(match.league)}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("standings unavailable");
+      const payload = await response.json();
+      const rows = Array.isArray(payload?.standings) ? payload.standings : [];
+      setStandingsRows(rows.map((row: Partial<StandingRow> & Record<string, unknown>, index: number) => ({
+        id: String(row.id || `${row.team || "team"}-${index}`),
+        rank: Number(row.rank || index + 1),
+        league: String(row.league || "MLB"),
+        division: String(row.division || "Division"),
+        team: String(row.team || ""),
+        wins: Number(row.wins || 0),
+        losses: Number(row.losses || 0),
+        pct: String(row.pct || ".000"),
+        gamesBack: String(row.gamesBack || "-")
+      })).filter((row: StandingRow) => row.team));
+    } catch {
+      setStandingsRows([]);
+      setStandingsMessage(t("Турнирная таблица сейчас недоступна."));
+    } finally {
+      setStandingsLoading(false);
+    }
+  }
+
   async function analyzeMatches(matches: MatchRow[], openAssistant = false) {
     if (analyzing) return;
     if (!matches.length) return;
@@ -3570,6 +3629,9 @@ export default function Home() {
                       <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country, lang)}</span>
                       <span className="match-meta-sport" title={getSportLabel(match.sport, lang)}>{getSportIcon(match.sport)} {getSportLabel(match.sport, lang)}</span>
                       <strong>{t(match.league)}</strong>
+                      {match.sport === "baseball" && /mlb/i.test(match.league) ? (
+                        <button className="match-standings-button" onClick={() => openStandings(match)} type="button">{t("Таблица")}</button>
+                      ) : null}
                       <time>{match.time}</time>
                     </div>
 
@@ -4444,6 +4506,54 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="calendar-bets-empty">{t("У этого источника пока нет прогнозов.")}</div>
+                )}
+              </section>
+            </div>
+          ) : null}
+
+          {standingsOpen ? (
+            <div className="assistant-modal-backdrop" onMouseDown={() => setStandingsOpen(false)} role="presentation">
+              <section
+                aria-label={t("Турнирная таблица")}
+                aria-modal="true"
+                className="rail-panel standings-panel"
+                onMouseDown={event => event.stopPropagation()}
+                role="dialog"
+              >
+                <div className="rail-title">📊 {t("Турнирная таблица MLB")}</div>
+                <button className="stats-modal-close" aria-label={t("Закрыть таблицу")} onClick={() => setStandingsOpen(false)} type="button">×</button>
+                {standingsLoading ? (
+                  <div className="assistant-empty-hint">{t("Загружаю таблицу...")}</div>
+                ) : standingsGroups.length ? (
+                  <div className="standings-groups">
+                    {standingsGroups.map(group => (
+                      <section className="standings-group" key={group.title}>
+                        <h3>{group.title}</h3>
+                        <div className="standings-table">
+                          <div className="standings-row standings-head">
+                            <span>#</span>
+                            <span>{t("Команда")}</span>
+                            <span>{t("В")}</span>
+                            <span>{t("П")}</span>
+                            <span>PCT</span>
+                            <span>GB</span>
+                          </div>
+                          {group.rows.map(row => (
+                            <div className="standings-row" key={row.id}>
+                              <span>{row.rank}</span>
+                              <strong>{row.team}</strong>
+                              <span>{row.wins}</span>
+                              <span>{row.losses}</span>
+                              <span>{row.pct}</span>
+                              <span>{row.gamesBack}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="assistant-empty-hint">{standingsMessage || t("Турнирная таблица сейчас недоступна.")}</div>
                 )}
               </section>
             </div>
