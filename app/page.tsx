@@ -54,10 +54,14 @@ type MatchRow = {
   home: string;
   away: string;
   odds: string[];
+  bookmakerOdds?: Partial<Record<MatchBookmakerKey, string[]>>;
+  bestBookmakers?: string[];
   confidence: number;
   recommendationSide: "home" | "draw" | "away";
   startsAt?: string;
 };
+
+type MatchBookmakerKey = "best" | "pari" | "fonbet" | "tennisi";
 
 type CouponItem = {
   id: string;
@@ -205,6 +209,19 @@ const TIMEZONE_OPTIONS: { label: string; offset: number }[] = [
   { label: "UTC+1 (Берлин)", offset: 60 }
 ];
 const DEFAULT_TIMEZONE_OFFSET = 180; // Москва
+const MATCH_BOOKMAKER_OPTIONS: { key: MatchBookmakerKey; label: string }[] = [
+  { key: "best", label: "Лучшие" },
+  { key: "pari", label: "PARI" },
+  { key: "fonbet", label: "Fonbet" },
+  { key: "tennisi", label: "Tennisi" }
+];
+
+const MATCH_BOOKMAKER_LABELS: Record<MatchBookmakerKey, string> = {
+  best: "Лучшие",
+  pari: "PARI",
+  fonbet: "Fonbet",
+  tennisi: "Tennisi"
+};
 
 function getUserTimezoneOffsetMinutes(user: User | null): number {
   const raw = user?.user_metadata?.timezone_offset_minutes;
@@ -490,11 +507,11 @@ function recommendationSideLabel(match: MatchRow, t: (text: string) => string): 
   return `${t("Победа")} ${match.home}`;
 }
 
-function recommendedOutcome(match: MatchRow): { market: string; odds: string; selection: string } {
+function recommendedOutcome(match: MatchRow, odds = match.odds): { market: string; odds: string; selection: string } {
   if (match.recommendationSide === "draw") {
     return {
       market: "Победа",
-      odds: match.odds[1] && match.odds[1] !== "-" ? match.odds[1] : "",
+      odds: odds[1] && odds[1] !== "-" ? odds[1] : "",
       selection: "Ничья"
     };
   }
@@ -502,22 +519,44 @@ function recommendedOutcome(match: MatchRow): { market: string; odds: string; se
   if (match.recommendationSide === "away") {
     return {
       market: "Победа",
-      odds: match.odds[2] && match.odds[2] !== "-" ? match.odds[2] : "",
+      odds: odds[2] && odds[2] !== "-" ? odds[2] : "",
       selection: match.away
     };
   }
 
   return {
     market: "Победа",
-    odds: match.odds[0] && match.odds[0] !== "-" ? match.odds[0] : "",
+    odds: odds[0] && odds[0] !== "-" ? odds[0] : "",
     selection: match.home
   };
 }
 
-function recommendedOutcomeDetails(match: MatchRow, t: (text: string) => string): string {
-  const outcome = recommendedOutcome(match);
+function matchOddsForBookmaker(match: MatchRow, bookmaker: MatchBookmakerKey): { labels: string[]; odds: string[] } {
+  if (bookmaker === "best") {
+    return {
+      labels: match.bestBookmakers?.length ? match.bestBookmakers : ["Лучшие", "Лучшие", "Лучшие"],
+      odds: match.odds
+    };
+  }
+
+  const odds = match.bookmakerOdds?.[bookmaker] || ["-", "-", "-"];
+  const label = MATCH_BOOKMAKER_LABELS[bookmaker];
+  return {
+    labels: odds.map(odd => (odd && odd !== "-" ? label : "")),
+    odds
+  };
+}
+
+function recommendedOutcomeDetails(match: MatchRow, t: (text: string) => string, odds = match.odds, bookmaker = ""): string {
+  const outcome = recommendedOutcome(match, odds);
   const label = match.recommendationSide === "draw" ? t("Ничья") : `${t("Победа")} ${outcome.selection}`;
-  return `${t("Исход")}: ${label}${outcome.odds ? ` · ${t("кэф")} ×${outcome.odds}` : ""}`;
+  return `${t("Исход")}: ${label}${outcome.odds ? ` · ${t("кэф")} ×${outcome.odds}${bookmaker ? ` · ${bookmaker}` : ""}` : ""}`;
+}
+
+function recommendedOutcomeIndex(match: MatchRow): number {
+  if (match.recommendationSide === "draw") return 1;
+  if (match.recommendationSide === "away") return 2;
+  return 0;
 }
 
 function confidenceTier(confidence: number): "hot" | "good" | "neutral" {
@@ -1333,6 +1372,7 @@ export default function Home() {
   const [countryFilter, setCountryFilter] = useState("all");
   const [leagueFilter, setLeagueFilter] = useState("all");
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
+  const [matchBookmakerChoice, setMatchBookmakerChoice] = useState<Record<string, MatchBookmakerKey>>({});
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState<MatchesStatusState>({ kind: "idle" });
   const [analyzing, setAnalyzing] = useState(false);
@@ -1865,6 +1905,8 @@ export default function Home() {
             home: String(match.home || ""),
             away: String(match.away || ""),
             odds: [odds[0] || "-", odds[1] || "-", odds[2] || "-"],
+            bookmakerOdds: typeof match.bookmakerOdds === "object" && match.bookmakerOdds ? match.bookmakerOdds as MatchRow["bookmakerOdds"] : undefined,
+            bestBookmakers: Array.isArray(match.bestBookmakers) ? match.bestBookmakers.map(String) : undefined,
             confidence: Number(match.confidence || 0),
             recommendationSide: (["home", "draw", "away"].includes(String(match.recommendationSide)) ? match.recommendationSide : "home") as MatchRow["recommendationSide"],
             startsAt
@@ -2364,8 +2406,9 @@ export default function Home() {
     setDataLoading(false);
   }
 
-  function buildCouponItem(match: MatchRow): CouponItem {
-    const outcome = recommendedOutcome(match);
+  function buildCouponItem(match: MatchRow, bookmaker: MatchBookmakerKey): CouponItem {
+    const view = matchOddsForBookmaker(match, bookmaker);
+    const outcome = recommendedOutcome(match, view.odds);
 
     return {
       id: `${match.id}-${Date.now()}`,
@@ -2378,7 +2421,7 @@ export default function Home() {
     };
   }
 
-  function toggleCouponMatch(match: MatchRow) {
+  function toggleCouponMatch(match: MatchRow, bookmaker: MatchBookmakerKey = "best") {
     setCouponItems(current => {
       if (current.some(item => item.matchId === match.id)) {
         return current.filter(item => item.matchId !== match.id);
@@ -2395,7 +2438,7 @@ export default function Home() {
       if (assistantStake > 0) {
         setCouponDraft(draft => ({ ...draft, stake: String(assistantStake), freebet: "" }));
       }
-      return [...current, buildCouponItem(match)];
+      return [...current, buildCouponItem(match, bookmaker)];
     });
   }
 
@@ -3479,7 +3522,10 @@ export default function Home() {
             <div className="matches-area">
               {shownMatches.length ? (
                 shownMatches.map(match => {
-                  const hasDrawOdds = Boolean(match.odds[1] && match.odds[1] !== "-");
+                  const selectedBookmaker = matchBookmakerChoice[match.id] || "best";
+                  const oddsView = matchOddsForBookmaker(match, selectedBookmaker);
+                  const hasDrawOdds = Boolean(oddsView.odds[1] && oddsView.odds[1] !== "-");
+                  const recommendedSource = oddsView.labels[recommendedOutcomeIndex(match)] || MATCH_BOOKMAKER_LABELS[selectedBookmaker];
 
                   return (
                   <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
@@ -3490,21 +3536,37 @@ export default function Home() {
                       <time>{match.time}</time>
                     </div>
 
-                    <div className={`odds-strip ${hasDrawOdds ? "" : "odds-strip-two-way"}`}>
-                      <button type="button">
-                        <strong>{match.odds[0]}</strong>
-                        <span>{t("П1 · лучший")}</span>
-                      </button>
-                      {hasDrawOdds ? (
+                    <div className="match-odds-row">
+                      <label className="match-bookmaker-select">
+                        <span>{t("БК")}</span>
+                        <select
+                          onChange={event => setMatchBookmakerChoice(current => ({ ...current, [match.id]: event.target.value as MatchBookmakerKey }))}
+                          value={selectedBookmaker}
+                        >
+                          {MATCH_BOOKMAKER_OPTIONS.map(option => (
+                            <option key={option.key} value={option.key}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className={`odds-strip ${hasDrawOdds ? "" : "odds-strip-two-way"}`}>
                         <button type="button">
-                          <strong>{match.odds[1]}</strong>
-                          <span>{t("Х")}</span>
+                          <strong>{oddsView.odds[0]}</strong>
+                          {oddsView.labels[0] ? <em>{oddsView.labels[0]}</em> : null}
+                          <span>{selectedBookmaker === "best" ? t("П1 · лучший") : t("П1")}</span>
                         </button>
-                      ) : null}
-                      <button type="button">
-                        <strong>{match.odds[2]}</strong>
-                        <span>{t("П2 · лучший")}</span>
-                      </button>
+                        {hasDrawOdds ? (
+                          <button type="button">
+                            <strong>{oddsView.odds[1]}</strong>
+                            {oddsView.labels[1] ? <em>{oddsView.labels[1]}</em> : null}
+                            <span>{t("Х")}</span>
+                          </button>
+                        ) : null}
+                        <button type="button">
+                          <strong>{oddsView.odds[2]}</strong>
+                          {oddsView.labels[2] ? <em>{oddsView.labels[2]}</em> : null}
+                          <span>{selectedBookmaker === "best" ? t("П2 · лучший") : t("П2")}</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="match-teams">
@@ -3523,7 +3585,7 @@ export default function Home() {
                       <div>
                         <span>{t("Рекомендация")}</span>
                         <strong>{recommendationSideLabel(match, t)}</strong>
-                        <small>{recommendedOutcomeDetails(match, t)}</small>
+                        <small>{recommendedOutcomeDetails(match, t, oddsView.odds, recommendedSource)}</small>
                       </div>
                       <div>
                         <strong>{match.confidence}%</strong>
@@ -3535,7 +3597,7 @@ export default function Home() {
                       <div className="probability-bar">
                         <span style={{ width: `${match.confidence}%` }} />
                       </div>
-                      <button onClick={() => toggleCouponMatch(match)} type="button">{couponItems.some(item => item.matchId === match.id) ? t("✓ В купоне") : t("+ Добавить в купон")}</button>
+                      <button onClick={() => toggleCouponMatch(match, selectedBookmaker)} type="button">{couponItems.some(item => item.matchId === match.id) ? t("✓ В купоне") : t("+ Добавить в купон")}</button>
                     </div>
                   </article>
                   );

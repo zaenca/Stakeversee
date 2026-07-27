@@ -1532,8 +1532,49 @@ h1 {
 
 .odds-strip {
   display: flex;
+  flex: 1;
   gap: 6px;
+}
+
+.match-odds-row {
+  align-items: stretch;
+  display: flex;
+  gap: 7px;
   margin: 9px 0;
+}
+
+.match-bookmaker-select {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  flex: 0 0 92px;
+  gap: 2px;
+  padding: 5px 7px;
+}
+
+.match-bookmaker-select span {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.match-bookmaker-select select {
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  min-width: 0;
+  outline: none;
+}
+
+.match-bookmaker-select option {
+  background: #111b28;
+  color: var(--text);
 }
 
 .odds-strip button {
@@ -1546,7 +1587,24 @@ h1 {
   padding: 6px;
 }
 
-.odds-strip strong,
+.odds-strip strong {
+  display: inline-block;
+}
+
+.odds-strip em {
+  color: var(--cyan);
+  display: inline-block;
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 800;
+  margin-left: 6px;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .odds-strip span {
   display: block;
 }

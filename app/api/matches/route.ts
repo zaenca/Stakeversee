@@ -7,6 +7,8 @@ type BookmakerOdds = {
   bookmaker: string;
 };
 
+type BookmakerKey = "pari" | "fonbet" | "tennisi" | "featured";
+
 type RawMatch = {
   id: string;
   sport: string;
@@ -19,6 +21,7 @@ type RawMatch = {
   confidence: number;
   recommendationSide: "home" | "draw" | "away";
   odds: BookmakerOdds;
+  bookmakerOdds: Partial<Record<BookmakerKey, BookmakerOdds>>;
 };
 
 type ApiMatch = {
@@ -29,6 +32,8 @@ type ApiMatch = {
   home: string;
   away: string;
   odds: string[];
+  bookmakerOdds: Partial<Record<BookmakerKey, string[]>>;
+  bestBookmakers: string[];
   confidence: number;
   recommendationSide: "home" | "draw" | "away";
   startsAt: string;
@@ -73,7 +78,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v2";
+const API_VERSION = "bookmakers-v3";
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   Pragma: "no-cache",
@@ -270,6 +275,38 @@ function analyzeOdds(odds: BookmakerOdds): Analysis {
   };
 }
 
+function formatOdds(odds: BookmakerOdds): string[] {
+  return [odds.home, odds.draw, odds.away].map((odd) => odd ? odd.toFixed(2) : "-");
+}
+
+function bestOddsFromBookmakers(bookmakerOdds: Partial<Record<BookmakerKey, BookmakerOdds>>): BookmakerOdds {
+  const values = Object.values(bookmakerOdds);
+  const home = Math.max(...values.map((odds) => odds.home));
+  const away = Math.max(...values.map((odds) => odds.away));
+  const drawValues = values.map((odds) => odds.draw || 0).filter(Boolean);
+  return {
+    bookmaker: "Лучшие",
+    home,
+    away,
+    draw: drawValues.length ? Math.max(...drawValues) : null
+  };
+}
+
+function bestBookmakersByOutcome(bookmakerOdds: Partial<Record<BookmakerKey, BookmakerOdds>>, best: BookmakerOdds): string[] {
+  const values = Object.values(bookmakerOdds);
+  const findLabel = (side: "home" | "draw" | "away", bestValue: number | null) => {
+    if (!bestValue) return "";
+    const found = values.find((odds) => Math.abs(((side === "draw" ? odds.draw : odds[side]) || 0) - bestValue) < 0.001);
+    return found?.bookmaker || "";
+  };
+
+  return [
+    findLabel("home", best.home),
+    findLabel("draw", best.draw),
+    findLabel("away", best.away)
+  ];
+}
+
 function mainOdds(factors: PariLikeEvent[], sport: string, bookmaker: string): BookmakerOdds | null {
   const home = factorOdd(factors, 921);
   const rawDraw = factorOdd(factors, 922);
@@ -295,7 +332,7 @@ async function fetchJson(url: string, timeoutMs = 18000): Promise<PariLikeData> 
   }
 }
 
-function fromBookmakerEvent(data: PariLikeData, item: PariLikeEvent, factorMap: Map<string, PariLikeEvent>, source: "pari" | "fonbet"): RawMatch | null {
+function fromBookmakerEvent(data: PariLikeData, item: PariLikeEvent, factorMap: Map<string, PariLikeEvent>, source: "pari" | "fonbet" | "tennisi"): RawMatch | null {
   const sport = normalizeSport(sportAlias(data, item.sportId));
   if (!SPORTS.includes(sport as (typeof SPORTS)[number])) return null;
   const home = asString(item.team1 || item.teamHome || (item.homeTeam as PariLikeEvent | undefined)?.name).trim();
@@ -303,7 +340,7 @@ function fromBookmakerEvent(data: PariLikeData, item: PariLikeEvent, factorMap: 
   if (!home || !away) return null;
   if (/^(хозяева|гости|home|away)$/i.test(home) || /^(хозяева|гости|home|away)$/i.test(away)) return null;
   const factors = asArray(factorMap.get(asString(item.id))?.factors);
-  const odds = mainOdds(factors, sport, source === "pari" ? "PARI" : "Фонбет");
+  const odds = mainOdds(factors, sport, source === "pari" ? "PARI" : source === "fonbet" ? "Фонбет" : "Tennisi");
   if (!odds) return null;
   const startMs = startMsFrom(item.startTime, item.startTimestamp, item.timestamp);
   if (!startMs) return null;
@@ -320,11 +357,12 @@ function fromBookmakerEvent(data: PariLikeData, item: PariLikeEvent, factorMap: 
     startsAt: new Date(startMs).toISOString(),
     confidence: analysis.confidence,
     recommendationSide: analysis.recommendationSide,
-    odds
+    odds,
+    bookmakerOdds: { [source]: odds }
   };
 }
 
-async function fetchPariLike(urls: string[], source: "pari" | "fonbet"): Promise<RawMatch[]> {
+async function fetchPariLike(urls: string[], source: "pari" | "fonbet" | "tennisi"): Promise<RawMatch[]> {
   const errors: string[] = [];
   for (const url of urls) {
     try {
@@ -400,6 +438,14 @@ function featuredFallbackMatches(now: number, horizon: number): RawMatch[] {
         home: 1.58,
         away: 2.46,
         draw: null
+      },
+      bookmakerOdds: {
+        featured: {
+          bookmaker: "featured",
+          home: 1.58,
+          away: 2.46,
+          draw: null
+        }
       }
     }
   ];
@@ -415,9 +461,8 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
       byKey.set(key, match);
       continue;
     }
-    const home = Math.max(current.odds.home, match.odds.home);
-    const away = Math.max(current.odds.away, match.odds.away);
-    const draw = current.odds.draw || match.odds.draw ? Math.max(current.odds.draw || 0, match.odds.draw || 0) : null;
+    const bookmakerOdds = { ...current.bookmakerOdds, ...match.bookmakerOdds };
+    const odds = bestOddsFromBookmakers(bookmakerOdds);
     byKey.set(key, {
       ...current,
       id: `${current.id}+${match.id}`,
@@ -425,12 +470,8 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
       league: current.league !== "World" ? current.league : match.league,
       home: /[а-яё]/i.test(current.home) ? current.home : match.home,
       away: /[а-яё]/i.test(current.away) ? current.away : match.away,
-      odds: {
-        bookmaker: home === match.odds.home || away === match.odds.away || draw === match.odds.draw ? match.odds.bookmaker : current.odds.bookmaker,
-        home,
-        away,
-        draw
-      }
+      bookmakerOdds,
+      odds
     });
   }
   // Пересчитываем анализ по итоговым (объединённым) коэффициентам —
@@ -444,7 +485,10 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
 }
 
 function toApiMatch(match: RawMatch): ApiMatch {
-  const odds = [match.odds.home, match.odds.draw, match.odds.away].map((odd) => odd ? odd.toFixed(2) : "-");
+  const bookmakerOdds = Object.fromEntries(
+    Object.entries(match.bookmakerOdds).map(([bookmaker, odds]) => [bookmaker, formatOdds(odds)])
+  ) as Partial<Record<BookmakerKey, string[]>>;
+  const odds = formatOdds(match.odds);
   return {
     id: match.id,
     sport: match.sport,
@@ -453,6 +497,8 @@ function toApiMatch(match: RawMatch): ApiMatch {
     home: match.home,
     away: match.away,
     odds,
+    bookmakerOdds,
+    bestBookmakers: bestBookmakersByOutcome(match.bookmakerOdds, match.odds),
     confidence: match.confidence,
     recommendationSide: match.recommendationSide,
     startsAt: match.startsAt
@@ -474,6 +520,7 @@ async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[
     debug: {
       pari: pari.length,
       fonbet: fonbet.length,
+      tennisi: 0,
       raw: raw.length,
       merged: merged.length
     }
