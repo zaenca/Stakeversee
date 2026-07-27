@@ -1604,6 +1604,13 @@ h1 {
   color: var(--cyan);
 }
 
+.recommendation-card small {
+  color: var(--muted);
+  display: block;
+  font-size: 0.68rem;
+  margin-top: 3px;
+}
+
 .recommendation-card.tier-hot {
   background: rgba(0, 224, 150, 0.08);
   border-color: rgba(0, 224, 150, 0.4);

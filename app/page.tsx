@@ -484,6 +484,36 @@ function recommendationSideLabel(match: MatchRow, t: (text: string) => string): 
   return `${t("Победа")} ${match.home}`;
 }
 
+function recommendedOutcome(match: MatchRow): { market: string; odds: string; selection: string } {
+  if (match.recommendationSide === "draw") {
+    return {
+      market: "Победа",
+      odds: match.odds[1] && match.odds[1] !== "-" ? match.odds[1] : "",
+      selection: "Ничья"
+    };
+  }
+
+  if (match.recommendationSide === "away") {
+    return {
+      market: "Победа",
+      odds: match.odds[2] && match.odds[2] !== "-" ? match.odds[2] : "",
+      selection: match.away
+    };
+  }
+
+  return {
+    market: "Победа",
+    odds: match.odds[0] && match.odds[0] !== "-" ? match.odds[0] : "",
+    selection: match.home
+  };
+}
+
+function recommendedOutcomeDetails(match: MatchRow, t: (text: string) => string): string {
+  const outcome = recommendedOutcome(match);
+  const label = match.recommendationSide === "draw" ? t("Ничья") : `${t("Победа")} ${outcome.selection}`;
+  return `${t("Исход")}: ${label}${outcome.odds ? ` · ${t("кэф")} ×${outcome.odds}` : ""}`;
+}
+
 function confidenceTier(confidence: number): "hot" | "good" | "neutral" {
   if (confidence >= 70) return "hot";
   if (confidence >= 58) return "good";
@@ -2298,14 +2328,16 @@ export default function Home() {
   }
 
   function buildCouponItem(match: MatchRow): CouponItem {
+    const outcome = recommendedOutcome(match);
+
     return {
       id: `${match.id}-${Date.now()}`,
       matchId: match.id,
       eventName: `${match.home} - ${match.away}`,
       sport: match.sport,
       market: "Победа",
-      selection: match.home,
-      odds: match.odds[0] && match.odds[0] !== "-" ? match.odds[0] : ""
+      selection: outcome.selection,
+      odds: outcome.odds
     };
   }
 
@@ -3412,6 +3444,7 @@ export default function Home() {
                       <div>
                         <span>{t("Рекомендация")}</span>
                         <strong>{recommendationSideLabel(match, t)}</strong>
+                        <small>{recommendedOutcomeDetails(match, t)}</small>
                       </div>
                       <div>
                         <strong>{match.confidence}%</strong>
@@ -4290,7 +4323,7 @@ export default function Home() {
                               <span className="assistant-feed-odds">{match.odds.filter(odd => odd && odd !== "-").join(" / ")}</span>
                             </div>
                             <div className="assistant-feed-rec">
-                              <strong>{recommendationSideLabel(match, t)}</strong>
+                              <strong>{recommendedOutcomeDetails(match, t)}</strong>
                               <span>{match.confidence}%</span>
                             </div>
                           </div>
@@ -4323,7 +4356,7 @@ export default function Home() {
                               <span>{bet.event_name}</span>
                             </div>
                             <div className="assistant-feed-meta">
-                              <span>{translateBetMarket(bet.market, lang)} · {translateBetSelectionLine(bet.selection, lang)}</span>
+                              <span>{t("Ставка")}: {translateBetMarket(bet.market, lang)} {translateBetSelectionLine(bet.selection, lang)}</span>
                               <span className="assistant-feed-odds">×{Number(bet.odds || 0).toFixed(2)}</span>
                             </div>
                             <div className="assistant-feed-rec">
