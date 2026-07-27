@@ -1372,7 +1372,7 @@ h1 {
   border-top: 0;
   display: grid;
   gap: 13px;
-  grid-template-columns: 190px 190px auto minmax(140px, 220px);
+  grid-template-columns: 190px 190px 150px auto minmax(140px, 220px);
   padding: 16px 20px;
   position: relative;
 }
@@ -3123,7 +3123,7 @@ h1 {
 
 .match-filters {
   gap: 10px;
-  grid-template-columns: minmax(150px, 190px) minmax(150px, 190px) auto minmax(150px, 1fr);
+  grid-template-columns: minmax(150px, 190px) minmax(150px, 190px) minmax(120px, 150px) auto minmax(150px, 1fr);
   padding: 9px 16px;
 }
 

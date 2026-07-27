@@ -235,6 +235,22 @@ const MATCH_BOOKMAKER_LABELS: Record<MatchBookmakerKey, string> = {
   tennisi: "Tennisi"
 };
 
+type MatchTimeWindow = 1 | 2 | 4 | 6 | 8 | 10 | 12 | 24 | 48 | 72 | "all";
+
+const MATCH_TIME_WINDOWS: { value: MatchTimeWindow; label: string }[] = [
+  { value: 1, label: "1 час" },
+  { value: 2, label: "2 часа" },
+  { value: 4, label: "4 часа" },
+  { value: 6, label: "6 часов" },
+  { value: 8, label: "8 часов" },
+  { value: 10, label: "10 часов" },
+  { value: 12, label: "12 часов" },
+  { value: 24, label: "24 часа" },
+  { value: 48, label: "2 дня" },
+  { value: 72, label: "3 дня" },
+  { value: "all", label: "Всё время" }
+];
+
 function getUserTimezoneOffsetMinutes(user: User | null): number {
   const raw = user?.user_metadata?.timezone_offset_minutes;
   const parsed = Number(raw);
@@ -795,6 +811,29 @@ function getUpcomingMatches(matches: MatchRow[], hours = 72) {
   });
 }
 
+function getFutureMatches(matches: MatchRow[]) {
+  const now = Date.now();
+
+  return matches.filter(match => {
+    if (!match.startsAt) return true;
+    return new Date(match.startsAt).getTime() > now;
+  });
+}
+
+function getMatchesInTimeWindow(matches: MatchRow[], hours: number | "all") {
+  return hours === "all" ? getFutureMatches(matches) : getUpcomingMatches(matches, hours);
+}
+
+function formatMatchDateTime(match: MatchRow, lang: Lang) {
+  if (!match.startsAt) return match.time;
+  const date = new Date(match.startsAt);
+  if (Number.isNaN(date.getTime())) return match.time;
+
+  const day = date.toLocaleDateString(localeFor(lang), { day: "2-digit", month: "short" });
+  const time = date.toLocaleTimeString(localeFor(lang), { hour: "2-digit", minute: "2-digit" });
+  return `${day} · ${time}`;
+}
+
 function readCachedMatches() {
   if (typeof window === "undefined") return [];
 
@@ -803,7 +842,7 @@ function readCachedMatches() {
     if (!raw) return [];
 
     const parsed = JSON.parse(raw) as { matches?: MatchRow[] };
-    return getUpcomingMatches(Array.isArray(parsed.matches) ? parsed.matches : []);
+    return getFutureMatches(Array.isArray(parsed.matches) ? parsed.matches : []);
   } catch {
     return [];
   }
@@ -815,7 +854,7 @@ function writeCachedMatches(matches: MatchRow[]) {
   window.localStorage.setItem(
     MATCH_CACHE_KEY,
     JSON.stringify({
-      matches: getUpcomingMatches(matches),
+      matches: getFutureMatches(matches),
       updatedAt: new Date().toISOString()
     })
   );
@@ -1327,6 +1366,7 @@ export default function Home() {
   });
   const [activeSport, setActiveSport] = useState("all");
   const [matchFilter, setMatchFilter] = useState("all");
+  const [matchTimeWindow, setMatchTimeWindow] = useState<MatchTimeWindow>(24);
   const [searchQuery, setSearchQuery] = useState("");
   const [bankEditorOpen, setBankEditorOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
@@ -1849,7 +1889,7 @@ export default function Home() {
 
   const activeMatches = useMemo(() => {
     const queryGroups = searchTokenGroups(searchQuery);
-    const upcomingMatches = getUpcomingMatches(lineMatches);
+    const upcomingMatches = getMatchesInTimeWindow(lineMatches, matchTimeWindow);
 
     return upcomingMatches.filter(match => {
       const sportOk = activeSport === "all" || match.sport === activeSport;
@@ -1866,10 +1906,10 @@ export default function Home() {
 
       return sportOk && countryOk && leagueOk && tierOk && searchOk;
     });
-  }, [activeSport, countryFilter, leagueFilter, matchFilter, lineMatches, searchQuery]);
+  }, [activeSport, countryFilter, leagueFilter, matchFilter, lineMatches, matchTimeWindow, searchQuery]);
 
   const matchCounts = useMemo(() => {
-    const upcomingMatches = getUpcomingMatches(lineMatches);
+    const upcomingMatches = getMatchesInTimeWindow(lineMatches, matchTimeWindow);
     const counts = new Map<string, number>();
 
     for (const match of upcomingMatches) {
@@ -1880,20 +1920,20 @@ export default function Home() {
       all: upcomingMatches.length,
       bySport: counts
     };
-  }, [lineMatches]);
+  }, [lineMatches, matchTimeWindow]);
 
   const countryCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const match of getUpcomingMatches(lineMatches)) {
+    for (const match of getMatchesInTimeWindow(lineMatches, matchTimeWindow)) {
       const c = match.country;
       if (c) counts.set(c, (counts.get(c) || 0) + 1);
     }
     return counts;
-  }, [lineMatches]);
+  }, [lineMatches, matchTimeWindow]);
 
   const leagueCounts = useMemo(() => {
     const counts = new Map<string, { count: number; country: string; league: string; sport: string }>();
-    for (const match of getUpcomingMatches(lineMatches)) {
+    for (const match of getMatchesInTimeWindow(lineMatches, matchTimeWindow)) {
       const sportOk = activeSport === "all" || match.sport === activeSport;
       const countryOk = countryFilter === "all" || match.country === countryFilter;
       if (!sportOk || !countryOk) continue;
@@ -1908,7 +1948,7 @@ export default function Home() {
       else counts.set(key, { count: 1, country: match.country || "World", league: l, sport: match.sport });
     }
     return counts;
-  }, [activeSport, countryFilter, lineMatches]);
+  }, [activeSport, countryFilter, lineMatches, matchTimeWindow]);
 
   const standingsGroups = useMemo(() => {
     const groups = new Map<string, StandingRow[]>();
@@ -1934,7 +1974,8 @@ export default function Home() {
     setMatchesLoading(true);
 
     try {
-      const response = await fetch("/api/matches?hours=72", { cache: "no-store" });
+      const requestHours = matchTimeWindow === "all" ? 24 * 365 : Math.max(Number(matchTimeWindow), 72);
+      const response = await fetch(`/api/matches?hours=${requestHours}`, { cache: "no-store" });
       if (!response.ok) {
         if (!cachedMatches.length) setLineMatches([]);
         setMatchesStatus({ kind: "unavailable" });
@@ -1973,8 +2014,8 @@ export default function Home() {
         .filter((match: MatchRow) => match.home && match.away);
 
       writeCachedMatches(normalizedMatches);
-      const upcomingMatches = getUpcomingMatches(normalizedMatches);
-      setLineMatches(upcomingMatches);
+      const upcomingMatches = getMatchesInTimeWindow(normalizedMatches, matchTimeWindow);
+      setLineMatches(getFutureMatches(normalizedMatches));
       setMatchesStatus({ kind: "live", count: normalizedMatches.length });
       await analyzeMatches(upcomingMatches);
     } catch {
@@ -2146,7 +2187,7 @@ export default function Home() {
     return () => {
       window.clearInterval(timer);
     };
-  }, [user]);
+  }, [user, matchTimeWindow]);
 
   useEffect(() => {
     if (!user?.email) {
@@ -3585,6 +3626,21 @@ export default function Home() {
                 />
               </label>
 
+              <label>
+                <span>{t("Время до матча:")}</span>
+                <select
+                  onChange={event => {
+                    const raw = event.target.value;
+                    setMatchTimeWindow(raw === "all" ? "all" : Number(raw) as MatchTimeWindow);
+                  }}
+                  value={String(matchTimeWindow)}
+                >
+                  {MATCH_TIME_WINDOWS.map(option => (
+                    <option key={String(option.value)} value={String(option.value)}>{t(option.label)}</option>
+                  ))}
+                </select>
+              </label>
+
               <div className="filter-buttons">
                 {[
                   ["all", "Все"],
@@ -3632,7 +3688,7 @@ export default function Home() {
                       {match.sport === "baseball" && /mlb/i.test(match.league) ? (
                         <button className="match-standings-button" onClick={() => openStandings(match)} type="button">{t("Таблица")}</button>
                       ) : null}
-                      <time>{match.time}</time>
+                      <time>{formatMatchDateTime(match, lang)}</time>
                     </div>
 
                     <div className="match-odds-row">
