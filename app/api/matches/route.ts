@@ -661,13 +661,14 @@ function displayTeamName(match: RawMatch, value: string): string {
 }
 
 function normalizeFootballParticipantAlias(value: string): string {
-  const cleaned = value
+  const tokens = value
     .replace(/[э]/g, "е")
     .replace(/[й]/g, "и")
-    .replace(/\bатлетик\b/g, "")
-    .replace(/\bсити\b/g, "")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .split(" ")
+    .filter((part) => !["атлетик", "athletic", "сити", "city", "клуб", "club"].includes(part));
+  const cleaned = tokens.join(" ");
   if (/^(вс|в с)\s+уондерерс(?:\s|$)/.test(cleaned)) return "вестерн сидней уондерерс";
   if (/^ws\s+wanderers(?:\s|$)/.test(cleaned)) return "western sydney wanderers";
   if (/^реил[ув]еи(?:\s|$)/.test(cleaned)) return "реилвеи";
@@ -735,6 +736,7 @@ function dedupeKey(match: RawMatch): string {
 }
 
 function mergeTimeToleranceMs(sport: string): number {
+  if (sport === "football") return 3 * 60 * 60 * 1000;
   return sport === "tennis" ? 90 * 60 * 1000 : 45 * 60 * 1000;
 }
 
@@ -762,6 +764,7 @@ function shouldDropMatch(match: RawMatch): boolean {
   if (match.sport === "ice-hockey" && /(magnitka|магнитка|cyber|esport|virtual|simulation|3x3|3x4|4x4|3 на 3|3 на 4|4 на 4|nhl \d|лига про|liga pro)/i.test(full)) return true;
   if (match.sport === "esports" && /(fc\s*\d{2}|fifa|efootball|nhl\s*\d|nba\s*\d|h2h.*liga|liga.*h2h|h2h.*2x4|2x4.*h2h|2x4|2\s*x\s*4|h2h.*2x2|2x2.*h2h|2x2|2\s*x\s*2)/i.test(full)) return true;
   if (match.sport === "tennis" && /(double faults|aces|statistics|stats|двойн.*ошиб|эйс|статист)/i.test(full)) return true;
+  if (match.sport === "volleyball" && /(russia|россия).*(amateur|любительск)|(?:amateur|любительск).*(russia|россия)/i.test(full)) return true;
   if (match.sport === "volleyball" && /(belarus|беларус).*(minsk league|лига минска)|(?:minsk league|лига минска).*(belarus|беларус)/i.test(full)) return true;
   if (match.sport === "volleyball" && /(belarus|беларус).*(amateur|любительск)|(?:amateur|любительск).*(belarus|беларус)/i.test(full)) return true;
   if (match.sport === "baseball" && /(basketball|баскет|nba|euroleague|баскетбол)/i.test(full)) return true;
