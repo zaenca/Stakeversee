@@ -286,6 +286,22 @@ function splitCountryLeague(league: string): { country: string; league: string }
   return { country: "World", league: league || "World" };
 }
 
+function isSportHeaderName(value: string): boolean {
+  return /^(football|футбол|basketball|баскетбол|baseball|бейсбол|volleyball|волейбол|tennis|теннис|hockey|хоккей|handball|гандбол|cyber|кибер|киберспорт)$/i
+    .test(value.trim());
+}
+
+function splitTennisiCountryLeague(prefix: string, value: string): { country: string; league: string } {
+  const parsed = splitCountryLeague(value);
+  if (isSportHeaderName(prefix)) {
+    return isKnownCountry(parsed.country) ? parsed : { country: "World", league: value.trim() || "Tennisi" };
+  }
+
+  const countryCandidate = normalizeCountryName(prefix);
+  if (isKnownCountry(countryCandidate)) return { country: countryCandidate, league: value.trim() || "Tennisi" };
+  return isKnownCountry(parsed.country) ? parsed : { country: "World", league: `${countryCandidate} — ${value.trim()}` };
+}
+
 const COUNTRY_NAME_MAP: Record<string, string> = {
   "\u0411\u0415\u041b\u0410\u0420\u0423\u0421\u042c": "Belarus", "\u0420\u041e\u0421\u0421\u0418\u042f": "Russia", "\u0423\u041a\u0420\u0410\u0418\u041d\u0410": "Ukraine",
   "\u042f\u041f\u041e\u041d\u0418\u042f": "Japan", "\u041a\u0418\u0422\u0410\u0419": "China", "\u041a\u041e\u0420\u0415\u042f": "South Korea",
@@ -535,8 +551,9 @@ function parseTennisiHtml(html: string, sport: string): RawMatch[] {
     const headerText = stripTags(rowHtml);
     const leagueMatch = headerText.match(/^(.+?)\s*::\s*(.+)$/);
     if (leagueMatch) {
-      country = normalizeCountryName(leagueMatch[1]);
-      league = leagueMatch[2].trim();
+      const locale = splitTennisiCountryLeague(leagueMatch[1], leagueMatch[2]);
+      country = locale.country;
+      league = locale.league;
       columns = [];
       continue;
     }
@@ -643,9 +660,15 @@ function displayTeamName(match: RawMatch, value: string): string {
 }
 
 function normalizeFootballParticipantAlias(value: string): string {
-  const cleaned = value.replace(/\s+/g, " ").trim();
+  const cleaned = value
+    .replace(/[э]/g, "е")
+    .replace(/[й]/g, "и")
+    .replace(/\bатлетик\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (/^(вс|в с)\s+уондерерс(?:\s|$)/.test(cleaned)) return "вестерн сидней уондерерс";
   if (/^ws\s+wanderers(?:\s|$)/.test(cleaned)) return "western sydney wanderers";
+  if (/^реил[ув]еи(?:\s|$)/.test(cleaned)) return "реилвеи";
   return cleaned;
 }
 
