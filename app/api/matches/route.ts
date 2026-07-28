@@ -291,10 +291,66 @@ function isSportHeaderName(value: string): boolean {
     .test(value.trim());
 }
 
+const COUNTRY_FROM_LEAGUE_KEYWORDS: Array<[RegExp, string]> = [
+  [/болгар(ия|ии|ский|ская|ское)/i, "Bulgaria"],
+  [/уругва(й|я|йский|йская|йское)/i, "Uruguay"],
+  [/литв(а|ы|ы|ский|ская|ское)/i, "Lithuania"],
+  [/росси(я|и|йский|йская|йское)/i, "Russia"],
+  [/беларус(ь|и|ский|ская|ское)/i, "Belarus"],
+  [/инд(ия|ии|ийский|ийская|ийское)/i, "India"],
+  [/бутан(а|ский|ская|ское)?/i, "Bhutan"],
+  [/бразили(я|и|йский|йская|йское)/i, "Brazil"],
+  [/австрали(я|и|йский|йская|йское)/i, "Australia"],
+  [/аргентин(а|ы|ский|ская|ское)/i, "Argentina"],
+  [/мексик(а|и|анский|анская|анское)/i, "Mexico"],
+  [/чили(йский|йская|йское)?/i, "Chile"],
+  [/колумби(я|и|йский|йская|йское)/i, "Colombia"],
+  [/перу(анский|анская|анское)?/i, "Peru"],
+  [/егип(ет|та|етский|етская|етское)/i, "Egypt"],
+  [/марокко|мароккан/i, "Morocco"],
+  [/тунис(а|ский|ская|ское)?/i, "Tunisia"],
+  [/казахстан(а|ский|ская|ское)?/i, "Kazakhstan"],
+  [/таиланд(а|ский|ская|ское)?/i, "Thailand"],
+  [/индонези(я|и|йский|йская|йское)/i, "Indonesia"],
+  [/малайзи(я|и|йский|йская|йское)/i, "Malaysia"],
+  [/сингапур(а|ский|ская|ское)?/i, "Singapore"],
+  [/филиппин(ы|ский|ская|ское)?/i, "Philippines"],
+  [/саудовск|саудовская аравия|саудовской аравии/i, "Saudi Arabia"],
+  [/турци(я|и|ецкий|ецкая|ецкое)/i, "Turkey"],
+  [/польш(а|и|ский|ская|ское)/i, "Poland"],
+  [/германи(я|и|йский|йская|йское)/i, "Germany"],
+  [/франци(я|и|йский|йская|йское)/i, "France"],
+  [/испани(я|и|йский|йская|йское)/i, "Spain"],
+  [/итали(я|и|йский|йская|йское)/i, "Italy"],
+  [/португали(я|и|йский|йская|йское)/i, "Portugal"],
+  [/нидерланд(ы|ов|ский|ская|ское)/i, "Netherlands"],
+  [/бельги(я|и|йский|йская|йское)/i, "Belgium"],
+  [/швеци(я|и|йский|йская|йское)/i, "Sweden"],
+  [/норвеги(я|и|йский|йская|йское)/i, "Norway"],
+  [/дани(я|и|йский|йская|йское)/i, "Denmark"],
+  [/финлянди(я|и|йский|йская|йское)/i, "Finland"],
+  [/швейцари(я|и|йский|йская|йское)/i, "Switzerland"],
+  [/австри(я|и|йский|йская|йское)/i, "Austria"],
+  [/греци(я|и|йский|йская|йское)/i, "Greece"],
+  [/венгри(я|и|ерский|ерская|ерское)/i, "Hungary"],
+  [/румыни(я|и|ский|ская|ское)/i, "Romania"],
+  [/хорвати(я|и|йский|йская|йское)/i, "Croatia"],
+  [/серби(я|и|йский|йская|йское)/i, "Serbia"],
+  [/словаки(я|и|йский|йская|йское)/i, "Slovakia"],
+  [/чехи(я|и|йский|йская|йское)/i, "Czech Republic"],
+  [/израил(ь|я|ьский|ьская|ьское)/i, "Israel"]
+];
+
+function inferCountryFromLeague(value: string): string | null {
+  return COUNTRY_FROM_LEAGUE_KEYWORDS.find(([pattern]) => pattern.test(value))?.[1] || null;
+}
+
 function splitTennisiCountryLeague(prefix: string, value: string): { country: string; league: string } {
   const parsed = splitCountryLeague(value);
   if (isSportHeaderName(prefix)) {
-    return isKnownCountry(parsed.country) ? parsed : { country: "World", league: value.trim() || "Tennisi" };
+    if (isKnownCountry(parsed.country)) return parsed;
+    const inferredCountry = inferCountryFromLeague(value);
+    return inferredCountry ? { country: inferredCountry, league: value.trim() || "Tennisi" } : { country: "World", league: value.trim() || "Tennisi" };
   }
 
   const countryCandidate = normalizeCountryName(prefix);
@@ -317,6 +373,7 @@ const COUNTRY_NAME_MAP: Record<string, string> = {
   "\u0421\u041b\u041e\u0412\u0410\u041a\u0418\u042f": "Slovakia", "\u0427\u0415\u0425\u0418\u042f": "Czech Republic", "\u0418\u0417\u0420\u0410\u0418\u041b\u042c": "Israel",
   "\u041a\u0410\u0417\u0410\u0425\u0421\u0422\u0410\u041d": "Kazakhstan", "\u0422\u0410\u0418\u041b\u0410\u041d\u0414": "Thailand", "\u0418\u041d\u0414\u0418\u042f": "India",
   "\u0411\u0423\u0422\u0410\u041d": "Bhutan",
+  "\u0423\u0420\u0423\u0413\u0412\u0410\u0419": "Uruguay",
   "\u0422\u0410\u0419\u0412\u0410\u041d\u042c": "Taiwan", "\u041c\u0423\u0416\u0427\u0418\u041d\u042b": "ATP", "\u0416\u0415\u041d\u0429\u0418\u041d\u042b": "WTA",
 };
 
@@ -334,7 +391,7 @@ const KNOWN_COUNTRIES = new Set([
   "canada", "serbia", "croatia", "czech republic", "romania", "sweden",
   "norway", "denmark", "finland", "switzerland", "austria", "greece",
   "hungary", "slovakia", "bulgaria", "israel", "kazakhstan", "belarus",
-  "thailand", "india", "bhutan", "taiwan", "new zealand", "indonesia", "iran",
+  "thailand", "india", "bhutan", "uruguay", "taiwan", "new zealand", "indonesia", "iran",
   "united arab emirates", "qatar", "chile", "colombia", "peru", "egypt",
   "morocco", "tunisia", "lithuania", "latvia", "estonia", "philippines",
   "saudi arabia", "scotland", "wales", "ireland", "slovenia",
@@ -716,6 +773,8 @@ function areSimilarParticipants(a: string, b: string): boolean {
   if (a === b) return true;
   const maxLength = Math.max(a.length, b.length);
   if (maxLength < 4) return false;
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  if (shorter.length >= 3 && longer.split(" ").includes(shorter)) return true;
   return editDistance(a, b) <= Math.max(1, Math.floor(maxLength * 0.34));
 }
 
