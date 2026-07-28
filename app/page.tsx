@@ -680,6 +680,10 @@ function betOutcomeSignature(bet: Pick<BetRow, "event_name" | "market" | "select
 
 function analysisParticipantKey(match: MatchRow, value: string): string {
   const normalized = safeNormalizeForBetSignature(value);
+  if (match.sport === "baseball") {
+    const parts = normalized.split(" ").filter(Boolean);
+    return parts.slice(0, 2).join(" ") || normalized;
+  }
   if (match.sport !== "tennis") return normalized;
 
   const surname = normalized
@@ -691,9 +695,22 @@ function analysisParticipantKey(match: MatchRow, value: string): string {
 
 function analysisMatchKey(match: MatchRow): string {
   const startsAt = match.startsAt ? new Date(match.startsAt).getTime() : 0;
-  const timeBucket = startsAt ? Math.round(startsAt / (15 * 60 * 1000)) : safeNormalizeForBetSignature(match.time || "");
+  const bucketMinutes = match.sport === "tennis" ? 120 : 60;
+  const timeBucket = startsAt ? Math.round(startsAt / (bucketMinutes * 60 * 1000)) : safeNormalizeForBetSignature(match.time || "");
   const participants = [analysisParticipantKey(match, match.home), analysisParticipantKey(match, match.away)].sort().join("~");
   return [match.sport, timeBucket, participants].join("|");
+}
+
+function uniqueAnalyzedMatches(matches: MatchRow[]) {
+  const byKey = new Map<string, MatchRow>();
+  matches.forEach(match => {
+    const key = analysisMatchKey(match);
+    const current = byKey.get(key);
+    if (!current || match.confidence >= current.confidence) {
+      byKey.set(key, match);
+    }
+  });
+  return Array.from(byKey.values()).sort((a, b) => b.confidence - a.confidence);
 }
 
 function uniqueBetsByOutcome(bets: BetRow[]): BetRow[] {
@@ -1964,6 +1981,8 @@ export default function Home() {
     }));
   }, [standingsRows]);
 
+  const visibleAnalyzedMatches = useMemo(() => uniqueAnalyzedMatches(analyzedMatches), [analyzedMatches]);
+
   async function refreshMatchesWindow() {
     const cachedMatches = readCachedMatches();
     if (cachedMatches.length) {
@@ -2065,12 +2084,7 @@ export default function Home() {
     setDataMessage("");
 
     try {
-      const uniqueMatches = Array.from(
-        matches.reduce((byKey, match) => {
-          byKey.set(analysisMatchKey(match), match);
-          return byKey;
-        }, new Map<string, MatchRow>()).values()
-      );
+      const uniqueMatches = uniqueAnalyzedMatches(matches);
 
       if (user) {
         const rows = uniqueMatches.map(match => ({
@@ -2095,9 +2109,7 @@ export default function Home() {
       }
 
       setAnalyzedMatches(current => {
-        const byKey = new Map(current.map(match => [analysisMatchKey(match), match]));
-        uniqueMatches.forEach(match => byKey.set(analysisMatchKey(match), match));
-        return Array.from(byKey.values()).sort((a, b) => b.confidence - a.confidence);
+        return uniqueAnalyzedMatches([...current, ...uniqueMatches]);
       });
       if (openAssistant) setAssistantOpen(true);
 
@@ -4647,19 +4659,20 @@ export default function Home() {
                 {assistantTab === "analysis" ? (
                   <>
                     <div className="assistant-section-head">
-                      <span>{analyzing ? t("Анализирую линию...") : `${analyzedMatches.length} ${t("матчей")}`}</span>
+                      <span>{analyzing ? t("Анализирую линию...") : `${visibleAnalyzedMatches.length} ${t("матчей")}`}</span>
                     </div>
 
                     <div className="assistant-feed">
-                      {analyzedMatches.length ? (
-                        analyzedMatches.map(match => (
-                          <div className={`assistant-feed-item tier-${confidenceTier(match.confidence)}`} key={match.id}>
+                      {visibleAnalyzedMatches.length ? (
+                        visibleAnalyzedMatches.map(match => (
+                          <div className={`assistant-feed-item tier-${confidenceTier(match.confidence)}`} key={analysisMatchKey(match)}>
                             <div className="assistant-feed-teams">
                               <span>{match.home}</span>
                               <span className="assistant-feed-vs">—</span>
                               <span>{match.away}</span>
                             </div>
                             <div className="assistant-feed-meta">
+                              <span>{formatMatchDateTime(match, lang)}</span>
                               <span className="assistant-feed-league">{match.league}</span>
                               <span className="assistant-feed-odds">{match.odds.filter(odd => odd && odd !== "-").join(" / ")}</span>
                             </div>
