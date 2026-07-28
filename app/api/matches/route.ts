@@ -643,10 +643,10 @@ function displayTeamName(match: RawMatch, value: string): string {
 }
 
 function normalizeFootballParticipantAlias(value: string): string {
-  return value
-    .replace(/^вс уондерерс\b/, "вестерн сидней уондерерс")
-    .replace(/^ws wanderers\b/, "western sydney wanderers")
-    .trim();
+  const cleaned = value.replace(/\s+/g, " ").trim();
+  if (/^(вс|в с)\s+уондерерс(?:\s|$)/.test(cleaned)) return "вестерн сидней уондерерс";
+  if (/^ws\s+wanderers(?:\s|$)/.test(cleaned)) return "western sydney wanderers";
+  return cleaned;
 }
 
 function normalizedMatchParticipant(match: RawMatch, value: string): string {
