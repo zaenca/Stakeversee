@@ -106,6 +106,7 @@ const bookmakerOptions = [
   "PARI",
   "Fonbet",
   "TENNISI",
+  "Олимп",
   "Мелбет",
   "BetBoom",
   "Winline",
@@ -629,6 +630,8 @@ const BOOKMAKER_LOGOS: Record<string, string> = {
   "мелбет": "/bookmakers/melbet.png",
   winline: "/bookmakers/winline.png",
   leon: "/bookmakers/leon.png",
+  "олимп": "/bookmakers/olimp.png",
+  olimp: "/bookmakers/olimp.png",
   "лига ставок": "/bookmakers/liga-stavok.png",
   pari: "/bookmakers/pari.png"
 };
@@ -1078,6 +1081,11 @@ function BookmakerDropdownField({ onChange, options, placeholder, value }: Bookm
         type="button"
       >
         <span className="source-dropdown-trigger-label">
+          {getBookmakerLogo(value) ? (
+            <span className="bookmaker-select-logo">
+              <img alt="" src={getBookmakerLogo(value)!} />
+            </span>
+          ) : null}
           {value ? t(value) : (placeholder || t("— выберите букмекера —"))}
         </span>
         <span className="source-dropdown-caret" aria-hidden="true">▾</span>
@@ -1096,7 +1104,14 @@ function BookmakerDropdownField({ onChange, options, placeholder, value }: Bookm
               aria-selected={bookmaker === value}
               type="button"
             >
-              <span className="source-dropdown-item-label">{t(bookmaker)}</span>
+              <span className="source-dropdown-item-label">
+                {getBookmakerLogo(bookmaker) ? (
+                  <span className="bookmaker-select-logo">
+                    <img alt="" src={getBookmakerLogo(bookmaker)!} />
+                  </span>
+                ) : null}
+                {t(bookmaker)}
+              </span>
             </button>
           ))}
         </div>
