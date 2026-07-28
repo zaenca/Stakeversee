@@ -169,6 +169,36 @@ function splitTeams(value: string): [string, string] | null {
   return parts.length >= 2 ? [parts[0], parts.slice(1).join(" - ")] : null;
 }
 
+function parseTennisiStartMs(dateText: string, baseYear: number, baseMonth: number, baseDay: number, dayOffset: number): number | null {
+  const timeMatch = dateText.match(/(\d{1,2}):(\d{2})/);
+  if (!timeMatch) return null;
+
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  const numericDate = dateText.match(/(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?/);
+
+  let year = baseYear;
+  let month = baseMonth;
+  let day = baseDay + dayOffset;
+
+  if (numericDate) {
+    day = Number(numericDate[1]);
+    month = Number(numericDate[2]) - 1;
+    if (numericDate[3]) {
+      year = Number(numericDate[3]);
+      if (year < 100) year += 2000;
+    }
+  }
+
+  const startMs = Date.UTC(year, month, day, hour - 3, minute);
+  const baseMs = Date.UTC(baseYear, baseMonth, baseDay, 0, 0);
+  const monthMs = 30 * 24 * 60 * 60 * 1000;
+
+  return numericDate && startMs < baseMs - monthMs
+    ? Date.UTC(year + 1, month, day, hour - 3, minute)
+    : startMs;
+}
+
 function decimalOdd(value: unknown): number | null {
   const odd = asNumber(value);
   return odd >= 1.01 && odd <= 100 ? odd : null;
@@ -519,7 +549,8 @@ function parseTennisiHtml(html: string, sport: string): RawMatch[] {
     const cells = [...rowHtml.matchAll(/<td\b[\s\S]*?<\/td>/gi)].map((cell) => cell[0]);
     if (cells.length < 5) continue;
 
-    const time = stripTags(cells[1]).match(/\d{1,2}:\d{2}/)?.[0];
+    const dateText = stripTags(cells[1]);
+    const time = dateText.match(/\d{1,2}:\d{2}/)?.[0];
     const teams = splitTeams(cells[2]);
     if (!time || !teams) continue;
 
@@ -538,8 +569,8 @@ function parseTennisiHtml(html: string, sport: string): RawMatch[] {
     });
 
     if (!homeOdd || !awayOdd) continue;
-    const [hour, minute] = time.split(":").map(Number);
-    const startMs = Date.UTC(baseYear, baseMonth, baseDay + dayOffset, hour - 3, minute);
+    const startMs = parseTennisiStartMs(dateText, baseYear, baseMonth, baseDay, dayOffset);
+    if (!startMs) continue;
     const odds: BookmakerOdds = {
       bookmaker: "Tennisi",
       home: homeOdd,
@@ -582,7 +613,9 @@ function normalizedName(value: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[ё]/g, "е")
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
     .replace(/\b(fc|fk|bc|hc|cf|sc|club|w|women|u\d+)\b/g, "")
+    .replace(/\bматч\s+в\s+[a-zа-я0-9]+\b/gi, " ")
     .replace(/[^a-zа-я0-9]+/gi, " ")
     .trim();
 }
