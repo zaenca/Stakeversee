@@ -316,6 +316,7 @@ const COUNTRY_NAME_MAP: Record<string, string> = {
   "\u0411\u041e\u041b\u0413\u0410\u0420\u0418\u042f": "Bulgaria", "\u0425\u041e\u0420\u0412\u0410\u0422\u0418\u042f": "Croatia", "\u0421\u0415\u0420\u0411\u0418\u042f": "Serbia",
   "\u0421\u041b\u041e\u0412\u0410\u041a\u0418\u042f": "Slovakia", "\u0427\u0415\u0425\u0418\u042f": "Czech Republic", "\u0418\u0417\u0420\u0410\u0418\u041b\u042c": "Israel",
   "\u041a\u0410\u0417\u0410\u0425\u0421\u0422\u0410\u041d": "Kazakhstan", "\u0422\u0410\u0418\u041b\u0410\u041d\u0414": "Thailand", "\u0418\u041d\u0414\u0418\u042f": "India",
+  "\u0411\u0423\u0422\u0410\u041d": "Bhutan",
   "\u0422\u0410\u0419\u0412\u0410\u041d\u042c": "Taiwan", "\u041c\u0423\u0416\u0427\u0418\u041d\u042b": "ATP", "\u0416\u0415\u041d\u0429\u0418\u041d\u042b": "WTA",
 };
 
@@ -333,7 +334,7 @@ const KNOWN_COUNTRIES = new Set([
   "canada", "serbia", "croatia", "czech republic", "romania", "sweden",
   "norway", "denmark", "finland", "switzerland", "austria", "greece",
   "hungary", "slovakia", "bulgaria", "israel", "kazakhstan", "belarus",
-  "thailand", "india", "taiwan", "new zealand", "indonesia", "iran",
+  "thailand", "india", "bhutan", "taiwan", "new zealand", "indonesia", "iran",
   "united arab emirates", "qatar", "chile", "colombia", "peru", "egypt",
   "morocco", "tunisia", "lithuania", "latvia", "estonia", "philippines",
   "saudi arabia", "scotland", "wales", "ireland", "slovenia",
@@ -664,6 +665,7 @@ function normalizeFootballParticipantAlias(value: string): string {
     .replace(/[э]/g, "е")
     .replace(/[й]/g, "и")
     .replace(/\bатлетик\b/g, "")
+    .replace(/\bсити\b/g, "")
     .replace(/\s+/g, " ")
     .trim();
   if (/^(вс|в с)\s+уондерерс(?:\s|$)/.test(cleaned)) return "вестерн сидней уондерерс";
