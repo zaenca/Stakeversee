@@ -169,6 +169,21 @@ function splitTeams(value: string): [string, string] | null {
   return parts.length >= 2 ? [parts[0], parts.slice(1).join(" - ")] : null;
 }
 
+const TENNISI_MONTH_NAMES: Record<string, number> = {
+  "ЯНВАРЯ": 0,
+  "ФЕВРАЛЯ": 1,
+  "МАРТА": 2,
+  "АПРЕЛЯ": 3,
+  "МАЯ": 4,
+  "ИЮНЯ": 5,
+  "ИЮЛЯ": 6,
+  "АВГУСТА": 7,
+  "СЕНТЯБРЯ": 8,
+  "ОКТЯБРЯ": 9,
+  "НОЯБРЯ": 10,
+  "ДЕКАБРЯ": 11
+};
+
 function parseTennisiStartMs(dateText: string, baseYear: number, baseMonth: number, baseDay: number, dayOffset: number): number | null {
   const timeMatch = dateText.match(/(\d{1,2}):(\d{2})/);
   if (!timeMatch) return null;
@@ -176,6 +191,7 @@ function parseTennisiStartMs(dateText: string, baseYear: number, baseMonth: numb
   const hour = Number(timeMatch[1]);
   const minute = Number(timeMatch[2]);
   const numericDate = dateText.match(/(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?/);
+  const wordDate = dateText.match(/(\d{1,2})\s+([А-ЯЁ]+)/i);
 
   let year = baseYear;
   let month = baseMonth;
@@ -189,12 +205,19 @@ function parseTennisiStartMs(dateText: string, baseYear: number, baseMonth: numb
       if (year < 100) year += 2000;
     }
   }
+  if (!numericDate && wordDate) {
+    const parsedMonth = TENNISI_MONTH_NAMES[wordDate[2].toUpperCase()];
+    if (parsedMonth !== undefined) {
+      day = Number(wordDate[1]);
+      month = parsedMonth;
+    }
+  }
 
   const startMs = Date.UTC(year, month, day, hour - 3, minute);
   const baseMs = Date.UTC(baseYear, baseMonth, baseDay, 0, 0);
   const monthMs = 30 * 24 * 60 * 60 * 1000;
 
-  return numericDate && startMs < baseMs - monthMs
+  return (numericDate || wordDate) && startMs < baseMs - monthMs
     ? Date.UTC(year + 1, month, day, hour - 3, minute)
     : startMs;
 }
@@ -497,28 +520,15 @@ async function fetchTennisiCategory(category: { categoryId: number; path: string
 
 function parseTennisiHtml(html: string, sport: string): RawMatch[] {
   const serverDate = html.match(/server_time">(\d{1,2})\s+([А-ЯЁ]+)\s+(\d{4})/i);
-  const monthNames: Record<string, number> = {
-    "ЯНВАРЯ": 0,
-    "ФЕВРАЛЯ": 1,
-    "МАРТА": 2,
-    "АПРЕЛЯ": 3,
-    "МАЯ": 4,
-    "ИЮНЯ": 5,
-    "ИЮЛЯ": 6,
-    "АВГУСТА": 7,
-    "СЕНТЯБРЯ": 8,
-    "ОКТЯБРЯ": 9,
-    "НОЯБРЯ": 10,
-    "ДЕКАБРЯ": 11
-  };
   const baseDay = serverDate ? Number(serverDate[1]) : new Date().getUTCDate();
-  const baseMonth = serverDate ? monthNames[serverDate[2].toUpperCase()] ?? new Date().getUTCMonth() : new Date().getUTCMonth();
+  const baseMonth = serverDate ? TENNISI_MONTH_NAMES[serverDate[2].toUpperCase()] ?? new Date().getUTCMonth() : new Date().getUTCMonth();
   const baseYear = serverDate ? Number(serverDate[3]) : new Date().getUTCFullYear();
   const matches: RawMatch[] = [];
   let league = "Tennisi";
   let country = "World";
   let columns: string[] = [];
   let dayOffset = 0;
+  let dateHeader = "";
 
   for (const row of html.matchAll(/<tr\b[\s\S]*?<\/tr>/gi)) {
     const rowHtml = row[0];
@@ -532,10 +542,17 @@ function parseTennisiHtml(html: string, sport: string): RawMatch[] {
     }
     if (/^Сегодня$/i.test(headerText)) {
       dayOffset = 0;
+      dateHeader = "";
       continue;
     }
     if (/^Завтра$/i.test(headerText)) {
       dayOffset = 1;
+      dateHeader = "";
+      continue;
+    }
+    if (/^\d{1,2}\s+[А-ЯЁ]+(?:\s+\d{4})?$/i.test(headerText)) {
+      dayOffset = 0;
+      dateHeader = headerText;
       continue;
     }
 
@@ -549,7 +566,7 @@ function parseTennisiHtml(html: string, sport: string): RawMatch[] {
     const cells = [...rowHtml.matchAll(/<td\b[\s\S]*?<\/td>/gi)].map((cell) => cell[0]);
     if (cells.length < 5) continue;
 
-    const dateText = stripTags(cells[1]);
+    const dateText = `${dateHeader} ${stripTags(cells[1])}`.trim();
     const time = dateText.match(/\d{1,2}:\d{2}/)?.[0];
     const teams = splitTeams(cells[2]);
     if (!time || !teams) continue;
