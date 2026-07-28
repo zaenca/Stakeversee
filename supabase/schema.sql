@@ -81,6 +81,7 @@ create policy "bankroll own rows"
 -- Позволяет прикрепить к одной ставке несколько источников
 -- (source_id остаётся основным/первым источником, остальные - здесь)
 alter table public.bets add column if not exists extra_source_ids uuid[] not null default '{}';
+alter table public.bets add column if not exists source_stakes jsonb not null default '{}'::jsonb;
 
 -- ══════════════════════════════════════════════════════════════
 -- AI ПРОГНОЗЫ — хранит рекомендации модели по каждому матчу,

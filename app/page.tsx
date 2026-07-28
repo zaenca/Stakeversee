@@ -15,6 +15,8 @@ type SourceRow = {
   fixed_stake: number | null;
 };
 
+type SourceStakeMap = Record<string, number | string | null | undefined>;
+
 type ProfileRow = {
   login: string | null;
 };
@@ -30,6 +32,7 @@ type BetRow = {
   selection: string;
   odds: number | string;
   stake: number | string;
+  source_stakes: SourceStakeMap | null;
   result: "pending" | "win" | "loss" | "return";
   profit: number | string | null;
   settled_at: string | null;
@@ -187,13 +190,14 @@ function formatEventName(value: string): string {
   return value.replace(/\s+vs\s+/gi, " - ").replace(/\s+-\s+/g, " - ").trim();
 }
 
-function betProfitValue(bet: BetRow): number {
-  if (bet.profit !== null && bet.profit !== undefined) return Number(bet.profit || 0);
+function parseMoneyValue(value: unknown): number {
+  const amount = typeof value === "string" ? Number(value.replace(",", ".")) : Number(value || 0);
+  return Number.isFinite(amount) ? amount : 0;
+}
 
-  const stake = Number(bet.stake || 0);
-  const odds = Number(bet.odds || 0);
-  if (bet.result === "win") return stake * odds - stake;
-  if (bet.result === "loss") return -stake;
+function profitForStake(result: BetRow["result"], stake: number, odds: number): number {
+  if (result === "win") return stake * odds - stake;
+  if (result === "loss") return -stake;
   return 0;
 }
 
@@ -205,16 +209,42 @@ function getBetSourceIds(bet: BetRow): string[] {
   return Array.from(new Set(ids));
 }
 
-function betSourceCount(bet: BetRow): number {
-  return Math.max(1, getBetSourceIds(bet).length);
+function getBetSourceStake(bet: BetRow, sourceId: string): number {
+  const mappedStake = parseMoneyValue(bet.source_stakes?.[sourceId]);
+  return mappedStake > 0 ? mappedStake : parseMoneyValue(bet.stake);
+}
+
+function betStakeEntries(bet: BetRow): { sourceId: string; stake: number }[] {
+  const sourceIds = getBetSourceIds(bet);
+  if (!sourceIds.length) return [{ sourceId: "__no_source__", stake: parseMoneyValue(bet.stake) }];
+
+  return sourceIds.map(sourceId => ({
+    sourceId,
+    stake: getBetSourceStake(bet, sourceId)
+  }));
+}
+
+function makeSourceStakeMap(sourceIds: string[], fallbackStake: number, existing?: SourceStakeMap | null): Record<string, number> {
+  return sourceIds.reduce<Record<string, number>>((map, sourceId) => {
+    const stake = parseMoneyValue(existing?.[sourceId]);
+    map[sourceId] = stake > 0 ? stake : fallbackStake;
+    return map;
+  }, {});
+}
+
+function betProfitValue(bet: BetRow): number {
+  const odds = Number(bet.odds || 0);
+  return betStakeEntries(bet).reduce((sum, entry) => (
+    sum + profitForStake(bet.result, entry.stake, odds)
+  ), 0);
 }
 
 function betTotalStakeValue(bet: BetRow): number {
-  return Number(bet.stake || 0) * betSourceCount(bet);
+  return betStakeEntries(bet).reduce((sum, entry) => sum + entry.stake, 0);
 }
 
 function betTotalProfitValue(bet: BetRow): number {
-  return betProfitValue(bet) * betSourceCount(bet);
+  return betProfitValue(bet);
 }
 
 // Часовые пояса России + пара популярных зарубежных - для выбора в профиле
@@ -1161,6 +1191,7 @@ type EditBetForm = {
   event_name: string;
   bookmaker: string;
   odds: string;
+  source_stakes: Record<string, string>;
   stake: string;
   result: BetRow["result"];
 };
@@ -1207,7 +1238,6 @@ function BetCard({
   timezoneOffsetMinutes
 }: BetCardProps) {
   const { lang, t } = useLanguage();
-  const stake = Number(bet.stake || 0);
   const odds = Number(bet.odds || 0);
   const isEditing = editingBetId === bet.id && !!editForm;
   const cardRef = useRef<HTMLElement | null>(null);
@@ -1264,6 +1294,30 @@ function BetCard({
               value={editForm.stake}
             />
           </div>
+          {attachedSourceIds.length ? (
+            <div className="calendar-bet-source-stake-editor">
+              {attachedSourceIds.map(sourceId => (
+                <label className="calendar-bet-source-stake-field" key={sourceId}>
+                  <span>{sourceDisplayName(sourceById.get(sourceId)?.name)}</span>
+                  <input
+                    inputMode="decimal"
+                    onChange={event => {
+                      const nextValue = event.target.value;
+                      setEditForm(current => current ? {
+                        ...current,
+                        source_stakes: {
+                          ...current.source_stakes,
+                          [sourceId]: nextValue
+                        }
+                      } : current);
+                    }}
+                    placeholder={t("Ð¡ÑƒÐ¼Ð¼Ð° â‚½")}
+                    value={editForm.source_stakes[sourceId] ?? editForm.stake}
+                  />
+                </label>
+              ))}
+            </div>
+          ) : null}
           <BookmakerDropdownField
             onChange={bookmaker => setEditForm(current => (current ? { ...current, bookmaker } : current))}
             options={bookmakerOptions}
@@ -1295,12 +1349,13 @@ function BetCard({
           </div>
           <div className="calendar-bet-meta">
             {extraMeta ? <span>{extraMeta}</span> : null}
-            <span>{formatMoney(stake)}</span>
+            <span>{formatMoney(betTotalStakeValue(bet))}</span>
             <span>{bet.bookmaker ? translateBookmakerLabel(bet.bookmaker, lang) : t("БК не указан")}</span>
           </div>
           <div className="calendar-bet-sources">
             {attachedSourceIds.length ? attachedSourceIds.map(sourceId => (
               <span className="calendar-bet-source-tag" key={sourceId}>
+                <small className="calendar-bet-source-stake">{formatMoney(getBetSourceStake(bet, sourceId))}</small>
                 {sourceDisplayName(sourceById.get(sourceId)?.name)}
                 <button
                   aria-label={t("Убрать источник")}
@@ -1634,7 +1689,7 @@ export default function Home() {
       const settlementKind = (settlement.kind === "return" ? "return" : settlement.kind === "win" ? "win" : "loss") as BetRow["result"];
       return {
         ...bet,
-        profit: Number(settlement.amount || 0) / betSourceCount(bet),
+        profit: Number(settlement.amount || 0),
         result: settlementKind,
         settled_at: settlement.created_at
       };
@@ -1757,9 +1812,10 @@ export default function Home() {
 
         // Полная сумма/результат ставки засчитывается КАЖДОМУ источнику -
         // не делится между ними, даже если их несколько на одной ставке.
+        const sourceStake = sourceId === "__no_source__" ? parseMoneyValue(bet.stake) : getBetSourceStake(bet, sourceId);
         stat.bets += 1;
-        stat.stake += Number(bet.stake || 0);
-        stat.profit += betProfitValue(bet);
+        stat.stake += sourceStake;
+        stat.profit += profitForStake(bet.result, sourceStake, Number(bet.odds || 0));
         stat.oddsSum += Number(bet.odds || 0);
 
         if (bet.result === "win") stat.wins += 1;
@@ -2297,7 +2353,7 @@ export default function Home() {
         .order("name", { ascending: true }),
       supabase
         .from("bets")
-        .select("id,source_id,extra_source_ids,event_name,sport,bookmaker,market,selection,odds,stake,result,profit,settled_at,created_at")
+        .select("id,source_id,extra_source_ids,source_stakes,event_name,sport,bookmaker,market,selection,odds,stake,result,profit,settled_at,created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(1000),
@@ -2546,6 +2602,7 @@ export default function Home() {
       selection: betForm.selection.trim(),
       odds,
       stake,
+      source_stakes: { [betForm.sourceId]: stake },
       result: "pending"
     });
 
@@ -2669,6 +2726,7 @@ export default function Home() {
       source_id: couponDraft.sourceId,
       bookmaker,
       stake: activeStake,
+      source_stakes: { [couponDraft.sourceId]: activeStake },
       result: "pending",
       ...payload
     });
@@ -2758,10 +2816,10 @@ export default function Home() {
   async function settleBet(bet: BetRow, result: "win" | "loss" | "return") {
     if (!user) return;
 
-    const stake = Number(bet.stake || 0);
+    const stake = parseMoneyValue(bet.stake);
     const odds = Number(bet.odds || 0);
-    const profit = result === "win" ? stake * odds - stake : result === "loss" ? -stake : 0;
-    const bankrollAmount = profit * betSourceCount(bet);
+    const profit = profitForStake(result, stake, odds);
+    const bankrollAmount = betTotalProfitValue({ ...bet, result });
     const settledAt = new Date().toISOString();
 
     setDataLoading(true);
@@ -2822,12 +2880,18 @@ export default function Home() {
   }
 
   function startEditBet(bet: BetRow) {
+    const sourceIds = getBetSourceIds(bet);
+    const fallbackStake = parseMoneyValue(bet.stake);
     setEditingBetId(bet.id);
     setEditForm({
       event_name: formatEventName(bet.event_name),
       bookmaker: bet.bookmaker || "",
       odds: String(bet.odds ?? ""),
       stake: String(bet.stake ?? ""),
+      source_stakes: sourceIds.reduce<Record<string, string>>((map, sourceId) => {
+        map[sourceId] = String(getBetSourceStake(bet, sourceId) || fallbackStake || "");
+        return map;
+      }, {}),
       result: bet.result
     });
   }
@@ -2843,20 +2907,36 @@ export default function Home() {
     if (!bet) return;
 
     const odds = parseFloat(editForm.odds.replace(",", ".")) || 0;
-    const stake = parseFloat(editForm.stake.replace(",", ".")) || 0;
+    const sourceIds = getBetSourceIds(bet);
+    const fallbackStake = parseMoneyValue(editForm.stake);
+    const sourceStakes = sourceIds.length
+      ? sourceIds.reduce<Record<string, number>>((map, sourceId) => {
+          const stake = parseMoneyValue(editForm.source_stakes[sourceId]);
+          map[sourceId] = stake > 0 ? stake : fallbackStake;
+          return map;
+        }, {})
+      : {};
+    const primaryStake = sourceIds.length ? (sourceStakes[sourceIds[0]] || 0) : fallbackStake;
     const eventName = editForm.event_name.trim() || bet.event_name;
     const bookmaker = editForm.bookmaker.trim();
     const result = editForm.result;
 
-    if (odds <= 0 || stake < 0) {
+    if (odds <= 0 || primaryStake < 0 || Object.values(sourceStakes).some(stake => stake < 0)) {
       setDataMessage(t("Проверь коэффициент и сумму ставки."));
       return;
     }
 
     setDataLoading(true);
 
-    const profit = result === "win" ? stake * odds - stake : result === "loss" ? -stake : result === "return" ? 0 : null;
-    const bankrollAmount = profit === null ? null : profit * betSourceCount(bet);
+    const nextBetForTotals: BetRow = {
+      ...bet,
+      odds,
+      stake: primaryStake,
+      source_stakes: sourceStakes,
+      result
+    };
+    const profit = result === "pending" ? null : profitForStake(result, primaryStake, odds);
+    const bankrollAmount = result === "pending" ? null : betTotalProfitValue(nextBetForTotals);
     const settledAt = result === "pending" ? null : (bet.settled_at || new Date().toISOString());
 
     const payload: {
@@ -2864,6 +2944,7 @@ export default function Home() {
       bookmaker: string | null;
       odds: number;
       stake: number;
+      source_stakes: Record<string, number>;
       result: BetRow["result"];
       profit: number | null;
       settled_at: string | null;
@@ -2871,7 +2952,8 @@ export default function Home() {
       event_name: eventName,
       bookmaker: bookmaker || null,
       odds,
-      stake,
+      stake: primaryStake,
+      source_stakes: sourceStakes,
       result,
       profit,
       settled_at: settledAt
@@ -2956,7 +3038,7 @@ export default function Home() {
 
     const { data: allBets, error: betsError } = await supabase
       .from("bets")
-      .select("id,source_id,extra_source_ids,event_name,market,selection,odds,stake,result,profit,settled_at,created_at")
+      .select("id,source_id,extra_source_ids,source_stakes,event_name,market,selection,odds,stake,result,profit,settled_at,created_at")
       .eq("user_id", user.id)
       .neq("result", "pending")
       .limit(5000);
@@ -2980,13 +3062,8 @@ export default function Home() {
     }
 
     const rows = (allBets || []).map(row => {
-      const stake = Number(row.stake || 0);
-      const odds = Number(row.odds || 0);
       const result = row.result as "win" | "loss" | "return";
-      const unitProfit = row.profit !== null && row.profit !== undefined
-        ? Number(row.profit)
-        : result === "win" ? stake * odds - stake : result === "loss" ? -stake : 0;
-      const profit = unitProfit * betSourceCount(row as BetRow);
+      const profit = betTotalProfitValue({ ...(row as BetRow), result });
 
       return {
         user_id: user.id,
@@ -3024,9 +3101,16 @@ export default function Home() {
 
     // Если у ставки ещё нет ни одного источника - новый становится основным,
     // иначе добавляется как дополнительный (оба получают полный результат ставки).
-    const payload: { source_id?: string; extra_source_ids?: string[] } = !bet.source_id
-      ? { source_id: sourceId }
-      : { extra_source_ids: [...(bet.extra_source_ids || []), sourceId] };
+    const nextSourceIds = !bet.source_id ? [sourceId] : [...currentIds, sourceId];
+    const source = sources.find(row => row.id === sourceId);
+    const addedStake = parseMoneyValue(source?.fixed_stake) || parseMoneyValue(bet.stake);
+    const source_stakes = {
+      ...makeSourceStakeMap(currentIds, parseMoneyValue(bet.stake), bet.source_stakes),
+      [sourceId]: addedStake
+    };
+    const payload: { source_id?: string; extra_source_ids?: string[]; source_stakes: Record<string, number> } = !bet.source_id
+      ? { source_id: sourceId, source_stakes: makeSourceStakeMap(nextSourceIds, addedStake, source_stakes) }
+      : { extra_source_ids: [...(bet.extra_source_ids || []), sourceId], source_stakes };
 
     const { error } = await supabase
       .from("bets")
@@ -3051,14 +3135,18 @@ export default function Home() {
     if (!user) return;
     setDataLoading(true);
 
-    let payload: { source_id?: string | null; extra_source_ids?: string[] };
+    let payload: { source_id?: string | null; extra_source_ids?: string[]; source_stakes: Record<string, number> };
+    let nextSourceIds: string[];
     if (bet.source_id === sourceId) {
       // Основной источник убирают - продвигаем первый дополнительный на его место
       const extras = bet.extra_source_ids || [];
-      payload = { source_id: extras[0] || null, extra_source_ids: extras.slice(1) };
+      nextSourceIds = extras;
+      payload = { source_id: extras[0] || null, extra_source_ids: extras.slice(1), source_stakes: {} };
     } else {
-      payload = { extra_source_ids: (bet.extra_source_ids || []).filter(id => id !== sourceId) };
+      nextSourceIds = getBetSourceIds(bet).filter(id => id !== sourceId);
+      payload = { extra_source_ids: (bet.extra_source_ids || []).filter(id => id !== sourceId), source_stakes: {} };
     }
+    payload.source_stakes = makeSourceStakeMap(nextSourceIds, parseMoneyValue(bet.stake), bet.source_stakes);
 
     const { error } = await supabase
       .from("bets")

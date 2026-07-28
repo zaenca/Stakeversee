@@ -2914,24 +2914,62 @@ h1 {
 }
 
 .calendar-bet-source-tag {
-  align-items: center;
+  align-items: flex-start;
   background: rgba(0, 229, 255, 0.07);
   border: 1px solid rgba(0, 229, 255, 0.24);
-  border-radius: 999px;
+  border-radius: 8px;
   color: var(--cyan);
   display: inline-flex;
+  flex-direction: column;
   font-size: 0.72rem;
   font-weight: 700;
-  gap: 6px;
-  padding: 4px 6px 4px 10px;
+  gap: 3px;
+  min-width: 84px;
+  padding: 5px 28px 5px 8px;
+  position: relative;
 }
 
 .calendar-bet-source-tag.empty {
+  align-items: center;
   background: rgba(255, 255, 255, 0.04);
   border-color: var(--line);
   color: var(--muted);
+  flex-direction: row;
   font-weight: 500;
+  min-width: 0;
   padding: 4px 10px;
+}
+
+.calendar-bet-source-stake {
+  color: var(--text);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.calendar-bet-source-tag > button {
+  bottom: 5px;
+  position: absolute;
+  right: 6px;
+}
+
+.calendar-bet-source-stake-editor {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.calendar-bet-source-stake-field {
+  display: grid;
+  gap: 5px;
+}
+
+.calendar-bet-source-stake-field span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .calendar-bet-source-tag button {
