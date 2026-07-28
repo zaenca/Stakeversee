@@ -642,9 +642,17 @@ function displayTeamName(match: RawMatch, value: string): string {
   return MLB_TEAM_NAME_BY_ALIAS.get(normalizedName(value)) || value;
 }
 
+function normalizeFootballParticipantAlias(value: string): string {
+  return value
+    .replace(/^вс уондерерс\b/, "вестерн сидней уондерерс")
+    .replace(/^ws wanderers\b/, "western sydney wanderers")
+    .trim();
+}
+
 function normalizedMatchParticipant(match: RawMatch, value: string): string {
   if (match.sport === "baseball") return normalizedName(displayTeamName(match, value));
   const normalized = normalizedName(value);
+  if (match.sport === "football") return normalizeFootballParticipantAlias(normalized);
   if (match.sport !== "tennis") return normalized;
 
   return normalized
@@ -720,7 +728,7 @@ function findMergeKey(byKey: Map<string, RawMatch>, match: RawMatch): string | n
 
 function shouldDropMatch(match: RawMatch): boolean {
   const full = `${match.country} ${match.league} ${match.home} ${match.away}`.toLowerCase();
-  if (match.sport !== "esports" && /(fc\s*\d{2}|fifa|efootball|h2h|cyber|virtual|simulation|simulator|2x4|2\s*x\s*4|mins?|liga-?\d|division-?\d|nhl\s*\d|nba\s*\d)/i.test(full)) return true;
+  if (match.sport !== "esports" && /(fc\s*\d{2}|fifa|efootball|h2h|cyber|virtual|simulation|simulator|synthetic|синтет|2x4|2\s*x\s*4|mins?|liga-?\d|division-?\d|nhl\s*\d|nba\s*\d)/i.test(full)) return true;
   // Симулированные "Лига Про" турниры России/Беларуси — исключаем для всех видов спорта
   if (/(liga pro|лига про|pro league)/i.test(full)) return true;
   // Команды с суффиксом "-Про" в названии (например "Тверь-про") - тот же формат
