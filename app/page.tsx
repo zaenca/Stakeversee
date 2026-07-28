@@ -205,6 +205,18 @@ function getBetSourceIds(bet: BetRow): string[] {
   return Array.from(new Set(ids));
 }
 
+function betSourceCount(bet: BetRow): number {
+  return Math.max(1, getBetSourceIds(bet).length);
+}
+
+function betTotalStakeValue(bet: BetRow): number {
+  return Number(bet.stake || 0) * betSourceCount(bet);
+}
+
+function betTotalProfitValue(bet: BetRow): number {
+  return betProfitValue(bet) * betSourceCount(bet);
+}
+
 // Часовые пояса России + пара популярных зарубежных - для выбора в профиле
 const TIMEZONE_OPTIONS: { label: string; offset: number }[] = [
   { label: "Калининград (UTC+2)", offset: 120 },
@@ -797,7 +809,7 @@ function calendarProfitForDate(day: Date, settledBets: BetRow[]): number {
   const uniqueSettled = uniqueBetsByLooseSignature(settledBets);
   return uniqueSettled
     .filter(bet => isSameLocalDate(bet.settled_at || bet.created_at, day))
-    .reduce((sum, bet) => sum + Number(bet.profit || 0), 0);
+    .reduce((sum, bet) => sum + betTotalProfitValue(bet), 0);
 }
 
 function makeCalendarDays() {
@@ -1334,7 +1346,7 @@ function BetCard({
           ) : (
             <div className="calendar-bet-result">
               {bet.result === "win" ? t("Выигрыш") : bet.result === "loss" ? t("Проигрыш") : t("Возврат")}
-              <strong>{formatMoney(Number(bet.profit || 0))}</strong>
+              <strong>{formatMoney(betTotalProfitValue(bet))}</strong>
             </div>
           )}
         </>
@@ -1538,18 +1550,8 @@ export default function Home() {
     const avgOdds = bets.length
       ? bets.reduce((sum, bet) => sum + Number(bet.odds || 0), 0) / bets.length
       : 0;
-    const totalStake = closed.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
-    const profit = closed.reduce((sum, bet) => {
-      if (bet.profit !== null && bet.profit !== undefined) {
-        return sum + Number(bet.profit || 0);
-      }
-
-      const stake = Number(bet.stake || 0);
-      const odds = Number(bet.odds || 0);
-      if (bet.result === "win") return sum + stake * odds - stake;
-      if (bet.result === "loss") return sum - stake;
-      return sum;
-    }, 0);
+    const totalStake = closed.reduce((sum, bet) => sum + betTotalStakeValue(bet), 0);
+    const profit = closed.reduce((sum, bet) => sum + betTotalProfitValue(bet), 0);
     const roi = totalStake > 0 ? (profit / totalStake) * 100 : 0;
 
     return {
@@ -1631,7 +1633,7 @@ export default function Home() {
       const settlementKind = (settlement.kind === "return" ? "return" : settlement.kind === "win" ? "win" : "loss") as BetRow["result"];
       return {
         ...bet,
-        profit: Number(settlement.amount || 0),
+        profit: Number(settlement.amount || 0) / betSourceCount(bet),
         result: settlementKind,
         settled_at: settlement.created_at
       };
@@ -1660,14 +1662,9 @@ export default function Home() {
   ), [settledBets]);
 
   const assistantForecastStats = useMemo(() => {
-    const stake = assistantSettledBets.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
+    const stake = assistantSettledBets.reduce((sum, bet) => sum + betTotalStakeValue(bet), 0);
     const oddsSum = assistantSettledBets.reduce((sum, bet) => sum + Number(bet.odds || 0), 0);
-    const profit = assistantSettledBets.reduce((sum, bet) => {
-      if (bet.profit !== null && bet.profit !== undefined) return sum + Number(bet.profit || 0);
-      if (bet.result === "win") return sum + Number(bet.stake || 0) * Number(bet.odds || 0) - Number(bet.stake || 0);
-      if (bet.result === "loss") return sum - Number(bet.stake || 0);
-      return sum;
-    }, 0);
+    const profit = assistantSettledBets.reduce((sum, bet) => sum + betTotalProfitValue(bet), 0);
 
     return {
       avgOdds: assistantSettledBets.length ? oddsSum / assistantSettledBets.length : 0,
@@ -1829,8 +1826,8 @@ export default function Home() {
       const stat = ensureBookmaker(name);
 
       stat.bets += 1;
-      stat.stake += Number(bet.stake || 0);
-      stat.profit += betProfitValue(bet);
+      stat.stake += betTotalStakeValue(bet);
+      stat.profit += betTotalProfitValue(bet);
       stat.oddsSum += Number(bet.odds || 0);
 
       if (bet.result === "win") stat.wins += 1;
@@ -2763,6 +2760,7 @@ export default function Home() {
     const stake = Number(bet.stake || 0);
     const odds = Number(bet.odds || 0);
     const profit = result === "win" ? stake * odds - stake : result === "loss" ? -stake : 0;
+    const bankrollAmount = profit * betSourceCount(bet);
     const settledAt = new Date().toISOString();
 
     setDataLoading(true);
@@ -2782,7 +2780,7 @@ export default function Home() {
       const { error: bankrollError } = await supabase.from("bankroll_events").insert({
         user_id: user.id,
         bet_id: bet.id,
-        amount: profit,
+        amount: bankrollAmount,
         kind: result,
         note: `${bet.event_name} · ${bet.market} · ${bet.selection}`
       });
@@ -2793,7 +2791,7 @@ export default function Home() {
         const localSettlementEvent: BankrollEventRow = {
           id: `local-${bet.id}-${settledAt}`,
           bet_id: bet.id,
-          amount: profit,
+          amount: bankrollAmount,
           kind: result,
           note: `${bet.event_name} - ${bet.market} - ${bet.selection}`,
           created_at: settledAt
@@ -2857,6 +2855,7 @@ export default function Home() {
     setDataLoading(true);
 
     const profit = result === "win" ? stake * odds - stake : result === "loss" ? -stake : result === "return" ? 0 : null;
+    const bankrollAmount = profit === null ? null : profit * betSourceCount(bet);
     const settledAt = result === "pending" ? null : (bet.settled_at || new Date().toISOString());
 
     const payload: {
@@ -2903,7 +2902,7 @@ export default function Home() {
       const { error: bankrollError } = await supabase.from("bankroll_events").insert({
         user_id: user.id,
         bet_id: bet.id,
-        amount: profit ?? 0,
+        amount: bankrollAmount ?? 0,
         kind: result,
         note: `${eventName} · ${bet.market} · ${bet.selection}`
       });
@@ -2914,7 +2913,7 @@ export default function Home() {
         localSettlementEvent = {
           id: `local-${bet.id}-${insertedAt}`,
           bet_id: bet.id,
-          amount: profit ?? 0,
+          amount: bankrollAmount ?? 0,
           kind: result,
           note: `${eventName} - ${bet.market} - ${bet.selection}`,
           created_at: insertedAt
@@ -2956,7 +2955,7 @@ export default function Home() {
 
     const { data: allBets, error: betsError } = await supabase
       .from("bets")
-      .select("id,event_name,market,selection,odds,stake,result,profit,settled_at,created_at")
+      .select("id,source_id,extra_source_ids,event_name,market,selection,odds,stake,result,profit,settled_at,created_at")
       .eq("user_id", user.id)
       .neq("result", "pending")
       .limit(5000);
@@ -2983,9 +2982,10 @@ export default function Home() {
       const stake = Number(row.stake || 0);
       const odds = Number(row.odds || 0);
       const result = row.result as "win" | "loss" | "return";
-      const profit = row.profit !== null && row.profit !== undefined
+      const unitProfit = row.profit !== null && row.profit !== undefined
         ? Number(row.profit)
         : result === "win" ? stake * odds - stake : result === "loss" ? -stake : 0;
+      const profit = unitProfit * betSourceCount(row as BetRow);
 
       return {
         user_id: user.id,
@@ -4733,7 +4733,7 @@ export default function Home() {
                               <strong>
                                 {bet.result === "win" ? t("Прогноз выиграл") : bet.result === "loss" ? t("Прогноз проиграл") : t("Возврат")}
                               </strong>
-                              <span className={Number(bet.profit || 0) >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(Number(bet.profit || 0))}</span>
+                              <span className={betTotalProfitValue(bet) >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(betTotalProfitValue(bet))}</span>
                             </div>
                           </div>
                         ))
