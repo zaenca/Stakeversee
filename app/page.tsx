@@ -239,6 +239,11 @@ function betProfitValue(bet: BetRow): number {
   ), 0);
 }
 
+function betSourceProfitValue(bet: BetRow, sourceId: string): number {
+  const stake = sourceId === "__no_source__" ? parseMoneyValue(bet.stake) : getBetSourceStake(bet, sourceId);
+  return profitForStake(bet.result, stake, Number(bet.odds || 0));
+}
+
 function betTotalStakeValue(bet: BetRow): number {
   return betStakeEntries(bet).reduce((sum, entry) => sum + entry.stake, 0);
 }
@@ -1202,6 +1207,7 @@ type BetCardProps = {
   editForm: EditBetForm | null;
   editingBetId: string | null;
   extraMeta?: string;
+  focusedSourceId?: string | null;
   highlighted?: boolean;
   onAddSource: (sourceId: string) => void;
   onCancelEdit: () => void;
@@ -1223,6 +1229,7 @@ function BetCard({
   editForm,
   editingBetId,
   extraMeta,
+  focusedSourceId,
   highlighted,
   onAddSource,
   onCancelEdit,
@@ -1243,6 +1250,15 @@ function BetCard({
   const cardRef = useRef<HTMLElement | null>(null);
   const attachedSourceIds = getBetSourceIds(bet);
   const pickableSources = sourceOptions.filter(source => !attachedSourceIds.includes(source.id));
+  const sourceScoped = focusedSourceId && (
+    focusedSourceId === "__no_source__" ? !attachedSourceIds.length : attachedSourceIds.includes(focusedSourceId)
+  );
+  const displayedStake = sourceScoped && focusedSourceId
+    ? (focusedSourceId === "__no_source__" ? parseMoneyValue(bet.stake) : getBetSourceStake(bet, focusedSourceId))
+    : betTotalStakeValue(bet);
+  const displayedProfit = sourceScoped && focusedSourceId
+    ? betSourceProfitValue(bet, focusedSourceId)
+    : betTotalProfitValue(bet);
 
   useEffect(() => {
     if (highlighted && cardRef.current) {
@@ -1291,6 +1307,7 @@ function BetCard({
                 setEditForm(current => (current ? { ...current, stake: nextValue } : current));
               }}
               placeholder={t("Сумма ₽")}
+              style={attachedSourceIds.length ? { display: "none" } : undefined}
               value={editForm.stake}
             />
           </div>
@@ -1349,7 +1366,7 @@ function BetCard({
           </div>
           <div className="calendar-bet-meta">
             {extraMeta ? <span>{extraMeta}</span> : null}
-            <span>{formatMoney(betTotalStakeValue(bet))}</span>
+            <span>{formatMoney(displayedStake)}</span>
             <span>{bet.bookmaker ? translateBookmakerLabel(bet.bookmaker, lang) : t("БК не указан")}</span>
           </div>
           <div className="calendar-bet-sources">
@@ -1402,7 +1419,7 @@ function BetCard({
           ) : (
             <div className="calendar-bet-result">
               {bet.result === "win" ? t("Выигрыш") : bet.result === "loss" ? t("Проигрыш") : t("Возврат")}
-              <strong>{formatMoney(betTotalProfitValue(bet))}</strong>
+              <strong>{formatMoney(displayedProfit)}</strong>
             </div>
           )}
         </>
@@ -4659,6 +4676,7 @@ export default function Home() {
                           editForm={editForm}
                           editingBetId={editingBetId}
                           extraMeta={formatCalendarDateLabel(betDate, lang)}
+                          focusedSourceId={sourceBetsOpen}
                           highlighted={bet.id === highlightBetId}
                           key={bet.id}
                           onAddSource={sourceId => addSourceToBet(bet, sourceId)}
