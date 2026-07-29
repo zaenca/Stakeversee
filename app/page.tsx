@@ -100,7 +100,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v3";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v4";
 
 const MAX_COUPON_ITEMS = 5;
 const BASE_BANKROLL = 10000;
@@ -898,7 +898,7 @@ function formatMatchDateTime(match: MatchRow, lang: Lang) {
   const date = new Date(match.startsAt);
   if (Number.isNaN(date.getTime())) return match.time;
 
-  const day = date.toLocaleDateString(localeFor(lang), { day: "2-digit", month: "short" });
+  const day = `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}`;
   const time = date.toLocaleTimeString(localeFor(lang), { hour: "2-digit", minute: "2-digit" });
   return `${day} · ${time}`;
 }

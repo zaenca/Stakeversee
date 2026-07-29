@@ -89,7 +89,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v3";
+const API_VERSION = "bookmakers-v4";
 const MLB_TEAM_ALIASES: [string, string[]][] = [
   ["Техас Рейнджерс", ["texas", "техас", "texas rangers", "техас рейнджерс"]],
   ["Сиэтл Маринерс", ["seattle", "сиэтл", "seattle mariners", "сиэтл маринерс"]],
@@ -403,6 +403,20 @@ function isKnownCountry(name: string): boolean {
   return KNOWN_COUNTRIES.has(name.toLowerCase().trim());
 }
 
+const HOCKEY_FRIENDLY_COUNTRY_HINTS: Array<[RegExp, string]> = [
+  [/беларус|минск|лида|авиатор\s+барановичи|барановичи|брест|шахтер\s+солигорск|солигорск/i, "Belarus"],
+  [/\b(кхл|khl)\b|адмирал|нефтехимик|челны|ак\s*барс|сибирь|локомотив|трактор|северсталь|салават|ска|лада|спартак|торпедо|автомобилист|динамо\s+москва/i, "Russia"]
+];
+
+function normalizeMatchLocale(match: RawMatch): RawMatch {
+  if (match.country !== "World" || match.sport !== "ice-hockey") return match;
+  if (!/товарищ|friendly/i.test(match.league)) return match;
+
+  const full = `${match.league} ${match.home} ${match.away}`;
+  const inferred = HOCKEY_FRIENDLY_COUNTRY_HINTS.find(([pattern]) => pattern.test(full))?.[1];
+  return inferred ? { ...match, country: inferred } : match;
+}
+
 function extractCountryAndLeague(data: PariLikeData, item: PariLikeEvent): { country: string; league: string } {
   const sports = asArray(data.sports);
   const byId = new Map<number, PariLikeEvent>(sports.map((s) => [asNumber(s.id), s]));
@@ -706,7 +720,7 @@ function normalizedName(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[ё]/g, "е")
     .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
-    .replace(/\b(fc|fk|bc|hc|cf|sc|club|w|women|u\d+)\b/g, "")
+    .replace(/\b(fc|fk|bc|hc|cf|sc|club|w|women|u\d+)\b|(^|\s)(хк|фк|бк)(?=\s)/g, " ")
     .replace(/\bматч\s+в\s+[a-zа-я0-9]+\b/gi, " ")
     .replace(/[^a-zа-я0-9]+/gi, " ")
     .trim();
@@ -869,7 +883,8 @@ function featuredFallbackMatches(now: number, horizon: number): RawMatch[] {
 
 function mergeMatches(matches: RawMatch[]): RawMatch[] {
   const byKey = new Map<string, RawMatch>();
-  for (const match of matches) {
+  for (const rawMatch of matches) {
+    const match = normalizeMatchLocale(rawMatch);
     if (shouldDropMatch(match)) continue;
     const key = findMergeKey(byKey, match) || dedupeKey(match);
     const current = byKey.get(key);
