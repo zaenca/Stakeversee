@@ -1577,6 +1577,8 @@ export default function Home() {
   const [standingsRows, setStandingsRows] = useState<StandingRow[]>([]);
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [standingsMessage, setStandingsMessage] = useState("");
+  const [standingsMatch, setStandingsMatch] = useState<MatchRow | null>(null);
+  const [standingsTitle, setStandingsTitle] = useState("");
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState<MatchesStatusState>({ kind: "idle" });
   const [analyzing, setAnalyzing] = useState(false);
@@ -2141,6 +2143,8 @@ export default function Home() {
   // (обучение на ошибках — этап 2).
   async function openStandings(match: MatchRow) {
     setStandingsOpen(true);
+    setStandingsMatch(match);
+    setStandingsTitle(`${match.league} · ${match.home} — ${match.away}`);
     setStandingsLoading(true);
     setStandingsMessage("");
 
@@ -2148,6 +2152,7 @@ export default function Home() {
       const response = await fetch(`/api/standings?sport=${encodeURIComponent(match.sport)}&league=${encodeURIComponent(match.league)}`, { cache: "no-store" });
       if (!response.ok) throw new Error("standings unavailable");
       const payload = await response.json();
+      setStandingsTitle(`${String(payload?.league || match.league)} · ${match.home} — ${match.away}`);
       const rows = Array.isArray(payload?.standings) ? payload.standings : [];
       setStandingsRows(rows.map((row: Partial<StandingRow> & Record<string, unknown>, index: number) => ({
         id: String(row.id || `${row.team || "team"}-${index}`),
@@ -4715,7 +4720,7 @@ export default function Home() {
                 onMouseDown={event => event.stopPropagation()}
                 role="dialog"
               >
-                <div className="rail-title">📊 {t("Турнирная таблица MLB")}</div>
+                <div className="rail-title">📊 {t("Турнирная таблица")} {standingsTitle}</div>
                 <button className="stats-modal-close" aria-label={t("Закрыть таблицу")} onClick={() => setStandingsOpen(false)} type="button">×</button>
                 {standingsLoading ? (
                   <div className="assistant-empty-hint">{t("Загружаю таблицу...")}</div>
@@ -4733,8 +4738,17 @@ export default function Home() {
                             <span>PCT</span>
                             <span>GB</span>
                           </div>
-                          {group.rows.map(row => (
-                            <div className="standings-row" key={row.id}>
+                          {group.rows.map(row => {
+                            const rowName = searchHaystack(row.team);
+                            const homeName = standingsMatch ? searchHaystack(standingsMatch.home) : "";
+                            const awayName = standingsMatch ? searchHaystack(standingsMatch.away) : "";
+                            const highlighted = Boolean(standingsMatch) && (
+                              rowName.includes(homeName) || homeName.includes(rowName)
+                              || rowName.includes(awayName) || awayName.includes(rowName)
+                            );
+
+                            return (
+                            <div className={`standings-row ${highlighted ? "highlighted" : ""}`} key={row.id}>
                               <span>{row.rank}</span>
                               <strong>{row.team}</strong>
                               <span>{row.wins}</span>
@@ -4742,7 +4756,8 @@ export default function Home() {
                               <span>{row.pct}</span>
                               <span>{row.gamesBack}</span>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </section>
                     ))}

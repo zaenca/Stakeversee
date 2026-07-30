@@ -1837,6 +1837,16 @@ h1 {
   color: #eaf6ff;
 }
 
+.standings-row.highlighted {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.36);
+  color: #eaf6ff;
+}
+
+.standings-row.highlighted strong {
+  color: var(--cyan);
+}
+
 .standings-head {
   background: rgba(255, 255, 255, 0.04);
   color: var(--cyan);

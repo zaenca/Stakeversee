@@ -31,6 +31,7 @@ type StandingRow = {
 
 const BASEBALL_STANDINGS_SLUGS: Array<{ pattern: RegExp; label: string; slug: string }> = [
   { pattern: /\bmlb\b|major league/i, label: "MLB", slug: "mlb" },
+  { pattern: /\bkbo\b|korea|коре/i, label: "KBO", slug: "kbo" },
   { pattern: /\blmb\b|mexic|мексик/i, label: "LMB", slug: "mexican-winter-league" }
 ];
 
@@ -76,9 +77,9 @@ export async function GET(request: Request) {
 
   try {
     const standings = await loadBaseballStandings(standingLeague.slug, standingLeague.label);
-    return NextResponse.json({ sport: "baseball", league: standingLeague.label, standings }, { headers: NO_STORE_HEADERS });
+    return NextResponse.json({ sport: "baseball", league: standingLeague.label, source: "ESPN", standings }, { headers: NO_STORE_HEADERS });
   } catch (error) {
     console.error("Standings route failed", error);
-    return NextResponse.json({ standings: [] }, { status: 502, headers: NO_STORE_HEADERS });
+    return NextResponse.json({ league: standingLeague.label, source: "ESPN", standings: [] }, { status: 502, headers: NO_STORE_HEADERS });
   }
 }
