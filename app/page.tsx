@@ -1718,6 +1718,7 @@ export default function Home() {
   const [status, setStatus] = useState<AuthStatus>("idle");
   const [message, setMessage] = useState("");
   const [profileLogin, setProfileLogin] = useState("");
+  const [profileResolved, setProfileResolved] = useState(false);
   const [loginDraft, setLoginDraft] = useState("");
   const [loginMessage, setLoginMessage] = useState("");
   const [loginSaving, setLoginSaving] = useState(false);
@@ -1849,6 +1850,15 @@ export default function Home() {
   }, [couponDraft.sourceId, profileLogin, sources]);
   const [countryFilter, setCountryFilter] = useState("all");
   const [leagueFilter, setLeagueFilter] = useState("all");
+
+  function selectSport(nextSport: string) {
+    setActiveSport(nextSport);
+    setCountryFilter("all");
+    setLeagueFilter("all");
+    setMatchFilter("all");
+    setSearchQuery("");
+  }
+
   const [lineMatches, setLineMatches] = useState<MatchRow[]>([]);
   const [matchBookmakerChoice, setMatchBookmakerChoice] = useState<Record<string, MatchBookmakerKey>>({});
   const [standingsOpen, setStandingsOpen] = useState(false);
@@ -2678,6 +2688,7 @@ export default function Home() {
       setBets([]);
       setBankrollEvents([]);
       setProfileLogin("");
+      setProfileResolved(false);
       setLoginDraft("");
       setLoginMessage("");
       setPasswordRecoveryMode(false);
@@ -2689,8 +2700,17 @@ export default function Home() {
       return;
     }
 
-    syncUserProfile(user);
+    let cancelled = false;
+    setProfileLogin("");
+    setProfileResolved(false);
+    void syncUserProfile(user).finally(() => {
+      if (!cancelled) setProfileResolved(true);
+    });
     loadWorkspaceData(user.id);
+
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   async function syncUserProfile(currentUser: User) {
@@ -3787,7 +3807,7 @@ export default function Home() {
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
     const pendingRailBets = allPendingBetsOpen ? pendingBets : pendingBets.slice(0, 5);
-    const loginRequired = !profileLogin;
+    const loginRequired = profileResolved && !profileLogin;
     const selectedTimezone = TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes) || TIMEZONE_OPTIONS[1];
 
     return (
@@ -4091,7 +4111,7 @@ export default function Home() {
                   <button
                     className={activeSport === tab.key ? "active" : ""}
                     key={tab.key}
-                    onClick={() => setActiveSport(tab.key)}
+                    onClick={() => selectSport(tab.key)}
                     type="button"
                   >
                     <span>{tab.icon}</span>
