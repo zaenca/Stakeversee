@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { KBO_TEAMS } from "@/lib/kboTeams";
+import { MLB_TEAMS } from "@/lib/mlbTeams";
 
 type EspnCompetitor = {
   homeAway?: "home" | "away";
@@ -43,12 +44,18 @@ const BASEBALL_LEAGUES: Array<{ pattern: RegExp; label: string; slug: string; se
 ];
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
-  ...KBO_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]])
+  ...KBO_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]]),
+  ...MLB_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]])
 ];
 
 const BASEBALL_TEAM_ID_BY_ALIAS = new Map(
   BASEBALL_TEAM_ALIASES.flatMap(([id, aliases]) => aliases.map(alias => [normalizedName(alias), id] as const))
 );
+
+const BASEBALL_TEAM_NAME_BY_ID = new Map([
+  ...KBO_TEAMS.map(team => [team.id, team.name] as const),
+  ...MLB_TEAMS.map(team => [team.id, team.name] as const)
+]);
 
 function normalizedName(value: string): string {
   return value
@@ -110,10 +117,10 @@ function eventToHeadToHeadRow(event: EspnEvent, homeKey: string, awayKey: string
   return {
     id: String(event.id || `${event.date}-${home.key}-${away.key}`),
     date: String(event.date || ""),
-    home: home.team?.displayName || home.team?.name || "",
-    away: away.team?.displayName || away.team?.name || "",
+    home: BASEBALL_TEAM_NAME_BY_ID.get(home.key) || home.team?.displayName || home.team?.name || "",
+    away: BASEBALL_TEAM_NAME_BY_ID.get(away.key) || away.team?.displayName || away.team?.name || "",
     score: `${home.score || "-"}:${away.score || "-"}`,
-    winner: winner?.team?.displayName || winner?.team?.name || ""
+    winner: winner ? BASEBALL_TEAM_NAME_BY_ID.get(winner.key) || winner.team?.displayName || winner.team?.name || "" : ""
   };
 }
 

@@ -5,12 +5,17 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { type Lang, localeFor, translate, translateBetMarket, translateBetSelectionLine, translateBookmakerLabel, useLanguage } from "@/lib/i18n";
 import {
-  KBO_TEAM_BY_ID,
   isKboMatchContext,
   kboTeamId,
   resolveKboTeam,
   type KboTeamProfile
 } from "@/lib/kboTeams";
+import {
+  isMlbMatchContext,
+  mlbTeamId,
+  resolveMlbTeam,
+  type MlbTeamProfile
+} from "@/lib/mlbTeams";
 
 type AuthMode = "login" | "register";
 type AuthStatus = "idle" | "loading" | "ok" | "error";
@@ -95,7 +100,7 @@ type HeadToHeadRow = {
   winner: string;
 };
 
-type TeamCard = KboTeamProfile;
+type TeamCard = KboTeamProfile | MlbTeamProfile;
 
 type MatchBookmakerKey = "best" | "pari" | "fonbet" | "tennisi";
 
@@ -121,9 +126,10 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v11";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v12";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
+  "stakeversee:line-matches:v11",
   "stakeversee:line-matches:v10",
   "stakeversee:line-matches:v9",
   "stakeversee:line-matches:v8"
@@ -226,19 +232,21 @@ function compactMatchName(value: string): string {
 }
 
 function clientBaseballTeamKey(value: string, teamId?: string): string {
-  return resolveKboTeam(value, teamId)?.id || compactMatchName(value);
+  return clientBaseballTeamCard(value, teamId)?.id || compactMatchName(value);
 }
 
 function clientBaseballTeamCard(value: string, teamId?: string): TeamCard | null {
-  return resolveKboTeam(value, teamId);
+  return resolveKboTeam(value, teamId) || resolveMlbTeam(value, teamId);
+}
+
+function clientBaseballTeamId(card: TeamCard): string {
+  return card.league === "KBO" ? kboTeamId(card) : mlbTeamId(card);
 }
 
 function normalizeClientMatch(match: MatchRow): MatchRow {
   if (match.sport !== "baseball") return match;
-  const homeKey = clientBaseballTeamKey(match.home, match.homeTeamId);
-  const awayKey = clientBaseballTeamKey(match.away, match.awayTeamId);
-  const homeCard = KBO_TEAM_BY_ID.get(homeKey);
-  const awayCard = KBO_TEAM_BY_ID.get(awayKey);
+  const homeCard = resolveKboTeam(match.home, match.homeTeamId);
+  const awayCard = resolveKboTeam(match.away, match.awayTeamId);
 
   if (isKboMatchContext(match.country, match.league, match.home, match.away)) {
     return {
@@ -252,6 +260,22 @@ function normalizeClientMatch(match: MatchRow): MatchRow {
     };
   }
 
+  const mlbHomeCard = resolveMlbTeam(match.home, match.homeTeamId);
+  const mlbAwayCard = resolveMlbTeam(match.away, match.awayTeamId);
+  if (isMlbMatchContext(match.country, match.league, match.home, match.away)) {
+    return {
+      ...match,
+      country: "USA",
+      league: "MLB",
+      home: mlbHomeCard?.name || match.home,
+      away: mlbAwayCard?.name || match.away,
+      homeTeamId: mlbHomeCard ? mlbTeamId(mlbHomeCard) : match.homeTeamId,
+      awayTeamId: mlbAwayCard ? mlbTeamId(mlbAwayCard) : match.awayTeamId
+    };
+  }
+
+  const homeKey = clientBaseballTeamKey(match.home, match.homeTeamId);
+  const awayKey = clientBaseballTeamKey(match.away, match.awayTeamId);
   const full = compactMatchName(`${match.country} ${match.league}`);
   if (/lmb|mexico|мексик/.test(full)) {
     return {
@@ -287,11 +311,19 @@ function bestClientOdds(bookmakerOdds?: Partial<Record<MatchBookmakerKey, string
   return { odds, labels };
 }
 
-function kboMatchPairKey(match: MatchRow): string | null {
-  if (match.sport !== "baseball" || !isKboMatchContext(match.country, match.league, match.home, match.away)) return null;
-  const home = resolveKboTeam(match.home, match.homeTeamId);
-  const away = resolveKboTeam(match.away, match.awayTeamId);
-  return home && away ? [home.id, away.id].sort().join("~") : null;
+function baseballMatchPairKey(match: MatchRow): string | null {
+  if (match.sport !== "baseball") return null;
+  if (isKboMatchContext(match.country, match.league, match.home, match.away)) {
+    const home = resolveKboTeam(match.home, match.homeTeamId);
+    const away = resolveKboTeam(match.away, match.awayTeamId);
+    return home && away ? `KBO|${[home.id, away.id].sort().join("~")}` : null;
+  }
+  if (isMlbMatchContext(match.country, match.league, match.home, match.away)) {
+    const home = resolveMlbTeam(match.home, match.homeTeamId);
+    const away = resolveMlbTeam(match.away, match.awayTeamId);
+    return home && away ? `MLB|${[home.id, away.id].sort().join("~")}` : null;
+  }
+  return null;
 }
 
 function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
@@ -309,10 +341,10 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
       compactMatchName(match.league),
       teamKey
     ].join("|");
-    const kboPairKey = kboMatchPairKey(match);
-    const existingKboKey = kboPairKey
+    const baseballPairKey = baseballMatchPairKey(match);
+    const existingBaseballKey = baseballPairKey
       ? Array.from(byKey.entries()).find(([, candidate]) => {
-          if (kboMatchPairKey(candidate) !== kboPairKey) return false;
+          if (baseballMatchPairKey(candidate) !== baseballPairKey) return false;
           const matchStart = match.startsAt ? new Date(match.startsAt).getTime() : 0;
           const candidateStart = candidate.startsAt ? new Date(candidate.startsAt).getTime() : 0;
           return matchStart && candidateStart
@@ -320,7 +352,7 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
             : compactMatchName(match.time) === compactMatchName(candidate.time);
         })?.[0]
       : undefined;
-    const resolvedKey = existingKboKey || key;
+    const resolvedKey = existingBaseballKey || key;
     const current = byKey.get(resolvedKey);
 
     if (!current) {
@@ -332,18 +364,20 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
     const best = bestClientOdds(bookmakerOdds);
     const chosen = match.confidence > current.confidence ? match : current;
     const mergedOdds = best.odds.some(odd => odd && odd !== "-") ? best.odds : current.odds;
-    const canonicalHome = resolveKboTeam(current.home, current.homeTeamId);
-    const canonicalAway = resolveKboTeam(current.away, current.awayTeamId);
+    const canonicalHome = clientBaseballTeamCard(current.home, current.homeTeamId);
+    const canonicalAway = clientBaseballTeamCard(current.away, current.awayTeamId);
+    const canonicalLeague = baseballPairKey?.startsWith("KBO|") ? "KBO" : baseballPairKey?.startsWith("MLB|") ? "MLB" : current.league;
+    const canonicalCountry = canonicalLeague === "KBO" ? "South Korea" : canonicalLeague === "MLB" ? "USA" : current.country;
 
     byKey.set(resolvedKey, {
       ...current,
       id: `${current.id}+${match.id}`,
-      country: kboPairKey ? "South Korea" : current.country,
-      league: kboPairKey ? "KBO" : current.league,
+      country: canonicalCountry,
+      league: canonicalLeague,
       home: canonicalHome?.name || (/[а-яё]/i.test(current.home) ? current.home : match.home),
       away: canonicalAway?.name || (/[а-яё]/i.test(current.away) ? current.away : match.away),
-      homeTeamId: canonicalHome ? kboTeamId(canonicalHome) : current.homeTeamId,
-      awayTeamId: canonicalAway ? kboTeamId(canonicalAway) : current.awayTeamId,
+      homeTeamId: canonicalHome ? clientBaseballTeamId(canonicalHome) : current.homeTeamId,
+      awayTeamId: canonicalAway ? clientBaseballTeamId(canonicalAway) : current.awayTeamId,
       bookmakerOdds,
       odds: mergedOdds,
       bestBookmakers: best.labels,
@@ -2421,12 +2455,13 @@ export default function Home() {
     if (standing) return;
 
     try {
-      const response = await fetch("/api/standings?sport=baseball&league=KBO", { cache: "no-store" });
+      const response = await fetch(`/api/standings?sport=baseball&league=${encodeURIComponent(card.league)}`, { cache: "no-store" });
       if (!response.ok) return;
       const payload = await response.json();
       const rows = Array.isArray(payload?.standings) ? payload.standings : [];
       const teamStanding = rows.find((row: Partial<StandingRow>) => (
-        row.id === kboTeamId(card) || resolveKboTeam(String(row.team || ""), String(row.id || ""))?.id === card.id
+        row.id === clientBaseballTeamId(card)
+        || clientBaseballTeamCard(String(row.team || ""), String(row.id || ""))?.id === card.id
       ));
       if (!teamStanding) return;
       setSelectedTeamCard(current => current?.id === card.id ? {
@@ -2439,7 +2474,7 @@ export default function Home() {
         gamesBack: String(teamStanding.gamesBack || "-")
       } : current);
     } catch {
-      // The offline KBO profile remains available if live standings cannot be loaded.
+      // The offline team profile remains available if live standings cannot be loaded.
     }
   }
 
@@ -4150,7 +4185,6 @@ export default function Home() {
                         {clientBaseballTeamCard(match.home, match.homeTeamId) ? (
                           <button className="match-team-button" onClick={() => openTeamCard(match, "home")} title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined} type="button">
                             <strong>{match.home}</strong>
-                            <small>{t("Профиль команды")} ›</small>
                           </button>
                         ) : (
                           <strong title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined}>{match.home}</strong>
@@ -4162,7 +4196,6 @@ export default function Home() {
                         {clientBaseballTeamCard(match.away, match.awayTeamId) ? (
                           <button className="match-team-button" onClick={() => openTeamCard(match, "away")} title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined} type="button">
                             <strong>{match.away}</strong>
-                            <small>{t("Профиль команды")} ›</small>
                           </button>
                         ) : (
                           <strong title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined}>{match.away}</strong>
@@ -5043,7 +5076,7 @@ export default function Home() {
                     <strong>{selectedTeamCard.losses ?? "-"}</strong>
                   </div>
                   <div>
-                    <span>PCT</span>
+                    <span>{t("Поб. %")}</span>
                     <strong>{selectedTeamCard.pct || "-"}</strong>
                   </div>
                 </div>
@@ -5100,8 +5133,8 @@ export default function Home() {
                             <span>{t("Команда")}</span>
                             <span>{t("В")}</span>
                             <span>{t("П")}</span>
-                            <span>PCT</span>
-                            <span>GB</span>
+                            <span>{t("Поб. %")}</span>
+                            <span>{t("Отст.")}</span>
                             <span>{t("Форма")}</span>
                           </div>
                           {group.rows.map(row => {
@@ -5123,7 +5156,6 @@ export default function Home() {
                               {rowTeamCard ? (
                                 <button className="standings-team-button" onClick={() => void openTeamProfile(rowTeamCard, row)} type="button">
                                   <strong>{rowTeamCard.name}</strong>
-                                  <small>{t("Профиль")} ›</small>
                                 </button>
                               ) : <strong>{row.team}</strong>}
                               <span>{row.wins}</span>

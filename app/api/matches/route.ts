@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 
 import { KBO_TEAMS, isKboMatchContext, kboTeamId, resolveKboTeam } from "@/lib/kboTeams";
+import { MLB_TEAMS, isMlbMatchContext, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 
 type BookmakerOdds = {
   home: number;
@@ -95,40 +96,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v10";
-const MLB_TEAM_ALIASES: [string, string[]][] = [
-  ["Техас Рейнджерс", ["texas", "техас", "texas rangers", "техас рейнджерс"]],
-  ["Сиэтл Маринерс", ["seattle", "сиэтл", "seattle mariners", "сиэтл маринерс"]],
-  ["Детройт Тайгерс", ["detroit", "детройт", "detroit tigers", "детройт тайгерс"]],
-  ["Балтимор Ориолс", ["baltimore", "балтимор", "baltimore orioles", "балтимор ориолс"]],
-  ["Питтсбург Пайретс", ["pittsburgh", "питтсбург", "pittsburgh pirates", "питтсбург пайретс"]],
-  ["Аризона Даймондбэкс", ["arizona", "аризона", "arizona diamondbacks", "аризона даймондбэкс"]],
-  ["Нью-Йорк Янкиз", ["ny yankees", "new york yankees", "нью йорк янкиз"]],
-  ["Нью-Йорк Метс", ["ny mets", "new york mets", "нью йорк метс"]],
-  ["Лос-Анджелес Доджерс", ["la dodgers", "los angeles dodgers", "лос анджелес доджерс"]],
-  ["Лос-Анджелес Энджелс", ["la angels", "los angeles angels", "лос анджелес энджелс"]],
-  ["Бостон Ред Сокс", ["boston", "бостон", "boston red sox", "бостон ред сокс"]],
-  ["Торонто Блю Джейс", ["toronto", "торонто", "toronto blue jays", "торонто блю джейс"]],
-  ["Хьюстон Астрос", ["houston", "хьюстон", "houston astros", "хьюстон астрос"]],
-  ["Атланта Брэйвз", ["atlanta", "атланта", "atlanta braves", "атланта брэйвз"]],
-  ["Чикаго Кабс", ["chicago cubs", "чикаго кабс"]],
-  ["Чикаго Уайт Сокс", ["chicago white sox", "чикаго уайт сокс"]],
-  ["Кливленд Гардианс", ["cleveland", "кливленд", "cleveland guardians", "кливленд гардианс"]],
-  ["Миннесота Твинс", ["minnesota", "миннесота", "minnesota twins", "миннесота твинс"]],
-  ["Канзас-Сити Роялс", ["kansas city", "канзас сити", "kansas city royals", "канзас сити роялс"]],
-  ["Окленд Атлетикс", ["oakland", "окленд", "athletics", "oakland athletics", "окленд атлетикс"]],
-  ["Майами Марлинс", ["miami", "майами", "miami marlins", "майами марлинс"]],
-  ["Филадельфия Филлис", ["philadelphia", "филадельфия", "philadelphia phillies", "филадельфия филлис"]],
-  ["Вашингтон Нэшионалс", ["washington", "вашингтон", "washington nationals", "вашингтон нэшионалс"]],
-  ["Милуоки Брюэрс", ["milwaukee", "милуоки", "milwaukee brewers", "милуоки брюэрс"]],
-  ["Сент-Луис Кардиналс", ["st louis", "st. louis", "сент луис", "st louis cardinals", "сент луис кардиналс"]],
-  ["Цинциннати Редс", ["cincinnati", "цинциннати", "cincinnati reds", "цинциннати редс"]],
-  ["Колорадо Рокиз", ["colorado", "колорадо", "colorado rockies", "колорадо рокиз"]],
-  ["Сан-Диего Падрес", ["san diego", "сан диего", "san diego padres", "сан диего падрес"]],
-  ["Сан-Франциско Джайентс", ["san francisco", "сан франциско", "san francisco giants", "сан франциско джайентс"]],
-  ["Тампа-Бэй Рэйс", ["tampa bay", "тампа бэй", "tampa bay rays", "тампа бэй рэйс"]]
-];
-const MLB_TEAM_NAME_BY_ALIAS = new Map(MLB_TEAM_ALIASES.flatMap(([fullName, aliases]) => aliases.map(alias => [alias, fullName] as const)));
+const API_VERSION = "bookmakers-v11";
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["oaxaca", ["oaxaca", "оахака", "геррерос де оаксака", "guerreros de oaxaca", "guerreros oaxaca"]],
@@ -142,7 +110,8 @@ const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["rieleros aguascalientes", ["rieleros aguascalientes", "rieleros de aguascalientes", "aguascalientes", "рьелерос"]],
   ["tigres quintana roo", ["tigres quintana roo", "tigres de quintana roo", "quintana roo", "тигрес"]],
   ["leones yucatan", ["leones yucatan", "leones de yucatan", "yucatan", "юкатан"]],
-  ...KBO_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]])
+  ...KBO_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]]),
+  ...MLB_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]])
 ];
 
 const BASEBALL_TEAM_ID_BY_ALIAS = new Map(
@@ -500,6 +469,17 @@ function normalizeBaseballLeague(match: RawMatch): RawMatch {
       away: away?.name || match.away
     };
   }
+  const mlbHome = resolveMlbTeam(match.home, match.homeTeamId);
+  const mlbAway = resolveMlbTeam(match.away, match.awayTeamId);
+  if (isMlbMatchContext(match.country, match.league, match.home, match.away)) {
+    return {
+      ...match,
+      country: "USA",
+      league: "MLB",
+      home: mlbHome?.name || match.home,
+      away: mlbAway?.name || match.away
+    };
+  }
   if (/lmb|mexico|мексик/.test(full)) {
     return { ...match, country: "Mexico", league: "LMB" };
   }
@@ -830,7 +810,9 @@ function displayTeamName(match: RawMatch, value: string): string {
   if (match.sport !== "baseball") return value;
   const kboTeam = resolveKboTeam(value);
   if (kboTeam && isKboMatchContext(match.country, match.league, match.home, match.away)) return kboTeam.name;
-  return MLB_TEAM_NAME_BY_ALIAS.get(normalizedName(value)) || value;
+  const mlbTeam = resolveMlbTeam(value);
+  if (mlbTeam && isMlbMatchContext(match.country, match.league, match.home, match.away)) return mlbTeam.name;
+  return value;
 }
 
 function normalizeEsportsParticipantAlias(value: string): string {
@@ -888,6 +870,8 @@ function normalizedMatchParticipant(match: RawMatch, value: string): string {
 function canonicalTeamId(match: RawMatch, value: string): string {
   const kboTeam = match.sport === "baseball" ? resolveKboTeam(value) : null;
   if (kboTeam && isKboMatchContext(match.country, match.league, match.home, match.away)) return kboTeamId(kboTeam);
+  const mlbTeam = match.sport === "baseball" ? resolveMlbTeam(value) : null;
+  if (mlbTeam && isMlbMatchContext(match.country, match.league, match.home, match.away)) return mlbTeamId(mlbTeam);
   const participant = normalizedMatchParticipant(match, value);
   return [match.sport, match.country, match.league, participant]
     .map(part => normalizedName(part))
@@ -968,6 +952,7 @@ function dedupeKey(match: RawMatch): string {
 
 function mergeTimeToleranceMs(sport: string): number {
   if (sport === "football") return 3 * 60 * 60 * 1000;
+  if (sport === "baseball") return 90 * 60 * 1000;
   return sport === "tennis" ? 90 * 60 * 1000 : 45 * 60 * 1000;
 }
 

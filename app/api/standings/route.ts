@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { KBO_TEAMS, kboTeamId } from "@/lib/kboTeams";
+import { MLB_TEAMS, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 
 type EspnStandingStat = {
   name?: string;
@@ -50,6 +51,22 @@ const KBO_REFERENCE_STANDINGS: StandingRow[] = KBO_TEAMS.map((team, index) => ({
   form: "-"
 }));
 
+const MLB_REFERENCE_STANDINGS: StandingRow[] = MLB_TEAMS.map((team, index) => {
+  const league = index < 15 ? "Американская лига" : "Национальная лига";
+  return {
+    id: mlbTeamId(team),
+    rank: (index % 15) + 1,
+    league,
+    division: league,
+    team: team.name,
+    wins: 0,
+    losses: 0,
+    pct: "-",
+    gamesBack: "-",
+    form: "-"
+  };
+});
+
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   Pragma: "no-cache",
@@ -62,15 +79,18 @@ async function loadBaseballStandings(slug: string, fallbackLeague: string): Prom
 
   const payload = await response.json() as { children?: EspnStandingGroup[] };
   return (payload.children || []).flatMap(group => {
-    const league = group.name || group.abbreviation || fallbackLeague;
+    const rawLeague = group.name || group.abbreviation || fallbackLeague;
+    const league = fallbackLeague === "MLB" ? translateMlbGroup(rawLeague) : fallbackLeague;
     return (group.standings?.entries || []).map((entry, index) => {
       const stat = (name: string) => entry.stats?.find(item => item.name === name);
+      const sourceName = entry.team?.displayName || "";
+      const mlbTeam = fallbackLeague === "MLB" ? resolveMlbTeam(sourceName) : null;
       return {
-        id: String(entry.team?.id || entry.team?.displayName || `${league}-${index}`),
+        id: mlbTeam ? mlbTeamId(mlbTeam) : String(entry.team?.id || entry.team?.displayName || `${league}-${index}`),
         rank: Number(stat("playoffSeed")?.value || index + 1),
         league,
         division: league,
-        team: entry.team?.displayName || "Team",
+        team: mlbTeam?.name || sourceName || "Команда",
         wins: Number(stat("wins")?.value || 0),
         losses: Number(stat("losses")?.value || 0),
         pct: stat("winPercent")?.displayValue || ".000",
@@ -79,6 +99,15 @@ async function loadBaseballStandings(slug: string, fallbackLeague: string): Prom
       };
     });
   }).sort((a, b) => a.league.localeCompare(b.league) || a.rank - b.rank);
+}
+
+function translateMlbGroup(value: string): string {
+  const normalized = value.toLowerCase();
+  const league = /national|\bnl\b/.test(normalized) ? "Национальная лига" : "Американская лига";
+  if (/east|восток/.test(normalized)) return `${league} · Восточный дивизион`;
+  if (/central|центр/.test(normalized)) return `${league} · Центральный дивизион`;
+  if (/west|запад/.test(normalized)) return `${league} · Западный дивизион`;
+  return league;
 }
 
 export async function GET(request: Request) {
@@ -94,13 +123,19 @@ export async function GET(request: Request) {
   try {
     const standings = await loadBaseballStandings(standingLeague.slug, standingLeague.label);
     if (standingLeague.label === "KBO" && standings.length === 0) {
-      return NextResponse.json({ sport: "baseball", league: "KBO", source: "Reference", standings: KBO_REFERENCE_STANDINGS }, { headers: NO_STORE_HEADERS });
+      return NextResponse.json({ sport: "baseball", league: "KBO", source: "Справочник", standings: KBO_REFERENCE_STANDINGS }, { headers: NO_STORE_HEADERS });
+    }
+    if (standingLeague.label === "MLB" && standings.length === 0) {
+      return NextResponse.json({ sport: "baseball", league: "MLB", source: "Справочник", standings: MLB_REFERENCE_STANDINGS }, { headers: NO_STORE_HEADERS });
     }
     return NextResponse.json({ sport: "baseball", league: standingLeague.label, source: "ESPN", standings }, { headers: NO_STORE_HEADERS });
   } catch (error) {
     console.error("Standings route failed", error);
     if (standingLeague.label === "KBO") {
-      return NextResponse.json({ sport: "baseball", league: "KBO", source: "Reference", standings: KBO_REFERENCE_STANDINGS }, { headers: NO_STORE_HEADERS });
+      return NextResponse.json({ sport: "baseball", league: "KBO", source: "Справочник", standings: KBO_REFERENCE_STANDINGS }, { headers: NO_STORE_HEADERS });
+    }
+    if (standingLeague.label === "MLB") {
+      return NextResponse.json({ sport: "baseball", league: "MLB", source: "Справочник", standings: MLB_REFERENCE_STANDINGS }, { headers: NO_STORE_HEADERS });
     }
     return NextResponse.json({ league: standingLeague.label, source: "ESPN", standings: [] }, { status: 502, headers: NO_STORE_HEADERS });
   }

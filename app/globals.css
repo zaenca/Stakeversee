@@ -1688,32 +1688,21 @@ h1 {
 }
 
 .match-team-button {
-  background: rgba(0, 229, 255, 0.05);
-  border: 1px solid rgba(0, 229, 255, 0.18);
-  border-radius: 6px;
+  background: transparent;
+  border: 0;
   color: #eaf6ff;
   cursor: pointer;
   display: block;
   font: inherit;
   font-weight: 900;
   margin: 0 auto;
-  padding: 5px 9px 4px;
+  padding: 0;
   text-align: center;
-  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+  transition: color 0.16s ease;
 }
 
 .match-team-button:hover {
-  background: rgba(0, 229, 255, 0.11);
-  border-color: var(--cyan);
   color: var(--cyan);
-}
-
-.match-team-button small {
-  color: var(--cyan);
-  display: block;
-  font-size: 0.58rem;
-  font-weight: 800;
-  margin-top: 2px;
 }
 
 .match-teams span {
@@ -2045,18 +2034,9 @@ h1 {
   color: inherit;
   cursor: pointer;
   display: flex;
-  gap: 8px;
-  justify-content: space-between;
   min-width: 0;
   padding: 4px 0;
   text-align: left;
-}
-
-.standings-team-button small {
-  color: var(--cyan);
-  flex: 0 0 auto;
-  font-size: 0.62rem;
-  font-weight: 800;
 }
 
 .standings-team-button:hover strong {
