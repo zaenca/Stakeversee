@@ -1827,6 +1827,32 @@ h1 {
   text-transform: uppercase;
 }
 
+.standings-h2h {
+  align-items: center;
+  background: rgba(0, 229, 255, 0.06);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: 8px;
+  color: var(--muted);
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: -4px 12px 14px;
+  padding: 9px 12px;
+  text-align: center;
+}
+
+.standings-h2h strong {
+  color: var(--cyan);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.standings-h2h span {
+  font-size: 0.76rem;
+}
+
 .standings-table {
   display: grid;
 }

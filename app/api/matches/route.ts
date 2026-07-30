@@ -93,7 +93,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v8";
+const API_VERSION = "bookmakers-v9";
 const MLB_TEAM_ALIASES: [string, string[]][] = [
   ["Техас Рейнджерс", ["texas", "техас", "texas rangers", "техас рейнджерс"]],
   ["Сиэтл Маринерс", ["seattle", "сиэтл", "seattle mariners", "сиэтл маринерс"]],
@@ -142,7 +142,7 @@ const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["leones yucatan", ["leones yucatan", "leones de yucatan", "yucatan", "юкатан"]],
   ["nc dinos", ["nc dinos", "nk dinos", "нц динос", "нк динос", "диноз", "динос"]],
   ["kt wiz", ["kt wiz", "kt wiz suwon", "кт виз", "кт уиз", "виз"]],
-  ["ssg landers", ["ssg landers", "ссг ландерс", "ssg", "лендерс", "ландерс"]],
+  ["ssg landers", ["ssg landers", "ссг ландерс", "ссг лэндерс", "ssg", "лендерс", "лэндерс", "ландерс"]],
   ["doosan bears", ["doosan bears", "дусан беарс", "дусан", "doosan"]],
   ["lg twins", ["lg twins", "лджи твинс", "лг твинс", "lg"]],
   ["kiwoom heroes", ["kiwoom heroes", "кивум хироуз", "кивум"]],
@@ -495,7 +495,7 @@ const HOCKEY_FRIENDLY_COUNTRY_HINTS: Array<[RegExp, string]> = [
 function normalizeBaseballLeague(match: RawMatch): RawMatch {
   if (match.sport !== "baseball") return match;
   const full = `${match.country} ${match.league}`.toLowerCase();
-  if (/\b(kbo|korea|south korea|коре[яй]|южн\w*\s+коре)/i.test(full)) {
+  if (/\b(kbo|korea|south korea|коре[яй]|южн\w*\s+коре)|чемпионат\s+южн\w*\s+коре/i.test(full)) {
     return { ...match, country: "South Korea", league: "KBO" };
   }
   if (/\b(lmb|mexico|мексик)/i.test(full)) {

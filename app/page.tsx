@@ -103,7 +103,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v8";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v9";
 
 const MAX_COUPON_ITEMS = 5;
 const BASE_BANKROLL = 10000;
@@ -4728,6 +4728,12 @@ export default function Home() {
               >
                 <div className="rail-title">📊 {t("Турнирная таблица")} {standingsTitle}</div>
                 {standingsSource ? <div className="standings-source">{t("Источник")}: {standingsSource}</div> : null}
+                {standingsMatch ? (
+                  <div className="standings-h2h">
+                    <strong>{t("Очные встречи")}</strong>
+                    <span>{t("Источник прошлых личных встреч пока не подключен. Турнирная таблица показывает место и форму команд.")}</span>
+                  </div>
+                ) : null}
                 <button className="stats-modal-close" aria-label={t("Закрыть таблицу")} onClick={() => setStandingsOpen(false)} type="button">×</button>
                 {standingsLoading ? (
                   <div className="assistant-empty-hint">{t("Загружаю таблицу...")}</div>
