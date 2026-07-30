@@ -100,7 +100,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v4";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v5";
 
 const MAX_COUPON_ITEMS = 5;
 const BASE_BANKROLL = 10000;
@@ -370,7 +370,7 @@ const sportTabs = [
   { key: "basketball", label: "Баскет", icon: "🏀" },
   { key: "ice-hockey", label: "Хоккей", icon: "🏒" },
   { key: "handball", label: "Гандбол", icon: "🤾" },
-  { key: "esports", label: "Кибер", icon: "🎮" },
+  { key: "esports", label: "Киберспорт", icon: "🎮" },
   { key: "football", label: "Футбол", icon: "⚽" },
   { key: "baseball", label: "Бейсбол", icon: "⚾" }
 ];

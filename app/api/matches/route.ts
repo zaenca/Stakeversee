@@ -89,7 +89,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v4";
+const API_VERSION = "bookmakers-v5";
 const MLB_TEAM_ALIASES: [string, string[]][] = [
   ["Техас Рейнджерс", ["texas", "техас", "texas rangers", "техас рейнджерс"]],
   ["Сиэтл Маринерс", ["seattle", "сиэтл", "seattle mariners", "сиэтл маринерс"]],
@@ -358,6 +358,15 @@ function splitTennisiCountryLeague(prefix: string, value: string): { country: st
   return isKnownCountry(parsed.country) ? parsed : { country: "World", league: `${countryCandidate} — ${value.trim()}` };
 }
 
+function normalizeEsportsLeagueName(sport: string, league: string): string {
+  if (sport !== "esports") return league;
+  return league
+    .replace(/\bbest\s+of\s*([135])\b/gi, "BO$1")
+    .replace(/\bbo\s*([135])\b/gi, "BO$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const COUNTRY_NAME_MAP: Record<string, string> = {
   "\u0411\u0415\u041b\u0410\u0420\u0423\u0421\u042c": "Belarus", "\u0420\u041e\u0421\u0421\u0418\u042f": "Russia", "\u0423\u041a\u0420\u0410\u0418\u041d\u0410": "Ukraine",
   "\u042f\u041f\u041e\u041d\u0418\u042f": "Japan", "\u041a\u0418\u0422\u0410\u0419": "China", "\u041a\u041e\u0420\u0415\u042f": "South Korea",
@@ -562,7 +571,7 @@ function fromBookmakerEvent(data: PariLikeData, item: PariLikeEvent, factorMap: 
     id: `${source}-${asString(item.id)}`,
     sport,
     country: locale.country,
-    league: locale.league,
+    league: normalizeEsportsLeagueName(sport, locale.league),
     home,
     away,
     startMs,
@@ -625,7 +634,7 @@ function parseTennisiHtml(html: string, sport: string): RawMatch[] {
     if (leagueMatch) {
       const locale = splitTennisiCountryLeague(leagueMatch[1], leagueMatch[2]);
       country = locale.country;
-      league = locale.league;
+      league = normalizeEsportsLeagueName(sport, locale.league);
       columns = [];
       continue;
     }
@@ -731,6 +740,17 @@ function displayTeamName(match: RawMatch, value: string): string {
   return MLB_TEAM_NAME_BY_ALIAS.get(normalizedName(value)) || value;
 }
 
+function normalizeEsportsParticipantAlias(value: string): string {
+  const cleaned = value
+    .replace(/\b(team|vivo|academy|академия)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (/^keyd(?:\s+stars)?$/.test(cleaned)) return "keyd";
+  if (/^solid$/.test(cleaned)) return "solid";
+  return cleaned;
+}
+
 function normalizeFootballParticipantAlias(value: string): string {
   const tokens = value
     .replace(/[э]/g, "е")
@@ -749,6 +769,7 @@ function normalizeFootballParticipantAlias(value: string): string {
 function normalizedMatchParticipant(match: RawMatch, value: string): string {
   if (match.sport === "baseball") return normalizedName(displayTeamName(match, value));
   const normalized = normalizedName(value);
+  if (match.sport === "esports") return normalizeEsportsParticipantAlias(normalized);
   if (match.sport === "football") return normalizeFootballParticipantAlias(normalized);
   if (match.sport !== "tennis") return normalized;
 
@@ -811,6 +832,23 @@ function dedupeKey(match: RawMatch): string {
 function mergeTimeToleranceMs(sport: string): number {
   if (sport === "football") return 3 * 60 * 60 * 1000;
   return sport === "tennis" ? 90 * 60 * 1000 : 45 * 60 * 1000;
+}
+
+function esportsBoFormat(value: string): string | null {
+  const match = value.match(/\b(?:bo|best\s+of)\s*([135])\b/i);
+  return match ? `BO${match[1]}` : null;
+}
+
+function mergedLeagueName(current: RawMatch, match: RawMatch): string {
+  if (current.sport === "esports") {
+    const currentBo = esportsBoFormat(current.league);
+    const nextBo = esportsBoFormat(match.league);
+    if (!currentBo && nextBo) return match.league;
+    if (currentBo && !new RegExp(`\\b${currentBo}\\b`, "i").test(current.league)) {
+      return `${current.league}. ${currentBo}`;
+    }
+  }
+  return current.league !== "World" ? current.league : match.league;
 }
 
 function findMergeKey(byKey: Map<string, RawMatch>, match: RawMatch): string | null {
@@ -898,7 +936,7 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
       ...current,
       id: `${current.id}+${match.id}`,
       country: current.country !== "World" ? current.country : match.country,
-      league: current.league !== "World" ? current.league : match.league,
+      league: mergedLeagueName(current, match),
       home: displayTeamName(current, /[а-яё]/i.test(current.home) ? current.home : match.home),
       away: displayTeamName(current, /[а-яё]/i.test(current.away) ? current.away : match.away),
       bookmakerOdds,

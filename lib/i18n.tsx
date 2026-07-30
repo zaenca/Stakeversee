@@ -44,6 +44,7 @@ export const translations: Record<string, string> = {
   "Хоккей": "Hockey",
   "Гандбол": "Handball",
   "Кибер": "Esports",
+  "Киберспорт": "Esports",
   "Футбол": "Football",
   "Бейсбол": "Baseball",
 
