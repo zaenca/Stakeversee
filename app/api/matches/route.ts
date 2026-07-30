@@ -89,7 +89,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v5";
+const API_VERSION = "bookmakers-v6";
 const MLB_TEAM_ALIASES: [string, string[]][] = [
   ["Техас Рейнджерс", ["texas", "техас", "texas rangers", "техас рейнджерс"]],
   ["Сиэтл Маринерс", ["seattle", "сиэтл", "seattle mariners", "сиэтл маринерс"]],
@@ -742,6 +742,7 @@ function displayTeamName(match: RawMatch, value: string): string {
 
 function normalizeEsportsParticipantAlias(value: string): string {
   const cleaned = value
+    .replace(/\bs\b/g, " ")
     .replace(/\b(team|vivo|academy|академия)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -749,6 +750,15 @@ function normalizeEsportsParticipantAlias(value: string): string {
   if (/^keyd(?:\s+stars)?$/.test(cleaned)) return "keyd";
   if (/^solid$/.test(cleaned)) return "solid";
   return cleaned;
+}
+
+function participantAcronym(value: string): string {
+  const tokens = value
+    .split(" ")
+    .filter(Boolean)
+    .filter((part) => !["team", "club", "academy", "gaming", "esports", "киберспорт"].includes(part));
+  if (tokens.length < 2) return "";
+  return tokens.map((part) => part[0]).join("");
 }
 
 function normalizeFootballParticipantAlias(value: string): string {
@@ -781,6 +791,7 @@ function normalizedMatchParticipant(match: RawMatch, value: string): string {
 
 function compactParticipantName(match: RawMatch, value: string): string {
   const normalized = normalizedMatchParticipant(match, value);
+  if (match.sport === "esports") return normalized;
   const parts = normalized.split(" ").filter(Boolean);
   const primary = match.sport === "tennis" ? parts.find(part => part.length > 1) || parts[0] || normalized : normalized;
   return primary.replace(/[aeiouаеёиоуыэюяьъ]/g, "") || primary;
@@ -803,12 +814,17 @@ function editDistance(a: string, b: string): number {
   return previous[b.length];
 }
 
-function areSimilarParticipants(a: string, b: string): boolean {
+function areSimilarParticipants(a: string, b: string, useAcronym = false): boolean {
   if (!a || !b) return false;
   if (a === b) return true;
   const maxLength = Math.max(a.length, b.length);
   if (maxLength < 4) return false;
   const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  if (useAcronym) {
+    const longerAcronym = participantAcronym(longer);
+    const shorterAcronym = participantAcronym(shorter);
+    if ((longerAcronym.length >= 2 && longerAcronym === shorter) || (shorterAcronym.length >= 2 && shorterAcronym === longer)) return true;
+  }
   if (shorter.length >= 3 && longer.split(" ").includes(shorter)) return true;
   return editDistance(a, b) <= Math.max(1, Math.floor(maxLength * 0.34));
 }
@@ -818,9 +834,10 @@ function sameParticipants(left: RawMatch, right: RawMatch): boolean {
   const leftAway = compactParticipantName(left, left.away);
   const rightHome = compactParticipantName(right, right.home);
   const rightAway = compactParticipantName(right, right.away);
+  const useAcronym = left.sport === "esports" || right.sport === "esports";
 
-  return (areSimilarParticipants(leftHome, rightHome) && areSimilarParticipants(leftAway, rightAway))
-    || (areSimilarParticipants(leftHome, rightAway) && areSimilarParticipants(leftAway, rightHome));
+  return (areSimilarParticipants(leftHome, rightHome, useAcronym) && areSimilarParticipants(leftAway, rightAway, useAcronym))
+    || (areSimilarParticipants(leftHome, rightAway, useAcronym) && areSimilarParticipants(leftAway, rightHome, useAcronym));
 }
 
 function dedupeKey(match: RawMatch): string {

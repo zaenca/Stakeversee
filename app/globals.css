@@ -1324,6 +1324,9 @@ h1 {
   border: 1px solid transparent;
   color: var(--muted);
   cursor: pointer;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 74px;
   padding: 14px 11px;
   text-align: left;
@@ -1349,19 +1352,30 @@ h1 {
   display: block;
 }
 
+.sport-tabs span {
+  grid-column: 1;
+}
+
 .sport-tabs strong {
   font-size: 0.78rem;
+  grid-column: 1;
   letter-spacing: 0.16em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .sport-tabs em {
   background: rgba(255, 255, 255, 0.06);
   border-radius: 999px;
-  float: right;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  align-self: center;
   font-size: 0.7rem;
   font-style: normal;
-  margin-top: -19px;
   padding: 2px 6px;
 }
 
