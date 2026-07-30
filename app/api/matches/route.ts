@@ -1,5 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 
+import { inferFootballCountry, isWorldCountry } from "@/lib/footballCountries";
 import { KBO_TEAMS, isKboMatchContext, kboTeamId, resolveKboTeam } from "@/lib/kboTeams";
 import { MLB_TEAMS, isMlbMatchContext, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 
@@ -96,7 +97,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v11";
+const API_VERSION = "bookmakers-v12";
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["oaxaca", ["oaxaca", "оахака", "геррерос де оаксака", "guerreros de oaxaca", "guerreros oaxaca"]],
@@ -489,6 +490,10 @@ function normalizeBaseballLeague(match: RawMatch): RawMatch {
 function normalizeMatchLocale(match: RawMatch): RawMatch {
   const baseballMatch = normalizeBaseballLeague(match);
   if (baseballMatch !== match) return withTeamIds(baseballMatch);
+  if (match.sport === "football" && isWorldCountry(match.country)) {
+    const inferredCountry = inferFootballCountry(match.league);
+    return withTeamIds({ ...match, country: inferredCountry || "World" });
+  }
   if (match.country !== "World" || match.sport !== "ice-hockey") return withTeamIds(match);
   if (!/товарищ|friendly/i.test(match.league)) return withTeamIds(match);
 
@@ -931,7 +936,8 @@ function sameParticipants(left: RawMatch, right: RawMatch): boolean {
   if (left.homeTeamId && left.awayTeamId && right.homeTeamId && right.awayTeamId) {
     const exactTeams = (left.homeTeamId === right.homeTeamId && left.awayTeamId === right.awayTeamId)
       || (left.homeTeamId === right.awayTeamId && left.awayTeamId === right.homeTeamId);
-    if (exactTeams || (left.sport !== "baseball" && right.sport !== "baseball")) return exactTeams;
+    const supportsNameFallback = ["baseball", "football"].includes(left.sport) && ["baseball", "football"].includes(right.sport);
+    if (exactTeams || !supportsNameFallback) return exactTeams;
   }
 
   const leftHome = compactParticipantName(left, left.home);

@@ -4,6 +4,7 @@ import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, use
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { type Lang, localeFor, translate, translateBetMarket, translateBetSelectionLine, translateBookmakerLabel, useLanguage } from "@/lib/i18n";
+import { inferFootballCountry, isWorldCountry } from "@/lib/footballCountries";
 import {
   isKboMatchContext,
   kboTeamId,
@@ -126,9 +127,10 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v12";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v13";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
+  "stakeversee:line-matches:v12",
   "stakeversee:line-matches:v11",
   "stakeversee:line-matches:v10",
   "stakeversee:line-matches:v9",
@@ -244,6 +246,10 @@ function clientBaseballTeamId(card: TeamCard): string {
 }
 
 function normalizeClientMatch(match: MatchRow): MatchRow {
+  if (match.sport === "football" && isWorldCountry(match.country)) {
+    const inferredCountry = inferFootballCountry(match.league);
+    return { ...match, country: inferredCountry || "World" };
+  }
   if (match.sport !== "baseball") return match;
   const homeCard = resolveKboTeam(match.home, match.homeTeamId);
   const awayCard = resolveKboTeam(match.away, match.awayTeamId);
@@ -326,6 +332,13 @@ function baseballMatchPairKey(match: MatchRow): string | null {
   return null;
 }
 
+function footballMatchPairKey(match: MatchRow): string | null {
+  if (match.sport !== "football") return null;
+  const home = compactMatchName(match.home);
+  const away = compactMatchName(match.away);
+  return home && away ? [home, away].sort().join("~") : null;
+}
+
 function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
   const byKey = new Map<string, MatchRow>();
 
@@ -352,7 +365,18 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
             : compactMatchName(match.time) === compactMatchName(candidate.time);
         })?.[0]
       : undefined;
-    const resolvedKey = existingBaseballKey || key;
+    const footballPairKey = footballMatchPairKey(match);
+    const existingFootballKey = footballPairKey
+      ? Array.from(byKey.entries()).find(([, candidate]) => {
+          if (footballMatchPairKey(candidate) !== footballPairKey) return false;
+          const matchStart = match.startsAt ? new Date(match.startsAt).getTime() : 0;
+          const candidateStart = candidate.startsAt ? new Date(candidate.startsAt).getTime() : 0;
+          return matchStart && candidateStart
+            ? Math.abs(matchStart - candidateStart) <= 3 * 60 * 60 * 1000
+            : compactMatchName(match.time) === compactMatchName(candidate.time);
+        })?.[0]
+      : undefined;
+    const resolvedKey = existingBaseballKey || existingFootballKey || key;
     const current = byKey.get(resolvedKey);
 
     if (!current) {
@@ -367,7 +391,13 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
     const canonicalHome = clientBaseballTeamCard(current.home, current.homeTeamId);
     const canonicalAway = clientBaseballTeamCard(current.away, current.awayTeamId);
     const canonicalLeague = baseballPairKey?.startsWith("KBO|") ? "KBO" : baseballPairKey?.startsWith("MLB|") ? "MLB" : current.league;
-    const canonicalCountry = canonicalLeague === "KBO" ? "South Korea" : canonicalLeague === "MLB" ? "USA" : current.country;
+    const canonicalCountry = canonicalLeague === "KBO"
+      ? "South Korea"
+      : canonicalLeague === "MLB"
+        ? "USA"
+        : existingFootballKey && isWorldCountry(current.country)
+          ? match.country
+          : current.country;
 
     byKey.set(resolvedKey, {
       ...current,
@@ -639,6 +669,16 @@ const COUNTRY_FLAGS: Record<string, string> = {
   "Bhutan": "🇧🇹", "Бутан": "🇧🇹", "BT": "🇧🇹",
   "Uruguay": "🇺🇾", "Уругвай": "🇺🇾", "UY": "🇺🇾",
   "Taiwan": "🇹🇼", "Тайвань": "🇹🇼", "TW": "🇹🇼",
+  "Kyrgyzstan": "🇰🇬", "Кыргызстан": "🇰🇬",
+  "Uzbekistan": "🇺🇿", "Узбекистан": "🇺🇿",
+  "Paraguay": "🇵🇾", "Парагвай": "🇵🇾",
+  "Panama": "🇵🇦", "Панама": "🇵🇦",
+  "Ecuador": "🇪🇨", "Эквадор": "🇪🇨",
+  "Pakistan": "🇵🇰", "Пакистан": "🇵🇰",
+  "Bangladesh": "🇧🇩", "Бангладеш": "🇧🇩",
+  "Afghanistan": "🇦🇫", "Афганистан": "🇦🇫",
+  "Nepal": "🇳🇵", "Непал": "🇳🇵",
+  "Sri Lanka": "🇱🇰", "Шри-Ланка": "🇱🇰",
   "World": "🌍", "WORLD": "🌍", "INT": "🌍", "International": "🌍",
   "ATP": "🎾", "WTA": "🎾", "ITF": "🎾",
   "Europe": "🇪🇺", "UEFA": "🇪🇺",
@@ -669,7 +709,16 @@ const COUNTRY_ISO: Record<string, string> = {
   "Wales": "gb-wls", "Ireland": "ie", "Slovenia": "si",
   "Bosnia and Herzegovina": "ba", "North Macedonia": "mk", "Albania": "al",
   "Iceland": "is", "Vietnam": "vn", "Malaysia": "my", "Singapore": "sg",
-  "Hong Kong": "hk",
+  "Hong Kong": "hk", "Kyrgyzstan": "kg", "Uzbekistan": "uz",
+  "Azerbaijan": "az", "Montenegro": "me", "Paraguay": "py", "Ecuador": "ec",
+  "Venezuela": "ve", "Guatemala": "gt", "Nicaragua": "ni", "Honduras": "hn",
+  "Dominican Republic": "do", "Puerto Rico": "pr", "Panama": "pa",
+  "Bolivia": "bo", "Costa Rica": "cr", "El Salvador": "sv", "South Africa": "za",
+  "Moldova": "md", "Georgia": "ge", "Armenia": "am", "Kosovo": "xk",
+  "Malta": "mt", "Cyprus": "cy", "Algeria": "dz", "Nigeria": "ng",
+  "Ghana": "gh", "Kenya": "ke", "Tanzania": "tz", "Jamaica": "jm",
+  "Pakistan": "pk", "Bangladesh": "bd", "Afghanistan": "af", "Nepal": "np",
+  "Sri Lanka": "lk",
 };
 
 function getCountryIso(country: string): string | null {
@@ -739,6 +788,19 @@ const COUNTRY_RU_NAMES: Record<string, string> = {
   "North Macedonia": "Северная Македония", "Albania": "Албания",
   "Iceland": "Исландия", "Vietnam": "Вьетнам", "Malaysia": "Малайзия",
   "Singapore": "Сингапур", "Hong Kong": "Гонконг",
+  "Kyrgyzstan": "Кыргызстан", "Uzbekistan": "Узбекистан",
+  "Azerbaijan": "Азербайджан", "Montenegro": "Черногория",
+  "Paraguay": "Парагвай", "Ecuador": "Эквадор", "Venezuela": "Венесуэла",
+  "Guatemala": "Гватемала", "Nicaragua": "Никарагуа", "Honduras": "Гондурас",
+  "Dominican Republic": "Доминиканская Республика", "Puerto Rico": "Пуэрто-Рико",
+  "Panama": "Панама", "Bolivia": "Боливия", "Costa Rica": "Коста-Рика",
+  "El Salvador": "Сальвадор", "South Africa": "ЮАР", "Moldova": "Молдова",
+  "Georgia": "Грузия", "Armenia": "Армения", "Kosovo": "Косово",
+  "Malta": "Мальта", "Cyprus": "Кипр", "Algeria": "Алжир",
+  "Nigeria": "Нигерия", "Ghana": "Гана", "Kenya": "Кения",
+  "Tanzania": "Танзания", "Jamaica": "Ямайка",
+  "Pakistan": "Пакистан", "Bangladesh": "Бангладеш",
+  "Afghanistan": "Афганистан", "Nepal": "Непал", "Sri Lanka": "Шри-Ланка",
 };
 
 function getCountryLabel(country: string, lang: Lang): string {
