@@ -1,14 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 
 import { inferFootballCountry, isWorldCountry } from "@/lib/footballCountries";
-import {
-  areHltvTeamNamesSimilar,
-  findHltvRanking,
-  loadHltvRankings,
-  loadHltvUpcomingMatches,
-  type HltvRankingData,
-  type HltvUpcomingMatch
-} from "@/lib/hltv";
 import { KBO_TEAMS, isKboMatchContext, kboTeamId, resolveKboTeam } from "@/lib/kboTeams";
 import { MLB_TEAMS, isMlbMatchContext, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 
@@ -105,8 +97,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v14";
-const HLTV_LINE_BUDGET_MS = 1_800;
+const API_VERSION = "bookmakers-v15";
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["oaxaca", ["oaxaca", "оахака", "геррерос де оаксака", "guerreros de oaxaca", "guerreros oaxaca"]],
@@ -991,37 +982,6 @@ function mergedLeagueName(current: RawMatch, match: RawMatch): string {
   return current.league !== "World" ? current.league : match.league;
 }
 
-function isCounterStrikeMatch(match: RawMatch): boolean {
-  return match.sport === "esports" && /\b(counter[\s.-]*strike|cs2?|кс)\b/i.test(match.league);
-}
-
-function sameHltvParticipants(match: RawMatch, hltvMatch: HltvUpcomingMatch): boolean {
-  return (
-    areHltvTeamNamesSimilar(match.home, hltvMatch.home)
-    && areHltvTeamNamesSimilar(match.away, hltvMatch.away)
-  ) || (
-    areHltvTeamNamesSimilar(match.home, hltvMatch.away)
-    && areHltvTeamNamesSimilar(match.away, hltvMatch.home)
-  );
-}
-
-function enrichCounterStrikeFormat(match: RawMatch, hltvMatches: HltvUpcomingMatch[]): RawMatch {
-  if (!isCounterStrikeMatch(match) || esportsBoFormat(match.league)) return match;
-  const hltvMatch = hltvMatches.find(candidate => (
-    Math.abs(candidate.startsAt - match.startMs) <= 3 * 60 * 60 * 1000
-    && sameHltvParticipants(match, candidate)
-  ));
-  if (!hltvMatch) return match;
-
-  const tournament = hltvMatch.event && !normalizedName(match.league).includes(normalizedName(hltvMatch.event))
-    ? `${match.league}. ${hltvMatch.event}`
-    : match.league;
-  return {
-    ...match,
-    league: normalizeEsportsLeagueName(match.sport, `${tournament}. ${hltvMatch.format}`)
-  };
-}
-
 function findMergeKey(byKey: Map<string, RawMatch>, match: RawMatch): string | null {
   const exactKey = dedupeKey(match);
   if (byKey.has(exactKey)) return exactKey;
@@ -1150,44 +1110,14 @@ function toApiMatch(match: RawMatch): ApiMatch {
 async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[]; debug: Record<string, unknown> }> {
   const now = Date.now();
   const horizon = now + Math.max(1, hours) * 60 * 60 * 1000;
-  const emptyRanking: HltvRankingData = { source: "недоступен", updatedAt: "", rows: [] };
-  const hltvDataPromise = Promise.race([
-    Promise.all([
-      loadHltvRankings().catch(error => {
-        console.error("Counter-Strike ranking unavailable", error);
-        return emptyRanking;
-      }),
-      loadHltvUpcomingMatches()
-    ]).then(([ranking, matches]) => ({ ranking, matches })),
-    new Promise<{ ranking: HltvRankingData; matches: HltvUpcomingMatch[] }>(resolve => {
-      setTimeout(() => resolve({
-        ranking: { ...emptyRanking, source: "таймаут" },
-        matches: []
-      }), HLTV_LINE_BUDGET_MS);
-    })
-  ]);
   const [pari, fonbet, tennisi] = await Promise.all([
     fetchPariLike(PARI_LINE_URLS, "pari"),
     fetchPariLike(FONBET_LINE_URLS, "fonbet"),
     fetchTennisiMatches()
   ]);
-  const { ranking: hltvRanking, matches: hltvMatches } = await hltvDataPromise;
   const raw = [...pari, ...fonbet, ...tennisi, ...featuredFallbackMatches(now, horizon)]
     .filter((match) => match.startMs > now && match.startMs <= horizon);
-  const mergedBeforeCounterStrikeFilter = mergeMatches(raw);
-  const counterStrikeBefore = mergedBeforeCounterStrikeFilter.filter(isCounterStrikeMatch).length;
-  const merged = mergedBeforeCounterStrikeFilter
-    .map(match => enrichCounterStrikeFormat(match, hltvMatches))
-    .filter(match => {
-      if (match.sport === "esports" && !esportsBoFormat(match.league)) return false;
-      if (!isCounterStrikeMatch(match)) return true;
-      if (!hltvRanking.rows.length) return true;
-      return Boolean(
-        findHltvRanking(match.home, hltvRanking.rows)
-        || findHltvRanking(match.away, hltvRanking.rows)
-      );
-    })
-    .map(toApiMatch);
+  const merged = mergeMatches(raw).map(toApiMatch);
   return {
     matches: merged,
     debug: {
@@ -1195,12 +1125,7 @@ async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[
       fonbet: fonbet.length,
       tennisi: tennisi.length,
       raw: raw.length,
-      merged: merged.length,
-      counterStrikeBefore,
-      counterStrikeAfter: merged.filter(match => match.sport === "esports" && /\bCounter-Strike\b/i.test(match.league)).length,
-      hltvRankedTeams: hltvRanking.rows.length,
-      hltvUpcomingMatches: hltvMatches.length,
-      hltvSource: hltvRanking.source
+      merged: merged.length
     }
   };
 }
