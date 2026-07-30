@@ -105,7 +105,8 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v13";
+const API_VERSION = "bookmakers-v14";
+const HLTV_LINE_BUDGET_MS = 1_800;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["oaxaca", ["oaxaca", "оахака", "геррерос де оаксака", "guerreros de oaxaca", "guerreros oaxaca"]],
@@ -1150,16 +1151,27 @@ async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[
   const now = Date.now();
   const horizon = now + Math.max(1, hours) * 60 * 60 * 1000;
   const emptyRanking: HltvRankingData = { source: "недоступен", updatedAt: "", rows: [] };
-  const [pari, fonbet, tennisi, hltvRanking, hltvMatches] = await Promise.all([
+  const hltvDataPromise = Promise.race([
+    Promise.all([
+      loadHltvRankings().catch(error => {
+        console.error("Counter-Strike ranking unavailable", error);
+        return emptyRanking;
+      }),
+      loadHltvUpcomingMatches()
+    ]).then(([ranking, matches]) => ({ ranking, matches })),
+    new Promise<{ ranking: HltvRankingData; matches: HltvUpcomingMatch[] }>(resolve => {
+      setTimeout(() => resolve({
+        ranking: { ...emptyRanking, source: "таймаут" },
+        matches: []
+      }), HLTV_LINE_BUDGET_MS);
+    })
+  ]);
+  const [pari, fonbet, tennisi] = await Promise.all([
     fetchPariLike(PARI_LINE_URLS, "pari"),
     fetchPariLike(FONBET_LINE_URLS, "fonbet"),
-    fetchTennisiMatches(),
-    loadHltvRankings().catch(error => {
-      console.error("Counter-Strike ranking unavailable", error);
-      return emptyRanking;
-    }),
-    loadHltvUpcomingMatches()
+    fetchTennisiMatches()
   ]);
+  const { ranking: hltvRanking, matches: hltvMatches } = await hltvDataPromise;
   const raw = [...pari, ...fonbet, ...tennisi, ...featuredFallbackMatches(now, horizon)]
     .filter((match) => match.startMs > now && match.startMs <= horizon);
   const mergedBeforeCounterStrikeFilter = mergeMatches(raw);
