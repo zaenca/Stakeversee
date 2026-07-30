@@ -1578,6 +1578,7 @@ export default function Home() {
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [standingsMessage, setStandingsMessage] = useState("");
   const [standingsMatch, setStandingsMatch] = useState<MatchRow | null>(null);
+  const [standingsSource, setStandingsSource] = useState("");
   const [standingsTitle, setStandingsTitle] = useState("");
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState<MatchesStatusState>({ kind: "idle" });
@@ -2144,6 +2145,7 @@ export default function Home() {
   async function openStandings(match: MatchRow) {
     setStandingsOpen(true);
     setStandingsMatch(match);
+    setStandingsSource("");
     setStandingsTitle(`${match.league} · ${match.home} — ${match.away}`);
     setStandingsLoading(true);
     setStandingsMessage("");
@@ -2152,6 +2154,7 @@ export default function Home() {
       const response = await fetch(`/api/standings?sport=${encodeURIComponent(match.sport)}&league=${encodeURIComponent(match.league)}`, { cache: "no-store" });
       if (!response.ok) throw new Error("standings unavailable");
       const payload = await response.json();
+      setStandingsSource(String(payload?.source || ""));
       setStandingsTitle(`${String(payload?.league || match.league)} · ${match.home} — ${match.away}`);
       const rows = Array.isArray(payload?.standings) ? payload.standings : [];
       setStandingsRows(rows.map((row: Partial<StandingRow> & Record<string, unknown>, index: number) => ({
@@ -4721,6 +4724,7 @@ export default function Home() {
                 role="dialog"
               >
                 <div className="rail-title">📊 {t("Турнирная таблица")} {standingsTitle}</div>
+                {standingsSource ? <div className="standings-source">{t("Источник")}: {standingsSource}</div> : null}
                 <button className="stats-modal-close" aria-label={t("Закрыть таблицу")} onClick={() => setStandingsOpen(false)} type="button">×</button>
                 {standingsLoading ? (
                   <div className="assistant-empty-hint">{t("Загружаю таблицу...")}</div>

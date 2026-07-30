@@ -35,6 +35,29 @@ const BASEBALL_STANDINGS_SLUGS: Array<{ pattern: RegExp; label: string; slug: st
   { pattern: /\blmb\b|mexic|мексик/i, label: "LMB", slug: "mexican-winter-league" }
 ];
 
+const KBO_REFERENCE_STANDINGS: StandingRow[] = [
+  "LG Twins / ЛГ Твинс",
+  "Hanwha Eagles / Ханвха Иглс",
+  "Lotte Giants / Лотте Джайентс",
+  "SSG Landers / ССГ Ландерс",
+  "KIA Tigers / КИА Тайгерс",
+  "KT Wiz / КТ Виз",
+  "Samsung Lions / Самсунг Лайонс",
+  "NC Dinos / НК Динос",
+  "Doosan Bears / Дусан Беарс",
+  "Kiwoom Heroes / Кивум Хироуз"
+].map((team, index) => ({
+  id: `kbo-reference-${index + 1}`,
+  rank: index + 1,
+  league: "KBO",
+  division: "KBO",
+  team,
+  wins: 0,
+  losses: 0,
+  pct: "-",
+  gamesBack: "-"
+}));
+
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   Pragma: "no-cache",
@@ -77,9 +100,15 @@ export async function GET(request: Request) {
 
   try {
     const standings = await loadBaseballStandings(standingLeague.slug, standingLeague.label);
+    if (standingLeague.label === "KBO" && standings.length === 0) {
+      return NextResponse.json({ sport: "baseball", league: "KBO", source: "Reference", standings: KBO_REFERENCE_STANDINGS }, { headers: NO_STORE_HEADERS });
+    }
     return NextResponse.json({ sport: "baseball", league: standingLeague.label, source: "ESPN", standings }, { headers: NO_STORE_HEADERS });
   } catch (error) {
     console.error("Standings route failed", error);
+    if (standingLeague.label === "KBO") {
+      return NextResponse.json({ sport: "baseball", league: "KBO", source: "Reference", standings: KBO_REFERENCE_STANDINGS }, { headers: NO_STORE_HEADERS });
+    }
     return NextResponse.json({ league: standingLeague.label, source: "ESPN", standings: [] }, { status: 502, headers: NO_STORE_HEADERS });
   }
 }

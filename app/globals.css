@@ -1817,6 +1817,16 @@ h1 {
   text-transform: uppercase;
 }
 
+.standings-source {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  margin: -8px 0 14px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 .standings-table {
   display: grid;
 }

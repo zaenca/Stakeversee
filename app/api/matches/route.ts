@@ -139,7 +139,17 @@ const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["saraperos saltillo", ["saraperos saltillo", "saraperos de saltillo", "saltillo", "сараперос"]],
   ["rieleros aguascalientes", ["rieleros aguascalientes", "rieleros de aguascalientes", "aguascalientes", "рьелерос"]],
   ["tigres quintana roo", ["tigres quintana roo", "tigres de quintana roo", "quintana roo", "тигрес"]],
-  ["leones yucatan", ["leones yucatan", "leones de yucatan", "yucatan", "юкатан"]]
+  ["leones yucatan", ["leones yucatan", "leones de yucatan", "yucatan", "юкатан"]],
+  ["nc dinos", ["nc dinos", "nk dinos", "нц динос", "нк динос", "диноз", "динос"]],
+  ["kt wiz", ["kt wiz", "kt wiz suwon", "кт виз", "кт уиз", "виз"]],
+  ["ssg landers", ["ssg landers", "ссг ландерс", "ssg", "лендерс", "ландерс"]],
+  ["doosan bears", ["doosan bears", "дусан беарс", "дусан", "doosan"]],
+  ["lg twins", ["lg twins", "лджи твинс", "лг твинс", "lg"]],
+  ["kiwoom heroes", ["kiwoom heroes", "кивум хироуз", "кивум"]],
+  ["kia tigers", ["kia tigers", "киа тайгерс", "kia"]],
+  ["lotte giants", ["lotte giants", "лотте джайентс", "lotte"]],
+  ["samsung lions", ["samsung lions", "самсунг лайонс", "samsung"]],
+  ["hanwha eagles", ["hanwha eagles", "ханвха иглс", "hanwha"]]
 ];
 
 const BASEBALL_TEAM_ID_BY_ALIAS = new Map(
@@ -485,6 +495,9 @@ const HOCKEY_FRIENDLY_COUNTRY_HINTS: Array<[RegExp, string]> = [
 function normalizeBaseballLeague(match: RawMatch): RawMatch {
   if (match.sport !== "baseball") return match;
   const full = `${match.country} ${match.league}`.toLowerCase();
+  if (/\b(kbo|korea|south korea|коре[яй]|южн\w*\s+коре)/i.test(full)) {
+    return { ...match, country: "South Korea", league: "KBO" };
+  }
   if (/\b(lmb|mexico|мексик)/i.test(full)) {
     return { ...match, country: "Mexico", league: "LMB" };
   }
