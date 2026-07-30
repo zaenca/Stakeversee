@@ -113,6 +113,11 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
 }
 
 const MATCH_CACHE_KEY = "stakeversee:line-matches:v10";
+const MATCH_CACHE_FALLBACK_KEYS = [
+  MATCH_CACHE_KEY,
+  "stakeversee:line-matches:v9",
+  "stakeversee:line-matches:v8"
+];
 
 const MAX_COUPON_ITEMS = 5;
 const BASE_BANKROLL = 10000;
@@ -924,15 +929,20 @@ function formatHeadToHeadDate(value: string, lang: Lang) {
 function readCachedMatches() {
   if (typeof window === "undefined") return [];
 
-  try {
-    const raw = window.localStorage.getItem(MATCH_CACHE_KEY);
-    if (!raw) return [];
+  for (const key of MATCH_CACHE_FALLBACK_KEYS) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
 
-    const parsed = JSON.parse(raw) as { matches?: MatchRow[] };
-    return getFutureMatches(Array.isArray(parsed.matches) ? parsed.matches : []);
-  } catch {
-    return [];
+      const parsed = JSON.parse(raw) as { matches?: MatchRow[] };
+      const matches = getFutureMatches(Array.isArray(parsed.matches) ? parsed.matches : []);
+      if (matches.length) return matches;
+    } catch {
+      continue;
+    }
   }
+
+  return [];
 }
 
 function writeCachedMatches(matches: MatchRow[]) {
@@ -2146,7 +2156,13 @@ export default function Home() {
         })
         .filter((match: MatchRow) => match.home && match.away);
 
-      writeCachedMatches(normalizedMatches);
+      if (!normalizedMatches.length && cachedMatches.length) {
+        setLineMatches(cachedMatches);
+        setMatchesStatus({ kind: "cache", count: cachedMatches.length });
+        return;
+      }
+
+      if (normalizedMatches.length) writeCachedMatches(normalizedMatches);
       const upcomingMatches = getMatchesInTimeWindow(normalizedMatches, matchTimeWindow);
       setLineMatches(getFutureMatches(normalizedMatches));
       setMatchesStatus({ kind: "live", count: normalizedMatches.length });
