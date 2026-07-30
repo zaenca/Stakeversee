@@ -203,6 +203,141 @@ function searchHaystack(...parts: string[]): string {
   return `${normalized} ${transliterated}`;
 }
 
+function compactMatchName(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[ё]/g, "е")
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+    .replace(/\b(fc|fk|bc|hc|cf|sc|club|w|women|u\d+)\b|(^|\s)(хк|фк|бк)(?=\s)/g, " ")
+    .replace(/[^a-zа-я0-9]+/gi, " ")
+    .trim();
+}
+
+const CLIENT_BASEBALL_TEAM_ALIASES: [string, string[]][] = [
+  ["nc dinos", ["nc dinos", "nk dinos", "нц динос", "нк динос", "диноз", "динос"]],
+  ["kt wiz", ["kt wiz", "kt wiz suwon", "кт виз", "кт уиз", "виз"]],
+  ["ssg landers", ["ssg landers", "ссг ландерс", "ссг лэндерс", "ssg", "лендерс", "лэндерс", "ландерс"]],
+  ["doosan bears", ["doosan bears", "дусан беарс", "дусан", "doosan"]],
+  ["lg twins", ["lg twins", "лджи твинс", "лг твинс", "элджи твинс", "lg"]],
+  ["kiwoom heroes", ["kiwoom heroes", "кивум хироуз", "кивум"]],
+  ["kia tigers", ["kia tigers", "киа тайгерс", "kia"]],
+  ["lotte giants", ["lotte giants", "лотте джайентс", "lotte"]],
+  ["samsung lions", ["samsung lions", "самсунг лайонс", "samsung"]],
+  ["hanwha eagles", ["hanwha eagles", "ханвха иглс", "ханва иглс", "хануа иглс", "hanwha"]]
+];
+
+const CLIENT_BASEBALL_TEAM_BY_ALIAS = new Map(
+  CLIENT_BASEBALL_TEAM_ALIASES.flatMap(([id, aliases]) => aliases.map(alias => [compactMatchName(alias), id] as const))
+);
+
+function clientBaseballTeamKey(value: string, teamId?: string): string {
+  const idTail = teamId?.split(":").pop() || "";
+  const normalizedIdTail = compactMatchName(idTail);
+  if (CLIENT_BASEBALL_TEAM_BY_ALIAS.has(normalizedIdTail)) return CLIENT_BASEBALL_TEAM_BY_ALIAS.get(normalizedIdTail) || normalizedIdTail;
+
+  const normalized = compactMatchName(value);
+  return CLIENT_BASEBALL_TEAM_BY_ALIAS.get(normalized) || normalized;
+}
+
+function normalizeClientMatch(match: MatchRow): MatchRow {
+  if (match.sport !== "baseball") return match;
+  const full = compactMatchName(`${match.country} ${match.league}`);
+  const homeKey = clientBaseballTeamKey(match.home, match.homeTeamId);
+  const awayKey = clientBaseballTeamKey(match.away, match.awayTeamId);
+
+  if (/kbo|korea|коре|южн\s+коре|чемпионат\s+южн\s+коре/.test(full)) {
+    return {
+      ...match,
+      country: "South Korea",
+      league: "KBO",
+      homeTeamId: `baseball:south korea:kbo:${homeKey}`,
+      awayTeamId: `baseball:south korea:kbo:${awayKey}`
+    };
+  }
+
+  if (/lmb|mexico|мексик/.test(full)) {
+    return {
+      ...match,
+      country: "Mexico",
+      league: "LMB",
+      homeTeamId: `baseball:mexico:lmb:${homeKey}`,
+      awayTeamId: `baseball:mexico:lmb:${awayKey}`
+    };
+  }
+
+  return match;
+}
+
+function bestClientOdds(bookmakerOdds?: Partial<Record<MatchBookmakerKey, string[]>>): { odds: string[]; labels: string[] } {
+  const entries = Object.entries(bookmakerOdds || {}) as Array<[MatchBookmakerKey, string[]]>;
+  const odds = [0, 1, 2].map(index => {
+    const best = entries
+      .map(([bookmaker, values]) => ({ bookmaker, value: String(values?.[index] || "-") }))
+      .map(item => ({ ...item, numeric: Number(item.value.replace(",", ".")) }))
+      .filter(item => Number.isFinite(item.numeric) && item.numeric > 0)
+      .sort((a, b) => b.numeric - a.numeric)[0];
+    return best?.value || "-";
+  });
+  const labels = [0, 1, 2].map(index => {
+    const best = entries
+      .map(([bookmaker, values]) => ({ bookmaker, value: String(values?.[index] || "-") }))
+      .map(item => ({ ...item, numeric: Number(item.value.replace(",", ".")) }))
+      .filter(item => Number.isFinite(item.numeric) && item.numeric > 0)
+      .sort((a, b) => b.numeric - a.numeric)[0];
+    return best ? MATCH_BOOKMAKER_LABELS[best.bookmaker] : "";
+  });
+  return { odds, labels };
+}
+
+function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
+  const byKey = new Map<string, MatchRow>();
+
+  matches.map(normalizeClientMatch).forEach(match => {
+    const startKey = match.startsAt ? Math.round(new Date(match.startsAt).getTime() / (15 * 60 * 1000)) : compactMatchName(match.time);
+    const homeKey = match.sport === "baseball" ? clientBaseballTeamKey(match.home, match.homeTeamId) : compactMatchName(match.home);
+    const awayKey = match.sport === "baseball" ? clientBaseballTeamKey(match.away, match.awayTeamId) : compactMatchName(match.away);
+    const teamKey = [homeKey, awayKey].sort().join("~");
+    const key = [
+      match.sport,
+      startKey,
+      compactMatchName(match.country),
+      compactMatchName(match.league),
+      teamKey
+    ].join("|");
+    const current = byKey.get(key);
+
+    if (!current) {
+      byKey.set(key, match);
+      return;
+    }
+
+    const bookmakerOdds = { ...current.bookmakerOdds, ...match.bookmakerOdds };
+    const best = bestClientOdds(bookmakerOdds);
+    const chosen = match.confidence > current.confidence ? match : current;
+    const mergedOdds = best.odds.some(odd => odd && odd !== "-") ? best.odds : current.odds;
+
+    byKey.set(key, {
+      ...current,
+      id: `${current.id}+${match.id}`,
+      home: /[а-яё]/i.test(current.home) ? current.home : match.home,
+      away: /[а-яё]/i.test(current.away) ? current.away : match.away,
+      bookmakerOdds,
+      odds: mergedOdds,
+      bestBookmakers: best.labels,
+      confidence: Math.max(current.confidence, match.confidence),
+      recommendationSide: chosen.recommendationSide
+    });
+  });
+
+  return Array.from(byKey.values()).sort((a, b) => {
+    const left = a.startsAt ? new Date(a.startsAt).getTime() : 0;
+    const right = b.startsAt ? new Date(b.startsAt).getTime() : 0;
+    return left - right;
+  });
+}
+
 function formatEventName(value: string): string {
   return value.replace(/\s+vs\s+/gi, " - ").replace(/\s+-\s+/g, " - ").trim();
 }
@@ -935,7 +1070,7 @@ function readCachedMatches() {
       if (!raw) continue;
 
       const parsed = JSON.parse(raw) as { matches?: MatchRow[] };
-      const matches = getFutureMatches(Array.isArray(parsed.matches) ? parsed.matches : []);
+      const matches = getFutureMatches(mergeClientMatches(Array.isArray(parsed.matches) ? parsed.matches : []));
       if (matches.length) return matches;
     } catch {
       continue;
@@ -2125,7 +2260,7 @@ export default function Home() {
 
       const payload = await response.json();
       const rawMatches = Array.isArray(payload) ? payload : Array.isArray(payload?.matches) ? payload.matches : [];
-      const normalizedMatches: MatchRow[] = rawMatches
+      const normalizedMatches: MatchRow[] = mergeClientMatches(rawMatches
         .map((match: Partial<MatchRow> & Record<string, unknown>, index: number) => {
           const startsAt = typeof match.startsAt === "string" ? match.startsAt : undefined;
           const startsAtTime = startsAt ? new Date(startsAt) : null;
@@ -2154,7 +2289,7 @@ export default function Home() {
             awayTeamId: match.awayTeamId ? String(match.awayTeamId) : undefined
           };
         })
-        .filter((match: MatchRow) => match.home && match.away);
+        .filter((match: MatchRow) => match.home && match.away));
 
       if (!normalizedMatches.length && cachedMatches.length) {
         setLineMatches(cachedMatches);
