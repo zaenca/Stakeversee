@@ -89,7 +89,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v6";
+const API_VERSION = "bookmakers-v7";
 const MLB_TEAM_ALIASES: [string, string[]][] = [
   ["Техас Рейнджерс", ["texas", "техас", "texas rangers", "техас рейнджерс"]],
   ["Сиэтл Маринерс", ["seattle", "сиэтл", "seattle mariners", "сиэтл маринерс"]],
@@ -360,10 +360,53 @@ function splitTennisiCountryLeague(prefix: string, value: string): { country: st
 
 function normalizeEsportsLeagueName(sport: string, league: string): string {
   if (sport !== "esports") return league;
-  return league
+  const value = league
     .replace(/\bbest\s+of\s*([135])\b/gi, "BO$1")
     .replace(/\bbo\s*([135])\b/gi, "BO$1")
+    .replace(/\s*[-–—·:]\s*/g, ". ")
+    .replace(/\s*\.\s*/g, ". ")
     .replace(/\s+/g, " ")
+    .trim();
+  const bo = esportsBoFormat(value);
+  const discipline = esportsDisciplineName(value);
+  const tournament = normalizeEsportsTournamentName(value, discipline, bo);
+  return [discipline, tournament, bo].filter(Boolean).join(". ") || value;
+}
+
+function esportsDisciplineName(value: string): string | null {
+  if (/\b(league\s+of\s+legends|lol)\b/i.test(value)) return "LoL";
+  if (/\b(counter\s*strike|cs2?|кс)\b/i.test(value)) return "Counter-Strike";
+  if (/\b(dota\s*2?|дота)\b/i.test(value)) return "Dota 2";
+  if (/\b(call\s+of\s+duty|cod)\b/i.test(value)) return "Call of Duty";
+  if (/\bvalorant\b/i.test(value)) return "Valorant";
+  if (/\boverwatch\b/i.test(value)) return "Overwatch";
+  if (/\brainbow\s*six\b/i.test(value)) return "Rainbow Six";
+  if (/\bstarcraft\b/i.test(value)) return "StarCraft";
+  return null;
+}
+
+function normalizeEsportsTournamentName(value: string, discipline: string | null, bo: string | null): string {
+  let tournament = value;
+  if (discipline === "LoL") tournament = tournament.replace(/\b(league\s+of\s+legends|lol)\b/gi, " ");
+  if (discipline === "Counter-Strike") tournament = tournament.replace(/\b(counter\s*strike|cs2?|кс)\b/gi, " ");
+  if (discipline === "Dota 2") tournament = tournament.replace(/\b(dota\s*2?|дота)\b/gi, " ");
+  if (discipline === "Call of Duty") tournament = tournament.replace(/\b(call\s+of\s+duty|cod)\b/gi, " ");
+  if (discipline === "Valorant") tournament = tournament.replace(/\bvalorant\b/gi, " ");
+  if (discipline === "Overwatch") tournament = tournament.replace(/\boverwatch\b/gi, " ");
+  if (discipline === "Rainbow Six") tournament = tournament.replace(/\brainbow\s*six\b/gi, " ");
+  if (discipline === "StarCraft") tournament = tournament.replace(/\bstarcraft\b/gi, " ");
+  if (bo) tournament = tournament.replace(new RegExp(`\\b${bo}\\b`, "gi"), " ");
+  return tournament
+    .replace(/\bqualification\b/gi, " ")
+    .replace(/\bквалификация\b/gi, " ")
+    .replace(/\s*[-–—·:]\s*/g, ". ")
+    .replace(/\s*\.\s*/g, ". ")
+    .replace(/\.{2,}/g, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\blck\b/gi, "LCK")
+    .replace(/\blcs\b/gi, "LCS")
+    .replace(/\blec\b/gi, "LEC")
     .trim();
 }
 
@@ -743,7 +786,7 @@ function displayTeamName(match: RawMatch, value: string): string {
 function normalizeEsportsParticipantAlias(value: string): string {
   const cleaned = value
     .replace(/\bs\b/g, " ")
-    .replace(/\b(team|vivo|academy|академия)\b/g, " ")
+    .replace(/\b(team|vivo|academy|академия|challengers?|esports?|киберспорт)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -756,7 +799,7 @@ function participantAcronym(value: string): string {
   const tokens = value
     .split(" ")
     .filter(Boolean)
-    .filter((part) => !["team", "club", "academy", "gaming", "esports", "киберспорт"].includes(part));
+    .filter((part) => !["team", "club", "academy", "challenger", "challengers", "gaming", "esports", "киберспорт"].includes(part));
   if (tokens.length < 2) return "";
   return tokens.map((part) => part[0]).join("");
 }

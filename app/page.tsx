@@ -100,7 +100,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v6";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v7";
 
 const MAX_COUPON_ITEMS = 5;
 const BASE_BANKROLL = 10000;
