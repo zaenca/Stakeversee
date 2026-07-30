@@ -1828,20 +1828,26 @@ h1 {
 }
 
 .standings-h2h {
-  align-items: center;
   background: rgba(0, 229, 255, 0.06);
   border: 1px solid rgba(0, 229, 255, 0.18);
   border-radius: 8px;
   color: var(--muted);
   display: flex;
-  gap: 10px;
-  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
   margin: -4px 12px 14px;
   padding: 9px 12px;
+}
+
+.standings-h2h-title {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
   text-align: center;
 }
 
-.standings-h2h strong {
+.standings-h2h-title strong {
   color: var(--cyan);
   font-size: 0.74rem;
   letter-spacing: 0.08em;
@@ -1849,8 +1855,40 @@ h1 {
   white-space: nowrap;
 }
 
-.standings-h2h span {
+.standings-h2h-title span,
+.standings-h2h > span {
   font-size: 0.76rem;
+  text-align: center;
+}
+
+.standings-h2h-list {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.standings-h2h-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 7px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 72px minmax(170px, 1fr) 58px minmax(120px, 0.8fr);
+  min-height: 32px;
+  padding: 6px 8px;
+}
+
+.standings-h2h-row strong {
+  color: #eaf6ff;
+  font-size: 0.78rem;
+}
+
+.standings-h2h-row span,
+.standings-h2h-row em {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-style: normal;
 }
 
 .standings-table {

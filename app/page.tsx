@@ -79,6 +79,15 @@ type StandingRow = {
   form?: string;
 };
 
+type HeadToHeadRow = {
+  id: string;
+  date: string;
+  home: string;
+  away: string;
+  score: string;
+  winner: string;
+};
+
 type MatchBookmakerKey = "best" | "pari" | "fonbet" | "tennisi";
 
 type CouponItem = {
@@ -103,7 +112,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v9";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v10";
 
 const MAX_COUPON_ITEMS = 5;
 const BASE_BANKROLL = 10000;
@@ -906,6 +915,12 @@ function formatMatchDateTime(match: MatchRow, lang: Lang) {
   return `${day} · ${time}`;
 }
 
+function formatHeadToHeadDate(value: string, lang: Lang) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(localeFor(lang), { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
 function readCachedMatches() {
   if (typeof window === "undefined") return [];
 
@@ -1581,6 +1596,9 @@ export default function Home() {
   const [standingsMatch, setStandingsMatch] = useState<MatchRow | null>(null);
   const [standingsSource, setStandingsSource] = useState("");
   const [standingsTitle, setStandingsTitle] = useState("");
+  const [headToHeadRows, setHeadToHeadRows] = useState<HeadToHeadRow[]>([]);
+  const [headToHeadLoading, setHeadToHeadLoading] = useState(false);
+  const [headToHeadSource, setHeadToHeadSource] = useState("");
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState<MatchesStatusState>({ kind: "idle" });
   const [analyzing, setAnalyzing] = useState(false);
@@ -2151,6 +2169,9 @@ export default function Home() {
     setStandingsTitle(`${match.league} · ${match.home} — ${match.away}`);
     setStandingsLoading(true);
     setStandingsMessage("");
+    setHeadToHeadRows([]);
+    setHeadToHeadSource("");
+    setHeadToHeadLoading(true);
 
     try {
       const response = await fetch(`/api/standings?sport=${encodeURIComponent(match.sport)}&league=${encodeURIComponent(match.league)}`, { cache: "no-store" });
@@ -2176,6 +2197,34 @@ export default function Home() {
       setStandingsMessage(t("Турнирная таблица сейчас недоступна."));
     } finally {
       setStandingsLoading(false);
+    }
+
+    try {
+      const params = new URLSearchParams({
+        sport: match.sport,
+        league: match.league,
+        home: match.home,
+        away: match.away,
+        homeTeamId: match.homeTeamId || "",
+        awayTeamId: match.awayTeamId || ""
+      });
+      const response = await fetch(`/api/head-to-head?${params.toString()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("head-to-head unavailable");
+      const payload = await response.json();
+      setHeadToHeadSource(String(payload?.source || ""));
+      const rows = Array.isArray(payload?.matches) ? payload.matches : [];
+      setHeadToHeadRows(rows.map((row: Partial<HeadToHeadRow> & Record<string, unknown>, index: number) => ({
+        id: String(row.id || `${row.home || "home"}-${row.away || "away"}-${index}`),
+        date: String(row.date || ""),
+        home: String(row.home || ""),
+        away: String(row.away || ""),
+        score: String(row.score || "-"),
+        winner: String(row.winner || "")
+      })).filter((row: HeadToHeadRow) => row.home && row.away));
+    } catch {
+      setHeadToHeadRows([]);
+    } finally {
+      setHeadToHeadLoading(false);
     }
   }
 
@@ -4730,8 +4779,26 @@ export default function Home() {
                 {standingsSource ? <div className="standings-source">{t("Источник")}: {standingsSource}</div> : null}
                 {standingsMatch ? (
                   <div className="standings-h2h">
-                    <strong>{t("Очные встречи")}</strong>
-                    <span>{t("Источник прошлых личных встреч пока не подключен. Турнирная таблица показывает место и форму команд.")}</span>
+                    <div className="standings-h2h-title">
+                      <strong>{t("Очные встречи")}</strong>
+                      {headToHeadSource ? <span>{t("Источник")}: {headToHeadSource}</span> : null}
+                    </div>
+                    {headToHeadLoading ? (
+                      <span>{t("Загружаю личные встречи...")}</span>
+                    ) : headToHeadRows.length ? (
+                      <div className="standings-h2h-list">
+                        {headToHeadRows.map(row => (
+                          <div className="standings-h2h-row" key={row.id}>
+                            <span>{formatHeadToHeadDate(row.date, lang)}</span>
+                            <strong>{row.home} — {row.away}</strong>
+                            <span>{row.score}</span>
+                            {row.winner ? <em>{t("Победитель")}: {row.winner}</em> : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span>{t("Прошлые личные встречи в подключенном источнике пока не найдены.")}</span>
+                    )}
                   </div>
                 ) : null}
                 <button className="stats-modal-close" aria-label={t("Закрыть таблицу")} onClick={() => setStandingsOpen(false)} type="button">×</button>

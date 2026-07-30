@@ -93,7 +93,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v9";
+const API_VERSION = "bookmakers-v10";
 const MLB_TEAM_ALIASES: [string, string[]][] = [
   ["Техас Рейнджерс", ["texas", "техас", "texas rangers", "техас рейнджерс"]],
   ["Сиэтл Маринерс", ["seattle", "сиэтл", "seattle mariners", "сиэтл маринерс"]],
@@ -149,7 +149,7 @@ const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["kia tigers", ["kia tigers", "киа тайгерс", "kia"]],
   ["lotte giants", ["lotte giants", "лотте джайентс", "lotte"]],
   ["samsung lions", ["samsung lions", "самсунг лайонс", "samsung"]],
-  ["hanwha eagles", ["hanwha eagles", "ханвха иглс", "hanwha"]]
+  ["hanwha eagles", ["hanwha eagles", "ханвха иглс", "ханва иглс", "хануа иглс", "hanwha"]]
 ];
 
 const BASEBALL_TEAM_ID_BY_ALIAS = new Map(
@@ -494,11 +494,11 @@ const HOCKEY_FRIENDLY_COUNTRY_HINTS: Array<[RegExp, string]> = [
 
 function normalizeBaseballLeague(match: RawMatch): RawMatch {
   if (match.sport !== "baseball") return match;
-  const full = `${match.country} ${match.league}`.toLowerCase();
-  if (/\b(kbo|korea|south korea|коре[яй]|южн\w*\s+коре)|чемпионат\s+южн\w*\s+коре/i.test(full)) {
+  const full = normalizedName(`${match.country} ${match.league}`);
+  if (/kbo|korea|south korea|коре|южн\s+коре|чемпионат\s+южн\s+коре/.test(full)) {
     return { ...match, country: "South Korea", league: "KBO" };
   }
-  if (/\b(lmb|mexico|мексик)/i.test(full)) {
+  if (/lmb|mexico|мексик/.test(full)) {
     return { ...match, country: "Mexico", league: "LMB" };
   }
   return match;
@@ -939,8 +939,9 @@ function areSimilarParticipants(a: string, b: string, useAcronym = false): boole
 
 function sameParticipants(left: RawMatch, right: RawMatch): boolean {
   if (left.homeTeamId && left.awayTeamId && right.homeTeamId && right.awayTeamId) {
-    return (left.homeTeamId === right.homeTeamId && left.awayTeamId === right.awayTeamId)
+    const exactTeams = (left.homeTeamId === right.homeTeamId && left.awayTeamId === right.awayTeamId)
       || (left.homeTeamId === right.awayTeamId && left.awayTeamId === right.homeTeamId);
+    if (exactTeams || (left.sport !== "baseball" && right.sport !== "baseball")) return exactTeams;
   }
 
   const leftHome = compactParticipantName(left, left.home);
