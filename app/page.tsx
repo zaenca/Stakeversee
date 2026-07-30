@@ -4,6 +4,13 @@ import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, use
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { type Lang, localeFor, translate, translateBetMarket, translateBetSelectionLine, translateBookmakerLabel, useLanguage } from "@/lib/i18n";
+import {
+  KBO_TEAM_BY_ID,
+  isKboMatchContext,
+  kboTeamId,
+  resolveKboTeam,
+  type KboTeamProfile
+} from "@/lib/kboTeams";
 
 type AuthMode = "login" | "register";
 type AuthStatus = "idle" | "loading" | "ok" | "error";
@@ -88,17 +95,7 @@ type HeadToHeadRow = {
   winner: string;
 };
 
-type TeamCard = {
-  id: string;
-  name: string;
-  shortName: string;
-  league: string;
-  country: string;
-  logo: string;
-  rank: number;
-  form: string;
-  aliases: string[];
-};
+type TeamCard = KboTeamProfile;
 
 type MatchBookmakerKey = "best" | "pari" | "fonbet" | "tennisi";
 
@@ -124,9 +121,10 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v10";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v11";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
+  "stakeversee:line-matches:v10",
   "stakeversee:line-matches:v9",
   "stakeversee:line-matches:v8"
 ];
@@ -227,57 +225,34 @@ function compactMatchName(value: string): string {
     .trim();
 }
 
-const KBO_TEAM_CARDS: TeamCard[] = [
-  { id: "lg twins", name: "ЛГ Твинс", shortName: "ЛГ", league: "KBO", country: "Южная Корея", logo: "LG", rank: 1, form: "—", aliases: ["lg twins", "лджи твинс", "лг твинс", "элджи твинс", "эл джи твинс", "эл джи", "lg"] },
-  { id: "hanwha eagles", name: "Ханвха Иглс", shortName: "Ханвха", league: "KBO", country: "Южная Корея", logo: "HE", rank: 2, form: "—", aliases: ["hanwha eagles", "ханвха иглс", "ханва иглс", "хануа иглс", "хануя иглс", "ханвха", "hanwha"] },
-  { id: "lotte giants", name: "Лотте Джайентс", shortName: "Лотте", league: "KBO", country: "Южная Корея", logo: "LT", rank: 3, form: "—", aliases: ["lotte giants", "лотте джайентс", "лотте", "lotte"] },
-  { id: "ssg landers", name: "ССГ Ландерс", shortName: "ССГ", league: "KBO", country: "Южная Корея", logo: "SSG", rank: 4, form: "—", aliases: ["ssg landers", "ссг ландерс", "ссг лэндерс", "ssg", "лендерс", "лэндерс", "ландерс"] },
-  { id: "kia tigers", name: "КИА Тайгерс", shortName: "КИА", league: "KBO", country: "Южная Корея", logo: "KIA", rank: 5, form: "—", aliases: ["kia tigers", "киа тайгерс", "киа", "kia"] },
-  { id: "kt wiz", name: "КТ Виз", shortName: "КТ", league: "KBO", country: "Южная Корея", logo: "KT", rank: 6, form: "—", aliases: ["kt wiz", "kt wiz suwon", "кт виз", "кт уиз", "виз"] },
-  { id: "samsung lions", name: "Самсунг Лайонс", shortName: "Самсунг", league: "KBO", country: "Южная Корея", logo: "SL", rank: 7, form: "—", aliases: ["samsung lions", "самсунг лайонс", "самсунг", "samsung"] },
-  { id: "nc dinos", name: "НК Динос", shortName: "НК", league: "KBO", country: "Южная Корея", logo: "NC", rank: 8, form: "—", aliases: ["nc dinos", "nk dinos", "нц динос", "нк динос", "диноз", "динос"] },
-  { id: "doosan bears", name: "Дусан Беарс", shortName: "Дусан", league: "KBO", country: "Южная Корея", logo: "DB", rank: 9, form: "—", aliases: ["doosan bears", "дусан беарс", "дусан", "doosan"] },
-  { id: "kiwoom heroes", name: "Кивум Хироус", shortName: "Кивум", league: "KBO", country: "Южная Корея", logo: "KH", rank: 10, form: "—", aliases: ["kiwoom heroes", "кивум хироуз", "кивум хироус", "кивум", "kiwoom"] }
-];
-
-const CLIENT_BASEBALL_TEAM_BY_ALIAS = new Map(
-  KBO_TEAM_CARDS.flatMap(team => [team.name, team.shortName, team.id, ...team.aliases].map(alias => [compactMatchName(alias), team.id] as const))
-);
-const KBO_TEAM_BY_ID = new Map(KBO_TEAM_CARDS.map(team => [team.id, team] as const));
-
 function clientBaseballTeamKey(value: string, teamId?: string): string {
-  const idTail = teamId?.split(":").pop() || "";
-  const normalizedIdTail = compactMatchName(idTail);
-  if (CLIENT_BASEBALL_TEAM_BY_ALIAS.has(normalizedIdTail)) return CLIENT_BASEBALL_TEAM_BY_ALIAS.get(normalizedIdTail) || normalizedIdTail;
-
-  const normalized = compactMatchName(value);
-  return CLIENT_BASEBALL_TEAM_BY_ALIAS.get(normalized) || normalized;
+  return resolveKboTeam(value, teamId)?.id || compactMatchName(value);
 }
 
 function clientBaseballTeamCard(value: string, teamId?: string): TeamCard | null {
-  return KBO_TEAM_BY_ID.get(clientBaseballTeamKey(value, teamId)) || null;
+  return resolveKboTeam(value, teamId);
 }
 
 function normalizeClientMatch(match: MatchRow): MatchRow {
   if (match.sport !== "baseball") return match;
-  const full = compactMatchName(`${match.country} ${match.league}`);
   const homeKey = clientBaseballTeamKey(match.home, match.homeTeamId);
   const awayKey = clientBaseballTeamKey(match.away, match.awayTeamId);
   const homeCard = KBO_TEAM_BY_ID.get(homeKey);
   const awayCard = KBO_TEAM_BY_ID.get(awayKey);
 
-  if (/kbo|korea|коре|южн\s+коре|чемпионат\s+южн\s+коре/.test(full)) {
+  if (isKboMatchContext(match.country, match.league, match.home, match.away)) {
     return {
       ...match,
       country: "South Korea",
       league: "KBO",
       home: homeCard?.name || match.home,
       away: awayCard?.name || match.away,
-      homeTeamId: `baseball:south korea:kbo:${homeKey}`,
-      awayTeamId: `baseball:south korea:kbo:${awayKey}`
+      homeTeamId: homeCard ? kboTeamId(homeCard) : match.homeTeamId,
+      awayTeamId: awayCard ? kboTeamId(awayCard) : match.awayTeamId
     };
   }
 
+  const full = compactMatchName(`${match.country} ${match.league}`);
   if (/lmb|mexico|мексик/.test(full)) {
     return {
       ...match,
@@ -312,6 +287,13 @@ function bestClientOdds(bookmakerOdds?: Partial<Record<MatchBookmakerKey, string
   return { odds, labels };
 }
 
+function kboMatchPairKey(match: MatchRow): string | null {
+  if (match.sport !== "baseball" || !isKboMatchContext(match.country, match.league, match.home, match.away)) return null;
+  const home = resolveKboTeam(match.home, match.homeTeamId);
+  const away = resolveKboTeam(match.away, match.awayTeamId);
+  return home && away ? [home.id, away.id].sort().join("~") : null;
+}
+
 function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
   const byKey = new Map<string, MatchRow>();
 
@@ -327,7 +309,19 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
       compactMatchName(match.league),
       teamKey
     ].join("|");
-    const current = byKey.get(key);
+    const kboPairKey = kboMatchPairKey(match);
+    const existingKboKey = kboPairKey
+      ? Array.from(byKey.entries()).find(([, candidate]) => {
+          if (kboMatchPairKey(candidate) !== kboPairKey) return false;
+          const matchStart = match.startsAt ? new Date(match.startsAt).getTime() : 0;
+          const candidateStart = candidate.startsAt ? new Date(candidate.startsAt).getTime() : 0;
+          return matchStart && candidateStart
+            ? Math.abs(matchStart - candidateStart) <= 90 * 60 * 1000
+            : compactMatchName(match.time) === compactMatchName(candidate.time);
+        })?.[0]
+      : undefined;
+    const resolvedKey = existingKboKey || key;
+    const current = byKey.get(resolvedKey);
 
     if (!current) {
       byKey.set(key, match);
@@ -338,12 +332,18 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
     const best = bestClientOdds(bookmakerOdds);
     const chosen = match.confidence > current.confidence ? match : current;
     const mergedOdds = best.odds.some(odd => odd && odd !== "-") ? best.odds : current.odds;
+    const canonicalHome = resolveKboTeam(current.home, current.homeTeamId);
+    const canonicalAway = resolveKboTeam(current.away, current.awayTeamId);
 
-    byKey.set(key, {
+    byKey.set(resolvedKey, {
       ...current,
       id: `${current.id}+${match.id}`,
-      home: /[а-яё]/i.test(current.home) ? current.home : match.home,
-      away: /[а-яё]/i.test(current.away) ? current.away : match.away,
+      country: kboPairKey ? "South Korea" : current.country,
+      league: kboPairKey ? "KBO" : current.league,
+      home: canonicalHome?.name || (/[а-яё]/i.test(current.home) ? current.home : match.home),
+      away: canonicalAway?.name || (/[а-яё]/i.test(current.away) ? current.away : match.away),
+      homeTeamId: canonicalHome ? kboTeamId(canonicalHome) : current.homeTeamId,
+      awayTeamId: canonicalAway ? kboTeamId(canonicalAway) : current.awayTeamId,
       bookmakerOdds,
       odds: mergedOdds,
       bestBookmakers: best.labels,
@@ -2402,13 +2402,53 @@ export default function Home() {
     }
   }
 
+  async function openTeamProfile(card: TeamCard, standing?: StandingRow) {
+    const initialCard = standing
+      ? {
+          ...card,
+          rank: standing.rank,
+          form: standing.form || "-",
+          wins: standing.wins,
+          losses: standing.losses,
+          pct: standing.pct,
+          gamesBack: standing.gamesBack
+        }
+      : card;
+    setSelectedTeamCard(initialCard);
+    setStandingsOpen(false);
+    setTeamCardOpen(true);
+
+    if (standing) return;
+
+    try {
+      const response = await fetch("/api/standings?sport=baseball&league=KBO", { cache: "no-store" });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const rows = Array.isArray(payload?.standings) ? payload.standings : [];
+      const teamStanding = rows.find((row: Partial<StandingRow>) => (
+        row.id === kboTeamId(card) || resolveKboTeam(String(row.team || ""), String(row.id || ""))?.id === card.id
+      ));
+      if (!teamStanding) return;
+      setSelectedTeamCard(current => current?.id === card.id ? {
+        ...current,
+        rank: Number(teamStanding.rank || current.rank),
+        form: String(teamStanding.form || "-"),
+        wins: Number(teamStanding.wins || 0),
+        losses: Number(teamStanding.losses || 0),
+        pct: String(teamStanding.pct || "-"),
+        gamesBack: String(teamStanding.gamesBack || "-")
+      } : current);
+    } catch {
+      // The offline KBO profile remains available if live standings cannot be loaded.
+    }
+  }
+
   function openTeamCard(match: MatchRow, side: "home" | "away") {
     const name = side === "home" ? match.home : match.away;
     const teamId = side === "home" ? match.homeTeamId : match.awayTeamId;
     const card = clientBaseballTeamCard(name, teamId);
     if (!card) return;
-    setSelectedTeamCard(card);
-    setTeamCardOpen(true);
+    void openTeamProfile(card);
   }
 
   async function analyzeMatches(matches: MatchRow[], openAssistant = false) {
@@ -4108,7 +4148,10 @@ export default function Home() {
                     <div className="match-teams">
                       <div>
                         {clientBaseballTeamCard(match.home, match.homeTeamId) ? (
-                          <button className="match-team-button" onClick={() => openTeamCard(match, "home")} title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined} type="button">{match.home}</button>
+                          <button className="match-team-button" onClick={() => openTeamCard(match, "home")} title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined} type="button">
+                            <strong>{match.home}</strong>
+                            <small>{t("Профиль команды")} ›</small>
+                          </button>
                         ) : (
                           <strong title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined}>{match.home}</strong>
                         )}
@@ -4117,7 +4160,10 @@ export default function Home() {
                       <b>-</b>
                       <div>
                         {clientBaseballTeamCard(match.away, match.awayTeamId) ? (
-                          <button className="match-team-button" onClick={() => openTeamCard(match, "away")} title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined} type="button">{match.away}</button>
+                          <button className="match-team-button" onClick={() => openTeamCard(match, "away")} title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined} type="button">
+                            <strong>{match.away}</strong>
+                            <small>{t("Профиль команды")} ›</small>
+                          </button>
                         ) : (
                           <strong title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined}>{match.away}</strong>
                         )}
@@ -4988,13 +5034,17 @@ export default function Home() {
                     <span>{t("Лига")}</span>
                     <strong>{selectedTeamCard.league}</strong>
                   </div>
-                </div>
-                <div className="team-card-aliases">
-                  <span>{t("Распознаётся как")}</span>
                   <div>
-                    {[selectedTeamCard.name, selectedTeamCard.shortName, ...selectedTeamCard.aliases].map(alias => (
-                      <small key={alias}>{alias}</small>
-                    ))}
+                    <span>{t("Побед")}</span>
+                    <strong>{selectedTeamCard.wins ?? "-"}</strong>
+                  </div>
+                  <div>
+                    <span>{t("Поражений")}</span>
+                    <strong>{selectedTeamCard.losses ?? "-"}</strong>
+                  </div>
+                  <div>
+                    <span>PCT</span>
+                    <strong>{selectedTeamCard.pct || "-"}</strong>
                   </div>
                 </div>
               </section>
@@ -5060,6 +5110,7 @@ export default function Home() {
                             const awayName = standingsMatch ? searchHaystack(standingsMatch.away) : "";
                             const homeTeamId = standingsMatch?.homeTeamId || "";
                             const awayTeamId = standingsMatch?.awayTeamId || "";
+                            const rowTeamCard = clientBaseballTeamCard(row.team, row.id);
                             const highlighted = Boolean(standingsMatch) && (
                               row.id === homeTeamId || row.id === awayTeamId
                               || rowName.includes(homeName) || homeName.includes(rowName)
@@ -5069,7 +5120,12 @@ export default function Home() {
                             return (
                             <div className={`standings-row ${highlighted ? "highlighted" : ""}`} key={row.id}>
                               <span>{row.rank}</span>
-                              <strong>{row.team}</strong>
+                              {rowTeamCard ? (
+                                <button className="standings-team-button" onClick={() => void openTeamProfile(rowTeamCard, row)} type="button">
+                                  <strong>{rowTeamCard.name}</strong>
+                                  <small>{t("Профиль")} ›</small>
+                                </button>
+                              ) : <strong>{row.team}</strong>}
                               <span>{row.wins}</span>
                               <span>{row.losses}</span>
                               <span>{row.pct}</span>

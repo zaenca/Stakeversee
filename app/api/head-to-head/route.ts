@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { KBO_TEAMS } from "@/lib/kboTeams";
 
 type EspnCompetitor = {
   homeAway?: "home" | "away";
@@ -42,16 +43,7 @@ const BASEBALL_LEAGUES: Array<{ pattern: RegExp; label: string; slug: string; se
 ];
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
-  ["nc dinos", ["nc dinos", "nk dinos", "нц динос", "нк динос", "диноз", "динос"]],
-  ["kt wiz", ["kt wiz", "kt wiz suwon", "кт виз", "кт уиз", "виз"]],
-  ["ssg landers", ["ssg landers", "ссг ландерс", "ссг лэндерс", "ssg", "лендерс", "лэндерс", "ландерс"]],
-  ["doosan bears", ["doosan bears", "дусан беарс", "дусан", "doosan"]],
-  ["lg twins", ["lg twins", "лджи твинс", "лг твинс", "элджи твинс", "эл джи твинс", "эл джи", "lg"]],
-  ["kiwoom heroes", ["kiwoom heroes", "кивум хироуз", "кивум хироус", "кивум"]],
-  ["kia tigers", ["kia tigers", "киа тайгерс", "kia"]],
-  ["lotte giants", ["lotte giants", "лотте джайентс", "lotte"]],
-  ["samsung lions", ["samsung lions", "самсунг лайонс", "samsung"]],
-  ["hanwha eagles", ["hanwha eagles", "ханвха иглс", "ханва иглс", "хануа иглс", "hanwha"]]
+  ...KBO_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]])
 ];
 
 const BASEBALL_TEAM_ID_BY_ALIAS = new Map(

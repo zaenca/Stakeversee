@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { KBO_TEAMS, kboTeamId } from "@/lib/kboTeams";
 
 type EspnStandingStat = {
   name?: string;
@@ -36,23 +37,12 @@ const BASEBALL_STANDINGS_SLUGS: Array<{ pattern: RegExp; label: string; slug: st
   { pattern: /\blmb\b|mexic|мексик/i, label: "LMB", slug: "mexican-winter-league" }
 ];
 
-const KBO_REFERENCE_STANDINGS: StandingRow[] = [
-  ["lg twins", "ЛГ Твинс"],
-  ["hanwha eagles", "Ханвха Иглс"],
-  ["lotte giants", "Лотте Джайентс"],
-  ["ssg landers", "ССГ Ландерс"],
-  ["kia tigers", "КИА Тайгерс"],
-  ["kt wiz", "КТ Виз"],
-  ["samsung lions", "Самсунг Лайонс"],
-  ["nc dinos", "НК Динос"],
-  ["doosan bears", "Дусан Беарс"],
-  ["kiwoom heroes", "Кивум Хироуз"]
-].map(([id, team], index) => ({
-  id: `baseball:south korea:kbo:${id}`,
+const KBO_REFERENCE_STANDINGS: StandingRow[] = KBO_TEAMS.map((team, index) => ({
+  id: kboTeamId(team),
   rank: index + 1,
   league: "KBO",
   division: "",
-  team,
+  team: team.name,
   wins: 0,
   losses: 0,
   pct: "-",

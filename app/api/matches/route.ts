@@ -1,5 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 
+import { KBO_TEAMS, isKboMatchContext, kboTeamId, resolveKboTeam } from "@/lib/kboTeams";
+
 type BookmakerOdds = {
   home: number;
   away: number;
@@ -140,16 +142,7 @@ const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["rieleros aguascalientes", ["rieleros aguascalientes", "rieleros de aguascalientes", "aguascalientes", "рьелерос"]],
   ["tigres quintana roo", ["tigres quintana roo", "tigres de quintana roo", "quintana roo", "тигрес"]],
   ["leones yucatan", ["leones yucatan", "leones de yucatan", "yucatan", "юкатан"]],
-  ["nc dinos", ["nc dinos", "nk dinos", "нц динос", "нк динос", "диноз", "динос"]],
-  ["kt wiz", ["kt wiz", "kt wiz suwon", "кт виз", "кт уиз", "виз"]],
-  ["ssg landers", ["ssg landers", "ссг ландерс", "ссг лэндерс", "ssg", "лендерс", "лэндерс", "ландерс"]],
-  ["doosan bears", ["doosan bears", "дусан беарс", "дусан", "doosan"]],
-  ["lg twins", ["lg twins", "лджи твинс", "лг твинс", "элджи твинс", "эл джи твинс", "эл джи", "lg"]],
-  ["kiwoom heroes", ["kiwoom heroes", "кивум хироуз", "кивум хироус", "кивум"]],
-  ["kia tigers", ["kia tigers", "киа тайгерс", "kia"]],
-  ["lotte giants", ["lotte giants", "лотте джайентс", "lotte"]],
-  ["samsung lions", ["samsung lions", "самсунг лайонс", "samsung"]],
-  ["hanwha eagles", ["hanwha eagles", "ханвха иглс", "ханва иглс", "хануа иглс", "hanwha"]]
+  ...KBO_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]])
 ];
 
 const BASEBALL_TEAM_ID_BY_ALIAS = new Map(
@@ -495,8 +488,17 @@ const HOCKEY_FRIENDLY_COUNTRY_HINTS: Array<[RegExp, string]> = [
 function normalizeBaseballLeague(match: RawMatch): RawMatch {
   if (match.sport !== "baseball") return match;
   const full = normalizedName(`${match.country} ${match.league}`);
-  if (/kbo|korea|south korea|коре|южн\s+коре|чемпионат\s+южн\s+коре/.test(full)) {
-    return { ...match, country: "South Korea", league: "KBO" };
+  const home = resolveKboTeam(match.home, match.homeTeamId);
+  const away = resolveKboTeam(match.away, match.awayTeamId);
+  if (/kbo|korea|south korea|коре|южн\s+коре|чемпионат\s+южн\s+коре/.test(full)
+    || isKboMatchContext(match.country, match.league, match.home, match.away)) {
+    return {
+      ...match,
+      country: "South Korea",
+      league: "KBO",
+      home: home?.name || match.home,
+      away: away?.name || match.away
+    };
   }
   if (/lmb|mexico|мексик/.test(full)) {
     return { ...match, country: "Mexico", league: "LMB" };
@@ -826,6 +828,8 @@ function normalizedName(value: string): string {
 
 function displayTeamName(match: RawMatch, value: string): string {
   if (match.sport !== "baseball") return value;
+  const kboTeam = resolveKboTeam(value);
+  if (kboTeam && isKboMatchContext(match.country, match.league, match.home, match.away)) return kboTeam.name;
   return MLB_TEAM_NAME_BY_ALIAS.get(normalizedName(value)) || value;
 }
 
@@ -882,6 +886,8 @@ function normalizedMatchParticipant(match: RawMatch, value: string): string {
 }
 
 function canonicalTeamId(match: RawMatch, value: string): string {
+  const kboTeam = match.sport === "baseball" ? resolveKboTeam(value) : null;
+  if (kboTeam && isKboMatchContext(match.country, match.league, match.home, match.away)) return kboTeamId(kboTeam);
   const participant = normalizedMatchParticipant(match, value);
   return [match.sport, match.country, match.league, participant]
     .map(part => normalizedName(part))
