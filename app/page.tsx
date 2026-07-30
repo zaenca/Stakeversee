@@ -62,6 +62,8 @@ type MatchRow = {
   confidence: number;
   recommendationSide: "home" | "draw" | "away";
   startsAt?: string;
+  homeTeamId?: string;
+  awayTeamId?: string;
 };
 
 type StandingRow = {
@@ -100,7 +102,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v7";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v8";
 
 const MAX_COUPON_ITEMS = 5;
 const BASE_BANKROLL = 10000;
@@ -2114,7 +2116,9 @@ export default function Home() {
             bestBookmakers: Array.isArray(match.bestBookmakers) ? match.bestBookmakers.map(String) : undefined,
             confidence: Number(match.confidence || 0),
             recommendationSide: (["home", "draw", "away"].includes(String(match.recommendationSide)) ? match.recommendationSide : "home") as MatchRow["recommendationSide"],
-            startsAt
+            startsAt,
+            homeTeamId: match.homeTeamId ? String(match.homeTeamId) : undefined,
+            awayTeamId: match.awayTeamId ? String(match.awayTeamId) : undefined
           };
         })
         .filter((match: MatchRow) => match.home && match.away);
@@ -3819,7 +3823,7 @@ export default function Home() {
                       <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country, lang)}</span>
                       <span className="match-meta-sport" title={getSportLabel(match.sport, lang)}>{getSportIcon(match.sport)} {getSportLabel(match.sport, lang)}</span>
                       <strong>{t(match.league)}</strong>
-                      {match.sport === "baseball" && /mlb/i.test(match.league) ? (
+                      {match.sport === "baseball" ? (
                         <button className="match-standings-button" onClick={() => openStandings(match)} type="button">{t("Таблица")}</button>
                       ) : null}
                       <time>{formatMatchDateTime(match, lang)}</time>
@@ -3860,12 +3864,12 @@ export default function Home() {
 
                     <div className="match-teams">
                       <div>
-                        <strong>{match.home}</strong>
+                        <strong title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined}>{match.home}</strong>
                         <span>{t("форма 5к · вес 3")}</span>
                       </div>
                       <b>-</b>
                       <div>
-                        <strong>{match.away}</strong>
+                        <strong title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined}>{match.away}</strong>
                         <span>{t("форма 5к · вес 3")}</span>
                       </div>
                     </div>

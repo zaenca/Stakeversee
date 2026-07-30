@@ -22,6 +22,8 @@ type RawMatch = {
   recommendationSide: "home" | "draw" | "away";
   odds: BookmakerOdds;
   bookmakerOdds: Partial<Record<BookmakerKey, BookmakerOdds>>;
+  homeTeamId?: string;
+  awayTeamId?: string;
 };
 
 type ApiMatch = {
@@ -37,6 +39,8 @@ type ApiMatch = {
   confidence: number;
   recommendationSide: "home" | "draw" | "away";
   startsAt: string;
+  homeTeamId?: string;
+  awayTeamId?: string;
 };
 
 type Analysis = {
@@ -89,7 +93,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v7";
+const API_VERSION = "bookmakers-v8";
 const MLB_TEAM_ALIASES: [string, string[]][] = [
   ["Техас Рейнджерс", ["texas", "техас", "texas rangers", "техас рейнджерс"]],
   ["Сиэтл Маринерс", ["seattle", "сиэтл", "seattle mariners", "сиэтл маринерс"]],
@@ -123,6 +127,24 @@ const MLB_TEAM_ALIASES: [string, string[]][] = [
   ["Тампа-Бэй Рэйс", ["tampa bay", "тампа бэй", "tampa bay rays", "тампа бэй рэйс"]]
 ];
 const MLB_TEAM_NAME_BY_ALIAS = new Map(MLB_TEAM_ALIASES.flatMap(([fullName, aliases]) => aliases.map(alias => [alias, fullName] as const)));
+
+const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
+  ["oaxaca", ["oaxaca", "оахака", "геррерос де оаксака", "guerreros de oaxaca", "guerreros oaxaca"]],
+  ["bravos leon", ["bravos leon", "bravos de leon", "бравос леон", "бравос де леон"]],
+  ["monterrey sultanes", ["monterrey", "sultanes monterrey", "sultanes de monterrey", "монтеррей", "султанес монтеррей"]],
+  ["diablos rojos mexico", ["diablos rojos", "diablos rojos del mexico", "diablos rojos mexico", "мехико диаблос рохос"]],
+  ["toros tijuana", ["toros tijuana", "toros de tijuana", "tijuana", "тихуана"]],
+  ["algodoneros union laguna", ["algodoneros", "union laguna", "algodoneros union laguna", "алгодонерос"]],
+  ["acereros monclova", ["acereros monclova", "acereros de monclova", "monclova", "монклова"]],
+  ["saraperos saltillo", ["saraperos saltillo", "saraperos de saltillo", "saltillo", "сараперос"]],
+  ["rieleros aguascalientes", ["rieleros aguascalientes", "rieleros de aguascalientes", "aguascalientes", "рьелерос"]],
+  ["tigres quintana roo", ["tigres quintana roo", "tigres de quintana roo", "quintana roo", "тигрес"]],
+  ["leones yucatan", ["leones yucatan", "leones de yucatan", "yucatan", "юкатан"]]
+];
+
+const BASEBALL_TEAM_ID_BY_ALIAS = new Map(
+  BASEBALL_TEAM_ALIASES.flatMap(([id, aliases]) => aliases.map(alias => [normalizedName(alias), id] as const))
+);
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   Pragma: "no-cache",
@@ -460,13 +482,24 @@ const HOCKEY_FRIENDLY_COUNTRY_HINTS: Array<[RegExp, string]> = [
   [/\b(кхл|khl)\b|адмирал|нефтехимик|челны|ак\s*барс|сибирь|локомотив|трактор|северсталь|салават|ска|лада|спартак|торпедо|автомобилист|динамо\s+москва/i, "Russia"]
 ];
 
+function normalizeBaseballLeague(match: RawMatch): RawMatch {
+  if (match.sport !== "baseball") return match;
+  const full = `${match.country} ${match.league}`.toLowerCase();
+  if (/\b(lmb|mexico|мексик)/i.test(full)) {
+    return { ...match, country: "Mexico", league: "LMB" };
+  }
+  return match;
+}
+
 function normalizeMatchLocale(match: RawMatch): RawMatch {
-  if (match.country !== "World" || match.sport !== "ice-hockey") return match;
-  if (!/товарищ|friendly/i.test(match.league)) return match;
+  const baseballMatch = normalizeBaseballLeague(match);
+  if (baseballMatch !== match) return withTeamIds(baseballMatch);
+  if (match.country !== "World" || match.sport !== "ice-hockey") return withTeamIds(match);
+  if (!/товарищ|friendly/i.test(match.league)) return withTeamIds(match);
 
   const full = `${match.league} ${match.home} ${match.away}`;
   const inferred = HOCKEY_FRIENDLY_COUNTRY_HINTS.find(([pattern]) => pattern.test(full))?.[1];
-  return inferred ? { ...match, country: inferred } : match;
+  return withTeamIds(inferred ? { ...match, country: inferred } : match);
 }
 
 function extractCountryAndLeague(data: PariLikeData, item: PariLikeEvent): { country: string; league: string } {
@@ -820,7 +853,10 @@ function normalizeFootballParticipantAlias(value: string): string {
 }
 
 function normalizedMatchParticipant(match: RawMatch, value: string): string {
-  if (match.sport === "baseball") return normalizedName(displayTeamName(match, value));
+  if (match.sport === "baseball") {
+    const normalized = normalizedName(displayTeamName(match, value)).replace(/\bde\b/g, " ").replace(/\s+/g, " ").trim();
+    return BASEBALL_TEAM_ID_BY_ALIAS.get(normalized) || normalized;
+  }
   const normalized = normalizedName(value);
   if (match.sport === "esports") return normalizeEsportsParticipantAlias(normalized);
   if (match.sport === "football") return normalizeFootballParticipantAlias(normalized);
@@ -830,6 +866,22 @@ function normalizedMatchParticipant(match: RawMatch, value: string): string {
     .split(" ")
     .filter((part, index, parts) => part.length > 1 || index === 0 || parts.length === 1)
     .join(" ");
+}
+
+function canonicalTeamId(match: RawMatch, value: string): string {
+  const participant = normalizedMatchParticipant(match, value);
+  return [match.sport, match.country, match.league, participant]
+    .map(part => normalizedName(part))
+    .filter(Boolean)
+    .join(":");
+}
+
+function withTeamIds(match: RawMatch): RawMatch {
+  return {
+    ...match,
+    homeTeamId: canonicalTeamId(match, match.home),
+    awayTeamId: canonicalTeamId(match, match.away)
+  };
 }
 
 function compactParticipantName(match: RawMatch, value: string): string {
@@ -873,6 +925,11 @@ function areSimilarParticipants(a: string, b: string, useAcronym = false): boole
 }
 
 function sameParticipants(left: RawMatch, right: RawMatch): boolean {
+  if (left.homeTeamId && left.awayTeamId && right.homeTeamId && right.awayTeamId) {
+    return (left.homeTeamId === right.homeTeamId && left.awayTeamId === right.awayTeamId)
+      || (left.homeTeamId === right.awayTeamId && left.awayTeamId === right.homeTeamId);
+  }
+
   const leftHome = compactParticipantName(left, left.home);
   const leftAway = compactParticipantName(left, left.away);
   const rightHome = compactParticipantName(right, right.home);
@@ -885,8 +942,8 @@ function sameParticipants(left: RawMatch, right: RawMatch): boolean {
 
 function dedupeKey(match: RawMatch): string {
   const bucket = Math.round(match.startMs / (15 * 60 * 1000));
-  const teams = [normalizedMatchParticipant(match, match.home), normalizedMatchParticipant(match, match.away)].sort().join("~");
-  return `${match.sport}|${bucket}|${teams}`;
+  const teams = [match.homeTeamId || canonicalTeamId(match, match.home), match.awayTeamId || canonicalTeamId(match, match.away)].sort().join("~");
+  return `${match.sport}|${bucket}|${normalizedName(match.country)}|${normalizedName(match.league)}|${teams}`;
 }
 
 function mergeTimeToleranceMs(sport: string): number {
@@ -1030,7 +1087,9 @@ function toApiMatch(match: RawMatch): ApiMatch {
     bestBookmakers: bestBookmakersByOutcome(match.bookmakerOdds, match.odds),
     confidence: match.confidence,
     recommendationSide: match.recommendationSide,
-    startsAt: match.startsAt
+    startsAt: match.startsAt,
+    homeTeamId: match.homeTeamId,
+    awayTeamId: match.awayTeamId
   };
 }
 

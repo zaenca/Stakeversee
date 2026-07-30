@@ -29,7 +29,10 @@ type StandingRow = {
   gamesBack: string;
 };
 
-const MLB_STANDINGS_URL = "https://site.api.espn.com/apis/v2/sports/baseball/mlb/standings";
+const BASEBALL_STANDINGS_SLUGS: Array<{ pattern: RegExp; label: string; slug: string }> = [
+  { pattern: /\bmlb\b|major league/i, label: "MLB", slug: "mlb" },
+  { pattern: /\blmb\b|mexic|мексик/i, label: "LMB", slug: "mexican-winter-league" }
+];
 
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -37,13 +40,13 @@ const NO_STORE_HEADERS = {
   Expires: "0"
 };
 
-async function loadMlbStandings(): Promise<StandingRow[]> {
-  const response = await fetch(MLB_STANDINGS_URL, { cache: "no-store" });
-  if (!response.ok) throw new Error(`ESPN MLB standings HTTP ${response.status}`);
+async function loadBaseballStandings(slug: string, fallbackLeague: string): Promise<StandingRow[]> {
+  const response = await fetch(`https://site.api.espn.com/apis/v2/sports/baseball/${slug}/standings`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`ESPN ${slug} standings HTTP ${response.status}`);
 
   const payload = await response.json() as { children?: EspnStandingGroup[] };
   return (payload.children || []).flatMap(group => {
-    const league = group.name || group.abbreviation || "MLB";
+    const league = group.name || group.abbreviation || fallbackLeague;
     return (group.standings?.entries || []).map((entry, index) => {
       const stat = (name: string) => entry.stats?.find(item => item.name === name);
       return {
@@ -64,15 +67,16 @@ async function loadMlbStandings(): Promise<StandingRow[]> {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sport = searchParams.get("sport");
-  const league = searchParams.get("league");
+  const league = searchParams.get("league") || "";
+  const standingLeague = BASEBALL_STANDINGS_SLUGS.find(item => item.pattern.test(league));
 
-  if (sport !== "baseball" || (league && !/mlb/i.test(league))) {
+  if (sport !== "baseball" || !standingLeague) {
     return NextResponse.json({ standings: [] }, { headers: NO_STORE_HEADERS });
   }
 
   try {
-    const standings = await loadMlbStandings();
-    return NextResponse.json({ sport: "baseball", league: "MLB", standings }, { headers: NO_STORE_HEADERS });
+    const standings = await loadBaseballStandings(standingLeague.slug, standingLeague.label);
+    return NextResponse.json({ sport: "baseball", league: standingLeague.label, standings }, { headers: NO_STORE_HEADERS });
   } catch (error) {
     console.error("Standings route failed", error);
     return NextResponse.json({ standings: [] }, { status: 502, headers: NO_STORE_HEADERS });
