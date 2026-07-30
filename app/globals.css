@@ -1838,7 +1838,7 @@ h1 {
   display: grid;
   font-size: 0.78rem;
   gap: 8px;
-  grid-template-columns: 34px minmax(150px, 1fr) 42px 42px 58px 48px;
+  grid-template-columns: 34px minmax(150px, 1fr) 42px 42px 58px 48px 72px;
   min-height: 34px;
   padding: 0 10px;
 }

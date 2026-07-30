@@ -27,6 +27,7 @@ type StandingRow = {
   losses: number;
   pct: string;
   gamesBack: string;
+  form?: string;
 };
 
 const BASEBALL_STANDINGS_SLUGS: Array<{ pattern: RegExp; label: string; slug: string }> = [
@@ -36,26 +37,27 @@ const BASEBALL_STANDINGS_SLUGS: Array<{ pattern: RegExp; label: string; slug: st
 ];
 
 const KBO_REFERENCE_STANDINGS: StandingRow[] = [
-  "LG Twins / ЛГ Твинс",
-  "Hanwha Eagles / Ханвха Иглс",
-  "Lotte Giants / Лотте Джайентс",
-  "SSG Landers / ССГ Ландерс",
-  "KIA Tigers / КИА Тайгерс",
-  "KT Wiz / КТ Виз",
-  "Samsung Lions / Самсунг Лайонс",
-  "NC Dinos / НК Динос",
-  "Doosan Bears / Дусан Беарс",
-  "Kiwoom Heroes / Кивум Хироуз"
-].map((team, index) => ({
-  id: `kbo-reference-${index + 1}`,
+  ["lg twins", "ЛГ Твинс"],
+  ["hanwha eagles", "Ханвха Иглс"],
+  ["lotte giants", "Лотте Джайентс"],
+  ["ssg landers", "ССГ Ландерс"],
+  ["kia tigers", "КИА Тайгерс"],
+  ["kt wiz", "КТ Виз"],
+  ["samsung lions", "Самсунг Лайонс"],
+  ["nc dinos", "НК Динос"],
+  ["doosan bears", "Дусан Беарс"],
+  ["kiwoom heroes", "Кивум Хироуз"]
+].map(([id, team], index) => ({
+  id: `baseball:south korea:kbo:${id}`,
   rank: index + 1,
   league: "KBO",
-  division: "KBO",
+  division: "",
   team,
   wins: 0,
   losses: 0,
   pct: "-",
-  gamesBack: "-"
+  gamesBack: "-",
+  form: "-"
 }));
 
 const NO_STORE_HEADERS = {
@@ -82,7 +84,8 @@ async function loadBaseballStandings(slug: string, fallbackLeague: string): Prom
         wins: Number(stat("wins")?.value || 0),
         losses: Number(stat("losses")?.value || 0),
         pct: stat("winPercent")?.displayValue || ".000",
-        gamesBack: stat("gamesBehind")?.displayValue || "-"
+        gamesBack: stat("gamesBehind")?.displayValue || "-",
+        form: stat("streak")?.displayValue || "-"
       };
     });
   }).sort((a, b) => a.league.localeCompare(b.league) || a.rank - b.rank);

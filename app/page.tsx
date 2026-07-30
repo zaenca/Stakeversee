@@ -76,6 +76,7 @@ type StandingRow = {
   losses: number;
   pct: string;
   gamesBack: string;
+  form?: string;
 };
 
 type MatchBookmakerKey = "best" | "pari" | "fonbet" | "tennisi";
@@ -2063,9 +2064,10 @@ export default function Home() {
     const groups = new Map<string, StandingRow[]>();
     standingsRows.forEach(row => {
       const key = `${row.league} · ${row.division}`;
-      const group = groups.get(key);
+      const groupKey = row.division && row.division !== row.league ? key : row.league;
+      const group = groups.get(groupKey);
       if (group) group.push(row);
-      else groups.set(key, [row]);
+      else groups.set(groupKey, [row]);
     });
     return Array.from(groups.entries()).map(([title, rows]) => ({
       title,
@@ -2166,7 +2168,8 @@ export default function Home() {
         wins: Number(row.wins || 0),
         losses: Number(row.losses || 0),
         pct: String(row.pct || ".000"),
-        gamesBack: String(row.gamesBack || "-")
+        gamesBack: String(row.gamesBack || "-"),
+        form: String(row.form || "-")
       })).filter((row: StandingRow) => row.team));
     } catch {
       setStandingsRows([]);
@@ -4741,13 +4744,17 @@ export default function Home() {
                             <span>{t("П")}</span>
                             <span>PCT</span>
                             <span>GB</span>
+                            <span>{t("Форма")}</span>
                           </div>
                           {group.rows.map(row => {
-                            const rowName = searchHaystack(row.team);
+                            const rowName = searchHaystack(row.team, row.id);
                             const homeName = standingsMatch ? searchHaystack(standingsMatch.home) : "";
                             const awayName = standingsMatch ? searchHaystack(standingsMatch.away) : "";
+                            const homeTeamId = standingsMatch?.homeTeamId || "";
+                            const awayTeamId = standingsMatch?.awayTeamId || "";
                             const highlighted = Boolean(standingsMatch) && (
-                              rowName.includes(homeName) || homeName.includes(rowName)
+                              row.id === homeTeamId || row.id === awayTeamId
+                              || rowName.includes(homeName) || homeName.includes(rowName)
                               || rowName.includes(awayName) || awayName.includes(rowName)
                             );
 
@@ -4759,6 +4766,7 @@ export default function Home() {
                               <span>{row.losses}</span>
                               <span>{row.pct}</span>
                               <span>{row.gamesBack}</span>
+                              <span>{row.form || "-"}</span>
                             </div>
                             );
                           })}
