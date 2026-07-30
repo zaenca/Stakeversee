@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { loadHltvRankings } from "@/lib/hltv";
 import { KBO_TEAMS, kboTeamId } from "@/lib/kboTeams";
 import { MLB_TEAMS, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 
@@ -30,6 +31,10 @@ type StandingRow = {
   pct: string;
   gamesBack: string;
   form?: string;
+  points?: number;
+  change?: string;
+  logo?: string;
+  profileUrl?: string;
 };
 
 const BASEBALL_STANDINGS_SLUGS: Array<{ pattern: RegExp; label: string; slug: string }> = [
@@ -114,6 +119,46 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sport = searchParams.get("sport");
   const league = searchParams.get("league") || "";
+  const counterStrike = sport === "esports" && /\b(counter[\s.-]*strike|cs2?|кс)\b/i.test(league);
+
+  if (counterStrike) {
+    try {
+      const ranking = await loadHltvRankings();
+      const standings: StandingRow[] = ranking.rows.map(row => ({
+        id: row.id,
+        rank: row.rank,
+        league: "Counter-Strike",
+        division: "топ-100",
+        team: row.team,
+        wins: 0,
+        losses: 0,
+        pct: "-",
+        gamesBack: "-",
+        form: row.change,
+        points: row.points,
+        change: row.change,
+        logo: row.logo,
+        profileUrl: row.profileUrl
+      }));
+      return NextResponse.json(
+        {
+          sport: "esports",
+          league: "Counter-Strike · топ-100",
+          source: ranking.source,
+          updatedAt: ranking.updatedAt,
+          standings
+        },
+        { headers: NO_STORE_HEADERS }
+      );
+    } catch (error) {
+      console.error("Counter-Strike standings route failed", error);
+      return NextResponse.json(
+        { sport: "esports", league: "Counter-Strike · топ-100", source: "HLTV", standings: [] },
+        { status: 502, headers: NO_STORE_HEADERS }
+      );
+    }
+  }
+
   const standingLeague = BASEBALL_STANDINGS_SLUGS.find(item => item.pattern.test(league));
 
   if (sport !== "baseball" || !standingLeague) {

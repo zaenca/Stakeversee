@@ -90,6 +90,10 @@ type StandingRow = {
   pct: string;
   gamesBack: string;
   form?: string;
+  points?: number;
+  change?: string;
+  logo?: string;
+  profileUrl?: string;
 };
 
 type HeadToHeadRow = {
@@ -127,15 +131,8 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v13";
-const MATCH_CACHE_FALLBACK_KEYS = [
-  MATCH_CACHE_KEY,
-  "stakeversee:line-matches:v12",
-  "stakeversee:line-matches:v11",
-  "stakeversee:line-matches:v10",
-  "stakeversee:line-matches:v9",
-  "stakeversee:line-matches:v8"
-];
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v14";
+const MATCH_CACHE_FALLBACK_KEYS = [MATCH_CACHE_KEY];
 
 const MAX_COUPON_ITEMS = 5;
 const BASE_BANKROLL = 10000;
@@ -339,6 +336,45 @@ function footballMatchPairKey(match: MatchRow): string | null {
   return home && away ? [home, away].sort().join("~") : null;
 }
 
+function isCounterStrikeMatch(match: MatchRow): boolean {
+  return match.sport === "esports" && /\b(counter[\s.-]*strike|cs2?|кс)\b/i.test(match.league);
+}
+
+function compactEsportsTeamName(value: string): string {
+  const compact = compactMatchName(value)
+    .replace(/\b(team|vivo|academy|академия|challengers?|esports?|киберспорт)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const aliases: Record<string, string> = {
+    "life s a game": "lag",
+    "life a game": "lag",
+    "keyd stars": "keyd",
+    "natus vincere": "navi",
+    "virtus pro": "virtus pro"
+  };
+  return aliases[compact] || compact;
+}
+
+function esportsMatchPairKey(match: MatchRow): string | null {
+  if (match.sport !== "esports") return null;
+  const home = compactEsportsTeamName(match.home);
+  const away = compactEsportsTeamName(match.away);
+  return home && away ? [home, away].sort().join("~") : null;
+}
+
+function esportsBoFormat(value: string): string | null {
+  const match = value.match(/\b(?:bo|best\s+of)\s*([135])\b/i);
+  return match ? `BO${match[1]}` : null;
+}
+
+function preferredEsportsLeague(current: string, next: string): string {
+  const currentBo = esportsBoFormat(current);
+  const nextBo = esportsBoFormat(next);
+  if (!currentBo && nextBo) return next;
+  if (currentBo && !nextBo) return current;
+  return current.length >= next.length ? current : next;
+}
+
 function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
   const byKey = new Map<string, MatchRow>();
 
@@ -376,7 +412,18 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
             : compactMatchName(match.time) === compactMatchName(candidate.time);
         })?.[0]
       : undefined;
-    const resolvedKey = existingBaseballKey || existingFootballKey || key;
+    const esportsPairKey = esportsMatchPairKey(match);
+    const existingEsportsKey = esportsPairKey
+      ? Array.from(byKey.entries()).find(([, candidate]) => {
+          if (esportsMatchPairKey(candidate) !== esportsPairKey) return false;
+          const matchStart = match.startsAt ? new Date(match.startsAt).getTime() : 0;
+          const candidateStart = candidate.startsAt ? new Date(candidate.startsAt).getTime() : 0;
+          return matchStart && candidateStart
+            ? Math.abs(matchStart - candidateStart) <= 90 * 60 * 1000
+            : compactMatchName(match.time) === compactMatchName(candidate.time);
+        })?.[0]
+      : undefined;
+    const resolvedKey = existingBaseballKey || existingFootballKey || existingEsportsKey || key;
     const current = byKey.get(resolvedKey);
 
     if (!current) {
@@ -390,7 +437,13 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
     const mergedOdds = best.odds.some(odd => odd && odd !== "-") ? best.odds : current.odds;
     const canonicalHome = clientBaseballTeamCard(current.home, current.homeTeamId);
     const canonicalAway = clientBaseballTeamCard(current.away, current.awayTeamId);
-    const canonicalLeague = baseballPairKey?.startsWith("KBO|") ? "KBO" : baseballPairKey?.startsWith("MLB|") ? "MLB" : current.league;
+    const canonicalLeague = baseballPairKey?.startsWith("KBO|")
+      ? "KBO"
+      : baseballPairKey?.startsWith("MLB|")
+        ? "MLB"
+        : existingEsportsKey
+          ? preferredEsportsLeague(current.league, match.league)
+          : current.league;
     const canonicalCountry = canonicalLeague === "KBO"
       ? "South Korea"
       : canonicalLeague === "MLB"
@@ -2451,7 +2504,7 @@ export default function Home() {
     setStandingsMessage("");
     setHeadToHeadRows([]);
     setHeadToHeadSource("");
-    setHeadToHeadLoading(true);
+    setHeadToHeadLoading(match.sport === "baseball");
 
     try {
       const response = await fetch(`/api/standings?sport=${encodeURIComponent(match.sport)}&league=${encodeURIComponent(match.league)}`, { cache: "no-store" });
@@ -2470,7 +2523,11 @@ export default function Home() {
         losses: Number(row.losses || 0),
         pct: String(row.pct || ".000"),
         gamesBack: String(row.gamesBack || "-"),
-        form: String(row.form || "-")
+        form: String(row.form || "-"),
+        points: row.points === undefined ? undefined : Number(row.points),
+        change: row.change === undefined ? undefined : String(row.change),
+        logo: row.logo === undefined ? undefined : String(row.logo),
+        profileUrl: row.profileUrl === undefined ? undefined : String(row.profileUrl)
       })).filter((row: StandingRow) => row.team));
     } catch {
       setStandingsRows([]);
@@ -2478,6 +2535,8 @@ export default function Home() {
     } finally {
       setStandingsLoading(false);
     }
+
+    if (match.sport !== "baseball") return;
 
     try {
       const params = new URLSearchParams({
@@ -4223,7 +4282,7 @@ export default function Home() {
                       <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country, lang)}</span>
                       <span className="match-meta-sport" title={getSportLabel(match.sport, lang)}>{getSportIcon(match.sport)} {getSportLabel(match.sport, lang)}</span>
                       <strong>{t(match.league)}</strong>
-                      {match.sport === "baseball" ? (
+                      {match.sport === "baseball" || isCounterStrikeMatch(match) ? (
                         <button className="match-standings-button" onClick={() => openStandings(match)} type="button">{t("Таблица")}</button>
                       ) : null}
                       <time>{formatMatchDateTime(match, lang)}</time>
@@ -4309,7 +4368,17 @@ export default function Home() {
                 })
               ) : (
                 <div className="empty-board">
-                  <strong>{matchesLoading ? t("Загружаю матчи") : t("Матчи не найдены")}</strong>
+                  {matchesLoading ? (
+                    <strong>{t("Идёт загрузка матчей")}</strong>
+                  ) : searchQuery.trim() ? (
+                    <>
+                      <strong>{t("По этому запросу матчи не найдены")}</strong>
+                      <span>{t("Возможно, поиск ограничивает выдачу.")}</span>
+                      <button onClick={() => setSearchQuery("")} type="button">{t("Очистить поиск")}</button>
+                    </>
+                  ) : (
+                    <strong>{t("Матчи не найдены")}</strong>
+                  )}
                 </div>
               )}
             </div>
@@ -5177,7 +5246,7 @@ export default function Home() {
               >
                 <div className="rail-title">📊 {t("Турнирная таблица")} {standingsTitle}</div>
                 {standingsSource ? <div className="standings-source">{t("Источник")}: {standingsSource}</div> : null}
-                {standingsMatch ? (
+                {standingsMatch?.sport === "baseball" ? (
                   <div className="standings-h2h">
                     <div className="standings-h2h-title">
                       <strong>{t("Очные встречи")}</strong>
@@ -5210,15 +5279,24 @@ export default function Home() {
                       <section className="standings-group" key={group.title}>
                         <h3>{group.title}</h3>
                         <div className="standings-table">
-                          <div className="standings-row standings-head">
-                            <span>#</span>
-                            <span>{t("Команда")}</span>
-                            <span>{t("В")}</span>
-                            <span>{t("П")}</span>
-                            <span>{t("Поб. %")}</span>
-                            <span>{t("Отст.")}</span>
-                            <span>{t("Форма")}</span>
-                          </div>
+                          {standingsMatch && isCounterStrikeMatch(standingsMatch) ? (
+                            <div className="standings-row standings-row-esports standings-head">
+                              <span>#</span>
+                              <span>{t("Команда")}</span>
+                              <span>{t("Очки HLTV")}</span>
+                              <span>{t("Изменение")}</span>
+                            </div>
+                          ) : (
+                            <div className="standings-row standings-head">
+                              <span>#</span>
+                              <span>{t("Команда")}</span>
+                              <span>{t("В")}</span>
+                              <span>{t("П")}</span>
+                              <span>{t("Поб. %")}</span>
+                              <span>{t("Отст.")}</span>
+                              <span>{t("Форма")}</span>
+                            </div>
+                          )}
                           {group.rows.map(row => {
                             const rowName = searchHaystack(row.team, row.id);
                             const homeName = standingsMatch ? searchHaystack(standingsMatch.home) : "";
@@ -5232,19 +5310,32 @@ export default function Home() {
                               || rowName.includes(awayName) || awayName.includes(rowName)
                             );
 
+                            const counterStrikeRow = Boolean(standingsMatch && isCounterStrikeMatch(standingsMatch));
+
                             return (
-                            <div className={`standings-row ${highlighted ? "highlighted" : ""}`} key={row.id}>
+                            <div className={`standings-row ${counterStrikeRow ? "standings-row-esports" : ""} ${highlighted ? "highlighted" : ""}`} key={row.id}>
                               <span>{row.rank}</span>
-                              {rowTeamCard ? (
+                              {counterStrikeRow ? (
+                                <strong>{row.team}</strong>
+                              ) : rowTeamCard ? (
                                 <button className="standings-team-button" onClick={() => void openTeamProfile(rowTeamCard, row)} type="button">
                                   <strong>{rowTeamCard.name}</strong>
                                 </button>
                               ) : <strong>{row.team}</strong>}
-                              <span>{row.wins}</span>
-                              <span>{row.losses}</span>
-                              <span>{row.pct}</span>
-                              <span>{row.gamesBack}</span>
-                              <span>{row.form || "-"}</span>
+                              {counterStrikeRow ? (
+                                <>
+                                  <span>{row.points ?? "-"}</span>
+                                  <span>{row.change || "-"}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>{row.wins}</span>
+                                  <span>{row.losses}</span>
+                                  <span>{row.pct}</span>
+                                  <span>{row.gamesBack}</span>
+                                  <span>{row.form || "-"}</span>
+                                </>
+                              )}
                             </div>
                             );
                           })}
