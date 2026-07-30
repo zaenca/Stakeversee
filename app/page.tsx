@@ -132,7 +132,15 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
 }
 
 const MATCH_CACHE_KEY = "stakeversee:line-matches:v14";
-const MATCH_CACHE_FALLBACK_KEYS = [MATCH_CACHE_KEY];
+const MATCH_CACHE_FALLBACK_KEYS = [
+  MATCH_CACHE_KEY,
+  "stakeversee:line-matches:v13",
+  "stakeversee:line-matches:v12",
+  "stakeversee:line-matches:v11",
+  "stakeversee:line-matches:v10",
+  "stakeversee:line-matches:v9",
+  "stakeversee:line-matches:v8"
+];
 
 const MAX_COUPON_ITEMS = 5;
 const BASE_BANKROLL = 10000;

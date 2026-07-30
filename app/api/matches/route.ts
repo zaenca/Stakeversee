@@ -4,6 +4,8 @@ import { inferFootballCountry, isWorldCountry } from "@/lib/footballCountries";
 import { KBO_TEAMS, isKboMatchContext, kboTeamId, resolveKboTeam } from "@/lib/kboTeams";
 import { MLB_TEAMS, isMlbMatchContext, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 
+export const maxDuration = 15;
+
 type BookmakerOdds = {
   home: number;
   away: number;
@@ -97,7 +99,8 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v15";
+const API_VERSION = "bookmakers-v16";
+const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["oaxaca", ["oaxaca", "оахака", "геррерос де оаксака", "guerreros de oaxaca", "guerreros oaxaca"]],
@@ -613,7 +616,7 @@ function mainOdds(factors: PariLikeEvent[], sport: string, bookmaker: string): B
   return { home, away, draw: canDraw ? rawDraw : null, bookmaker };
 }
 
-async function fetchJson(url: string, timeoutMs = 18000): Promise<PariLikeData> {
+async function fetchJson(url: string, timeoutMs = BOOKMAKER_REQUEST_TIMEOUT_MS): Promise<PariLikeData> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -660,35 +663,60 @@ function fromBookmakerEvent(data: PariLikeData, item: PariLikeEvent, factorMap: 
 }
 
 async function fetchPariLike(urls: string[], source: "pari" | "fonbet" | "tennisi"): Promise<RawMatch[]> {
-  const errors: string[] = [];
-  for (const url of urls) {
+  const settled = await Promise.allSettled(urls.map(async (url) => {
     try {
       const data = await fetchJson(url);
       const factorMap = new Map<string, PariLikeEvent>(asArray(data.customFactors).map((row) => [asString(row.e), row]));
-      const matches = asArray(data.events)
-        .filter((item) => item.level === 1 && item.place !== "live")
-        .map((item) => fromBookmakerEvent(data, item, factorMap, source))
-        .filter((match): match is RawMatch => Boolean(match));
-      if (matches.length) return matches;
-      errors.push(`${source}: empty ${url}`);
+      const matches: RawMatch[] = [];
+      for (const item of asArray(data.events)) {
+        if (item.level !== 1 || item.place === "live") continue;
+        try {
+          const match = fromBookmakerEvent(data, item, factorMap, source);
+          if (match) matches.push(match);
+        } catch (error) {
+          console.warn("[matches] skipped malformed bookmaker event", source, asString(item.id), error);
+        }
+      }
+      if (!matches.length) throw new Error(`empty ${url}`);
+      return matches;
     } catch (error) {
-      errors.push(`${source}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`${source}: ${error instanceof Error ? error.message : String(error)}`);
     }
-  }
-  console.warn("[matches] bookmaker source failed", errors.slice(0, 3));
+  }));
+
+  const successful = settled
+    .filter((result): result is PromiseFulfilledResult<RawMatch[]> => result.status === "fulfilled")
+    .map((result) => result.value)
+    .sort((left, right) => right.length - left.length);
+  if (successful.length) return successful[0];
+
+  console.warn(
+    "[matches] bookmaker source failed",
+    settled
+      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason))
+      .slice(0, 3)
+  );
   return [];
 }
 
 async function fetchTennisiCategory(category: { categoryId: number; path: string; sport: string }): Promise<RawMatch[]> {
   const url = `https://tennisi.bet/rt/cgi/!rt_home.CategoryInfo?mcmd=cat&mcmdparam=${category.path}&gameid=5&categoryid=${category.categoryId}&lang=rus&more=today`;
-  const response = await fetch(url, {
-    headers: { ...REQUEST_HEADERS, referer: `https://tennisi.bet/sport/${category.path}` },
-    cache: "no-store"
-  });
-  if (!response.ok) throw new Error(`Tennisi ${category.path}: HTTP ${response.status}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), BOOKMAKER_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      headers: { ...REQUEST_HEADERS, referer: `https://tennisi.bet/sport/${category.path}` },
+      cache: "no-store",
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`Tennisi ${category.path}: HTTP ${response.status}`);
 
-  const html = new TextDecoder("windows-1251").decode(await response.arrayBuffer());
-  return parseTennisiHtml(html, category.sport);
+    const html = new TextDecoder("windows-1251").decode(await response.arrayBuffer());
+    return parseTennisiHtml(html, category.sport);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function parseTennisiHtml(html: string, sport: string): RawMatch[] {
@@ -1053,26 +1081,30 @@ function featuredFallbackMatches(now: number, horizon: number): RawMatch[] {
 function mergeMatches(matches: RawMatch[]): RawMatch[] {
   const byKey = new Map<string, RawMatch>();
   for (const rawMatch of matches) {
-    const match = normalizeMatchLocale(rawMatch);
-    if (shouldDropMatch(match)) continue;
-    const key = findMergeKey(byKey, match) || dedupeKey(match);
-    const current = byKey.get(key);
-    if (!current) {
-      byKey.set(key, match);
-      continue;
+    try {
+      const match = normalizeMatchLocale(rawMatch);
+      if (shouldDropMatch(match)) continue;
+      const key = findMergeKey(byKey, match) || dedupeKey(match);
+      const current = byKey.get(key);
+      if (!current) {
+        byKey.set(key, match);
+        continue;
+      }
+      const bookmakerOdds = { ...current.bookmakerOdds, ...match.bookmakerOdds };
+      const odds = bestOddsFromBookmakers(bookmakerOdds);
+      byKey.set(key, {
+        ...current,
+        id: `${current.id}+${match.id}`,
+        country: current.country !== "World" ? current.country : match.country,
+        league: mergedLeagueName(current, match),
+        home: displayTeamName(current, /[а-яё]/i.test(current.home) ? current.home : match.home),
+        away: displayTeamName(current, /[а-яё]/i.test(current.away) ? current.away : match.away),
+        bookmakerOdds,
+        odds
+      });
+    } catch (error) {
+      console.warn("[matches] skipped malformed match during merge", rawMatch.id, error);
     }
-    const bookmakerOdds = { ...current.bookmakerOdds, ...match.bookmakerOdds };
-    const odds = bestOddsFromBookmakers(bookmakerOdds);
-    byKey.set(key, {
-      ...current,
-      id: `${current.id}+${match.id}`,
-      country: current.country !== "World" ? current.country : match.country,
-      league: mergedLeagueName(current, match),
-      home: displayTeamName(current, /[а-яё]/i.test(current.home) ? current.home : match.home),
-      away: displayTeamName(current, /[а-яё]/i.test(current.away) ? current.away : match.away),
-      bookmakerOdds,
-      odds
-    });
   }
   // Пересчитываем анализ по итоговым (объединённым) коэффициентам —
   // после merge odds могли обновиться (взяли лучшую котировку из двух букмекеров).
@@ -1117,7 +1149,14 @@ async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[
   ]);
   const raw = [...pari, ...fonbet, ...tennisi, ...featuredFallbackMatches(now, horizon)]
     .filter((match) => match.startMs > now && match.startMs <= horizon);
-  const merged = mergeMatches(raw).map(toApiMatch);
+  const merged = mergeMatches(raw).flatMap((match) => {
+    try {
+      return [toApiMatch(match)];
+    } catch (error) {
+      console.warn("[matches] skipped malformed match response", match.id, error);
+      return [];
+    }
+  });
   return {
     matches: merged,
     debug: {
