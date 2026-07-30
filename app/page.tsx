@@ -88,6 +88,18 @@ type HeadToHeadRow = {
   winner: string;
 };
 
+type TeamCard = {
+  id: string;
+  name: string;
+  shortName: string;
+  league: string;
+  country: string;
+  logo: string;
+  rank: number;
+  form: string;
+  aliases: string[];
+};
+
 type MatchBookmakerKey = "best" | "pari" | "fonbet" | "tennisi";
 
 type CouponItem = {
@@ -215,22 +227,23 @@ function compactMatchName(value: string): string {
     .trim();
 }
 
-const CLIENT_BASEBALL_TEAM_ALIASES: [string, string[]][] = [
-  ["nc dinos", ["nc dinos", "nk dinos", "нц динос", "нк динос", "диноз", "динос"]],
-  ["kt wiz", ["kt wiz", "kt wiz suwon", "кт виз", "кт уиз", "виз"]],
-  ["ssg landers", ["ssg landers", "ссг ландерс", "ссг лэндерс", "ssg", "лендерс", "лэндерс", "ландерс"]],
-  ["doosan bears", ["doosan bears", "дусан беарс", "дусан", "doosan"]],
-  ["lg twins", ["lg twins", "лджи твинс", "лг твинс", "элджи твинс", "lg"]],
-  ["kiwoom heroes", ["kiwoom heroes", "кивум хироуз", "кивум"]],
-  ["kia tigers", ["kia tigers", "киа тайгерс", "kia"]],
-  ["lotte giants", ["lotte giants", "лотте джайентс", "lotte"]],
-  ["samsung lions", ["samsung lions", "самсунг лайонс", "samsung"]],
-  ["hanwha eagles", ["hanwha eagles", "ханвха иглс", "ханва иглс", "хануа иглс", "hanwha"]]
+const KBO_TEAM_CARDS: TeamCard[] = [
+  { id: "lg twins", name: "ЛГ Твинс", shortName: "ЛГ", league: "KBO", country: "Южная Корея", logo: "LG", rank: 1, form: "—", aliases: ["lg twins", "лджи твинс", "лг твинс", "элджи твинс", "эл джи твинс", "эл джи", "lg"] },
+  { id: "hanwha eagles", name: "Ханвха Иглс", shortName: "Ханвха", league: "KBO", country: "Южная Корея", logo: "HE", rank: 2, form: "—", aliases: ["hanwha eagles", "ханвха иглс", "ханва иглс", "хануа иглс", "хануя иглс", "ханвха", "hanwha"] },
+  { id: "lotte giants", name: "Лотте Джайентс", shortName: "Лотте", league: "KBO", country: "Южная Корея", logo: "LT", rank: 3, form: "—", aliases: ["lotte giants", "лотте джайентс", "лотте", "lotte"] },
+  { id: "ssg landers", name: "ССГ Ландерс", shortName: "ССГ", league: "KBO", country: "Южная Корея", logo: "SSG", rank: 4, form: "—", aliases: ["ssg landers", "ссг ландерс", "ссг лэндерс", "ssg", "лендерс", "лэндерс", "ландерс"] },
+  { id: "kia tigers", name: "КИА Тайгерс", shortName: "КИА", league: "KBO", country: "Южная Корея", logo: "KIA", rank: 5, form: "—", aliases: ["kia tigers", "киа тайгерс", "киа", "kia"] },
+  { id: "kt wiz", name: "КТ Виз", shortName: "КТ", league: "KBO", country: "Южная Корея", logo: "KT", rank: 6, form: "—", aliases: ["kt wiz", "kt wiz suwon", "кт виз", "кт уиз", "виз"] },
+  { id: "samsung lions", name: "Самсунг Лайонс", shortName: "Самсунг", league: "KBO", country: "Южная Корея", logo: "SL", rank: 7, form: "—", aliases: ["samsung lions", "самсунг лайонс", "самсунг", "samsung"] },
+  { id: "nc dinos", name: "НК Динос", shortName: "НК", league: "KBO", country: "Южная Корея", logo: "NC", rank: 8, form: "—", aliases: ["nc dinos", "nk dinos", "нц динос", "нк динос", "диноз", "динос"] },
+  { id: "doosan bears", name: "Дусан Беарс", shortName: "Дусан", league: "KBO", country: "Южная Корея", logo: "DB", rank: 9, form: "—", aliases: ["doosan bears", "дусан беарс", "дусан", "doosan"] },
+  { id: "kiwoom heroes", name: "Кивум Хироус", shortName: "Кивум", league: "KBO", country: "Южная Корея", logo: "KH", rank: 10, form: "—", aliases: ["kiwoom heroes", "кивум хироуз", "кивум хироус", "кивум", "kiwoom"] }
 ];
 
 const CLIENT_BASEBALL_TEAM_BY_ALIAS = new Map(
-  CLIENT_BASEBALL_TEAM_ALIASES.flatMap(([id, aliases]) => aliases.map(alias => [compactMatchName(alias), id] as const))
+  KBO_TEAM_CARDS.flatMap(team => [team.name, team.shortName, team.id, ...team.aliases].map(alias => [compactMatchName(alias), team.id] as const))
 );
+const KBO_TEAM_BY_ID = new Map(KBO_TEAM_CARDS.map(team => [team.id, team] as const));
 
 function clientBaseballTeamKey(value: string, teamId?: string): string {
   const idTail = teamId?.split(":").pop() || "";
@@ -241,17 +254,25 @@ function clientBaseballTeamKey(value: string, teamId?: string): string {
   return CLIENT_BASEBALL_TEAM_BY_ALIAS.get(normalized) || normalized;
 }
 
+function clientBaseballTeamCard(value: string, teamId?: string): TeamCard | null {
+  return KBO_TEAM_BY_ID.get(clientBaseballTeamKey(value, teamId)) || null;
+}
+
 function normalizeClientMatch(match: MatchRow): MatchRow {
   if (match.sport !== "baseball") return match;
   const full = compactMatchName(`${match.country} ${match.league}`);
   const homeKey = clientBaseballTeamKey(match.home, match.homeTeamId);
   const awayKey = clientBaseballTeamKey(match.away, match.awayTeamId);
+  const homeCard = KBO_TEAM_BY_ID.get(homeKey);
+  const awayCard = KBO_TEAM_BY_ID.get(awayKey);
 
   if (/kbo|korea|коре|южн\s+коре|чемпионат\s+южн\s+коре/.test(full)) {
     return {
       ...match,
       country: "South Korea",
       league: "KBO",
+      home: homeCard?.name || match.home,
+      away: awayCard?.name || match.away,
       homeTeamId: `baseball:south korea:kbo:${homeKey}`,
       awayTeamId: `baseball:south korea:kbo:${awayKey}`
     };
@@ -1744,6 +1765,8 @@ export default function Home() {
   const [headToHeadRows, setHeadToHeadRows] = useState<HeadToHeadRow[]>([]);
   const [headToHeadLoading, setHeadToHeadLoading] = useState(false);
   const [headToHeadSource, setHeadToHeadSource] = useState("");
+  const [teamCardOpen, setTeamCardOpen] = useState(false);
+  const [selectedTeamCard, setSelectedTeamCard] = useState<TeamCard | null>(null);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesStatus, setMatchesStatus] = useState<MatchesStatusState>({ kind: "idle" });
   const [analyzing, setAnalyzing] = useState(false);
@@ -2377,6 +2400,15 @@ export default function Home() {
     } finally {
       setHeadToHeadLoading(false);
     }
+  }
+
+  function openTeamCard(match: MatchRow, side: "home" | "away") {
+    const name = side === "home" ? match.home : match.away;
+    const teamId = side === "home" ? match.homeTeamId : match.awayTeamId;
+    const card = clientBaseballTeamCard(name, teamId);
+    if (!card) return;
+    setSelectedTeamCard(card);
+    setTeamCardOpen(true);
   }
 
   async function analyzeMatches(matches: MatchRow[], openAssistant = false) {
@@ -4075,12 +4107,20 @@ export default function Home() {
 
                     <div className="match-teams">
                       <div>
-                        <strong title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined}>{match.home}</strong>
+                        {clientBaseballTeamCard(match.home, match.homeTeamId) ? (
+                          <button className="match-team-button" onClick={() => openTeamCard(match, "home")} title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined} type="button">{match.home}</button>
+                        ) : (
+                          <strong title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined}>{match.home}</strong>
+                        )}
                         <span>{t("форма 5к · вес 3")}</span>
                       </div>
                       <b>-</b>
                       <div>
-                        <strong title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined}>{match.away}</strong>
+                        {clientBaseballTeamCard(match.away, match.awayTeamId) ? (
+                          <button className="match-team-button" onClick={() => openTeamCard(match, "away")} title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined} type="button">{match.away}</button>
+                        ) : (
+                          <strong title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined}>{match.away}</strong>
+                        )}
                         <span>{t("форма 5к · вес 3")}</span>
                       </div>
                     </div>
@@ -4913,6 +4953,50 @@ export default function Home() {
                 ) : (
                   <div className="calendar-bets-empty">{t("У этого источника пока нет прогнозов.")}</div>
                 )}
+              </section>
+            </div>
+          ) : null}
+
+          {teamCardOpen && selectedTeamCard ? (
+            <div className="assistant-modal-backdrop" onMouseDown={() => setTeamCardOpen(false)} role="presentation">
+              <section
+                aria-label={t("Карточка команды")}
+                aria-modal="true"
+                className="rail-panel team-card-panel"
+                onMouseDown={event => event.stopPropagation()}
+                role="dialog"
+              >
+                <button className="stats-modal-close" aria-label={t("Закрыть")} onClick={() => setTeamCardOpen(false)} type="button">×</button>
+                <div className="team-card-hero">
+                  <div className="team-card-logo">{selectedTeamCard.logo}</div>
+                  <div>
+                    <span>{selectedTeamCard.country} · {selectedTeamCard.league}</span>
+                    <h2>{selectedTeamCard.name}</h2>
+                    <small>{t("ID команды")}: {selectedTeamCard.id}</small>
+                  </div>
+                </div>
+                <div className="team-card-stats">
+                  <div>
+                    <span>{t("Место")}</span>
+                    <strong>{selectedTeamCard.rank}</strong>
+                  </div>
+                  <div>
+                    <span>{t("Форма")}</span>
+                    <strong>{selectedTeamCard.form}</strong>
+                  </div>
+                  <div>
+                    <span>{t("Лига")}</span>
+                    <strong>{selectedTeamCard.league}</strong>
+                  </div>
+                </div>
+                <div className="team-card-aliases">
+                  <span>{t("Распознаётся как")}</span>
+                  <div>
+                    {[selectedTeamCard.name, selectedTeamCard.shortName, ...selectedTeamCard.aliases].map(alias => (
+                      <small key={alias}>{alias}</small>
+                    ))}
+                  </div>
+                </div>
               </section>
             </div>
           ) : null}
