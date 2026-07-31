@@ -307,6 +307,7 @@ const COUNTRY_FROM_LEAGUE_KEYWORDS: Array<[RegExp, string]> = [
   [/тунис(а|ский|ская|ское)?/i, "Tunisia"],
   [/казахстан(а|ский|ская|ское)?/i, "Kazakhstan"],
   [/таиланд(а|ский|ская|ское)?/i, "Thailand"],
+  [/вьетнам(а|ский|ская|ское)?/i, "Vietnam"],
   [/индонези(я|и|йский|йская|йское)/i, "Indonesia"],
   [/малайзи(я|и|йский|йская|йское)/i, "Malaysia"],
   [/сингапур(а|ский|ская|ское)?/i, "Singapore"],
@@ -418,6 +419,7 @@ const COUNTRY_NAME_MAP: Record<string, string> = {
   "\u0411\u041e\u041b\u0413\u0410\u0420\u0418\u042f": "Bulgaria", "\u0425\u041e\u0420\u0412\u0410\u0422\u0418\u042f": "Croatia", "\u0421\u0415\u0420\u0411\u0418\u042f": "Serbia",
   "\u0421\u041b\u041e\u0412\u0410\u041a\u0418\u042f": "Slovakia", "\u0427\u0415\u0425\u0418\u042f": "Czech Republic", "\u0418\u0417\u0420\u0410\u0418\u041b\u042c": "Israel",
   "\u041a\u0410\u0417\u0410\u0425\u0421\u0422\u0410\u041d": "Kazakhstan", "\u0422\u0410\u0418\u041b\u0410\u041d\u0414": "Thailand", "\u0418\u041d\u0414\u0418\u042f": "India",
+  "\u0412\u042c\u0415\u0422\u041d\u0410\u041c": "Vietnam",
   "\u0411\u0423\u0422\u0410\u041d": "Bhutan",
   "\u0423\u0420\u0423\u0413\u0412\u0410\u0419": "Uruguay",
   "\u0422\u0410\u0419\u0412\u0410\u041d\u042c": "Taiwan", "\u041c\u0423\u0416\u0427\u0418\u041d\u042b": "ATP", "\u0416\u0415\u041d\u0429\u0418\u041d\u042b": "WTA",
@@ -510,9 +512,20 @@ function normalizeHockeyLeague(match: RawMatch): RawMatch {
   return { ...match, league: leagueParts.join(". ") };
 }
 
+function normalizeBasketballLeague(match: RawMatch): RawMatch {
+  if (match.sport !== "basketball") return match;
+  const full = normalizedName(`${match.country} ${match.league}`);
+  if (/vba|vietnam|вьетнам/.test(full)) {
+    return { ...match, country: "Vietnam", league: "VBA" };
+  }
+  return match;
+}
+
 function normalizeMatchLocale(match: RawMatch): RawMatch {
   const baseballMatch = normalizeBaseballLeague(match);
   if (baseballMatch !== match) return withTeamIds(baseballMatch);
+  const basketballMatch = normalizeBasketballLeague(match);
+  if (basketballMatch !== match) return withTeamIds(basketballMatch);
   if (match.sport === "football" && isWorldCountry(match.country)) {
     const inferredCountry = inferFootballCountry(match.league);
     return withTeamIds({ ...match, country: inferredCountry || "World" });
@@ -994,8 +1007,8 @@ function sameParticipants(left: RawMatch, right: RawMatch): boolean {
   if (left.homeTeamId && left.awayTeamId && right.homeTeamId && right.awayTeamId) {
     const exactTeams = (left.homeTeamId === right.homeTeamId && left.awayTeamId === right.awayTeamId)
       || (left.homeTeamId === right.awayTeamId && left.awayTeamId === right.homeTeamId);
-    const supportsNameFallback = ["baseball", "football", "esports", "ice-hockey"].includes(left.sport)
-      && ["baseball", "football", "esports", "ice-hockey"].includes(right.sport);
+    const supportsNameFallback = ["baseball", "basketball", "football", "esports", "ice-hockey"].includes(left.sport)
+      && ["baseball", "basketball", "football", "esports", "ice-hockey"].includes(right.sport);
     if (exactTeams || !supportsNameFallback) return exactTeams;
   }
 
@@ -1061,6 +1074,7 @@ function shouldDropMatch(match: RawMatch): boolean {
   // симулированных матчей, встречается и без явного "Лига Про" в названии турнира.
   if (/[\s-]про(?:[\s-]|$)/i.test(`${match.home} ${match.away}`.toLowerCase())) return true;
   if (match.sport === "ice-hockey" && /(magnitka|магнитка|cyber|esport|virtual|simulation|3x3|3x4|4x4|3 на 3|3 на 4|4 на 4|nhl \d|лига про|liga pro)/i.test(full)) return true;
+  if (match.sport === "basketball" && /3\s*(?:x|х|×|на)\s*3/i.test(full)) return true;
   if (match.sport === "esports" && /(fc\s*\d{2}|fifa|efootball|nhl\s*\d|nba\s*\d|h2h.*liga|liga.*h2h|h2h.*2x4|2x4.*h2h|2x4|2\s*x\s*4|h2h.*2x2|2x2.*h2h|2x2|2\s*x\s*2)/i.test(full)) return true;
   if (match.sport === "tennis" && /(double faults|aces|statistics|stats|двойн.*ошиб|эйс|статист)/i.test(full)) return true;
   if (match.sport === "volleyball" && /(russia|россия).*(amateur|любительск)|(?:amateur|любительск).*(russia|россия)/i.test(full)) return true;
