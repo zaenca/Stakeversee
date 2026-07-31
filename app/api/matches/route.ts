@@ -486,6 +486,30 @@ function normalizeBaseballLeague(match: RawMatch): RawMatch {
   return match;
 }
 
+function normalizeHockeyLeague(match: RawMatch): RawMatch {
+  if (match.sport !== "ice-hockey") return match;
+
+  if (/цыплаков/i.test(match.league)) {
+    return {
+      ...match,
+      country: isWorldCountry(match.country) ? "Belarus" : match.country,
+      league: "Кубок Владимира Цыплакова"
+    };
+  }
+
+  if (!/товарищ|friendly/i.test(match.league)) return match;
+
+  const nationalTeams = /сборн|national\s+team/i.test(match.league);
+  const under20 = /u\s*[-.]?\s*20\b|до\s*[-.]?\s*20|20\s+лет|мол(?:одеж\w*)?/i.test(match.league);
+  const leagueParts = [
+    "Товарищеские матчи",
+    nationalTeams ? "Сборные" : "",
+    under20 ? "До 20 лет" : ""
+  ].filter(Boolean);
+
+  return { ...match, league: leagueParts.join(". ") };
+}
+
 function normalizeMatchLocale(match: RawMatch): RawMatch {
   const baseballMatch = normalizeBaseballLeague(match);
   if (baseballMatch !== match) return withTeamIds(baseballMatch);
@@ -493,12 +517,13 @@ function normalizeMatchLocale(match: RawMatch): RawMatch {
     const inferredCountry = inferFootballCountry(match.league);
     return withTeamIds({ ...match, country: inferredCountry || "World" });
   }
-  if (match.country !== "World" || match.sport !== "ice-hockey") return withTeamIds(match);
-  if (!/товарищ|friendly/i.test(match.league)) return withTeamIds(match);
+  const hockeyMatch = normalizeHockeyLeague(match);
+  if (hockeyMatch.country !== "World" || hockeyMatch.sport !== "ice-hockey") return withTeamIds(hockeyMatch);
+  if (!/товарищ|friendly/i.test(hockeyMatch.league)) return withTeamIds(hockeyMatch);
 
-  const full = `${match.league} ${match.home} ${match.away}`;
+  const full = `${hockeyMatch.league} ${hockeyMatch.home} ${hockeyMatch.away}`;
   const inferred = HOCKEY_FRIENDLY_COUNTRY_HINTS.find(([pattern]) => pattern.test(full))?.[1];
-  return withTeamIds(inferred ? { ...match, country: inferred } : match);
+  return withTeamIds(inferred ? { ...hockeyMatch, country: inferred } : hockeyMatch);
 }
 
 function extractCountryAndLeague(data: PariLikeData, item: PariLikeEvent): { country: string; league: string } {
@@ -969,8 +994,8 @@ function sameParticipants(left: RawMatch, right: RawMatch): boolean {
   if (left.homeTeamId && left.awayTeamId && right.homeTeamId && right.awayTeamId) {
     const exactTeams = (left.homeTeamId === right.homeTeamId && left.awayTeamId === right.awayTeamId)
       || (left.homeTeamId === right.awayTeamId && left.awayTeamId === right.homeTeamId);
-    const supportsNameFallback = ["baseball", "football", "esports"].includes(left.sport)
-      && ["baseball", "football", "esports"].includes(right.sport);
+    const supportsNameFallback = ["baseball", "football", "esports", "ice-hockey"].includes(left.sport)
+      && ["baseball", "football", "esports", "ice-hockey"].includes(right.sport);
     if (exactTeams || !supportsNameFallback) return exactTeams;
   }
 
@@ -978,6 +1003,10 @@ function sameParticipants(left: RawMatch, right: RawMatch): boolean {
   const leftAway = compactParticipantName(left, left.away);
   const rightHome = compactParticipantName(right, right.home);
   const rightAway = compactParticipantName(right, right.away);
+  if (left.sport === "ice-hockey" && right.sport === "ice-hockey") {
+    return (leftHome === rightHome && leftAway === rightAway)
+      || (leftHome === rightAway && leftAway === rightHome);
+  }
   const useAcronym = left.sport === "esports" || right.sport === "esports";
 
   return (areSimilarParticipants(leftHome, rightHome, useAcronym) && areSimilarParticipants(leftAway, rightAway, useAcronym))
