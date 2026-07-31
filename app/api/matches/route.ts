@@ -4,8 +4,6 @@ import { inferFootballCountry, isWorldCountry } from "@/lib/footballCountries";
 import { KBO_TEAMS, isKboMatchContext, kboTeamId, resolveKboTeam } from "@/lib/kboTeams";
 import { MLB_TEAMS, isMlbMatchContext, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 
-export const maxDuration = 15;
-
 type BookmakerOdds = {
   home: number;
   away: number;
@@ -99,7 +97,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
 };
 
-const API_VERSION = "bookmakers-v16";
+const API_VERSION = "bookmakers-v17";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -616,8 +614,11 @@ function mainOdds(factors: PariLikeEvent[], sport: string, bookmaker: string): B
   return { home, away, draw: canDraw ? rawDraw : null, bookmaker };
 }
 
-async function fetchJson(url: string, timeoutMs = BOOKMAKER_REQUEST_TIMEOUT_MS): Promise<PariLikeData> {
-  const controller = new AbortController();
+async function fetchJson(
+  url: string,
+  timeoutMs = BOOKMAKER_REQUEST_TIMEOUT_MS,
+  controller = new AbortController()
+): Promise<PariLikeData> {
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
@@ -663,9 +664,11 @@ function fromBookmakerEvent(data: PariLikeData, item: PariLikeEvent, factorMap: 
 }
 
 async function fetchPariLike(urls: string[], source: "pari" | "fonbet" | "tennisi"): Promise<RawMatch[]> {
-  const settled = await Promise.allSettled(urls.map(async (url) => {
+  const errors: string[] = [];
+  const controllers = urls.map(() => new AbortController());
+  const requests = urls.map(async (url, index) => {
     try {
-      const data = await fetchJson(url);
+      const data = await fetchJson(url, BOOKMAKER_REQUEST_TIMEOUT_MS, controllers[index]);
       const factorMap = new Map<string, PariLikeEvent>(asArray(data.customFactors).map((row) => [asString(row.e), row]));
       const matches: RawMatch[] = [];
       for (const item of asArray(data.events)) {
@@ -680,24 +683,20 @@ async function fetchPariLike(urls: string[], source: "pari" | "fonbet" | "tennis
       if (!matches.length) throw new Error(`empty ${url}`);
       return matches;
     } catch (error) {
-      throw new Error(`${source}: ${error instanceof Error ? error.message : String(error)}`);
+      const message = `${source}: ${error instanceof Error ? error.message : String(error)}`;
+      errors.push(message);
+      throw new Error(message);
     }
-  }));
+  });
 
-  const successful = settled
-    .filter((result): result is PromiseFulfilledResult<RawMatch[]> => result.status === "fulfilled")
-    .map((result) => result.value)
-    .sort((left, right) => right.length - left.length);
-  if (successful.length) return successful[0];
-
-  console.warn(
-    "[matches] bookmaker source failed",
-    settled
-      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-      .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason))
-      .slice(0, 3)
-  );
-  return [];
+  try {
+    return await Promise.any(requests);
+  } catch {
+    console.warn("[matches] bookmaker source failed", errors.slice(0, 3));
+    return [];
+  } finally {
+    controllers.forEach((controller) => controller.abort());
+  }
 }
 
 async function fetchTennisiCategory(category: { categoryId: number; path: string; sport: string }): Promise<RawMatch[]> {
