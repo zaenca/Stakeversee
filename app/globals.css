@@ -1688,17 +1688,38 @@ h1 {
 }
 
 .match-team-button {
+  align-items: center;
   background: transparent;
   border: 0;
   color: #eaf6ff;
   cursor: pointer;
-  display: block;
+  display: inline-flex;
+  flex-wrap: wrap;
   font: inherit;
   font-weight: 900;
+  gap: 6px;
+  justify-content: center;
   margin: 0 auto;
   padding: 0;
   text-align: center;
   transition: color 0.16s ease;
+}
+
+.match-team-button strong {
+  display: inline;
+}
+
+.match-team-button .match-team-ranking {
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-radius: 999px;
+  color: var(--cyan);
+  display: inline-flex;
+  font-size: 0.62rem;
+  font-style: normal;
+  line-height: 1;
+  padding: 4px 6px;
+  white-space: nowrap;
 }
 
 .match-team-button:hover {
@@ -1840,6 +1861,14 @@ h1 {
   width: 72px;
 }
 
+.team-card-logo img {
+  border-radius: 50%;
+  display: block;
+  height: 58px;
+  object-fit: contain;
+  width: 58px;
+}
+
 .team-card-hero span,
 .team-card-hero small,
 .team-card-aliases > span {
@@ -1911,10 +1940,30 @@ h1 {
 
 .standings-groups {
   display: grid;
+  flex: 1 1 auto;
   gap: 12px;
+  max-height: 100%;
   min-height: 0;
+  overscroll-behavior: contain;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 8px;
+  scrollbar-color: rgba(0, 229, 255, 0.75) rgba(255, 255, 255, 0.06);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.standings-groups::-webkit-scrollbar {
+  width: 9px;
+}
+
+.standings-groups::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+
+.standings-groups::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.72);
+  border-radius: 999px;
 }
 
 .standings-group {
