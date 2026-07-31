@@ -375,13 +375,10 @@ function isCounterStrikeMatch(match: MatchRow): boolean {
 function normalizeCounterStrikeLeague(value: string): string {
   const tournament = value
     .replace(/\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/gi, " ")
-    .replace(/\s*[-–—·:]\s*/g, ". ")
-    .replace(/\s*\.\s*/g, ". ")
-    .replace(/\.{2,}/g, ".")
-    .replace(/^\.+|\.+$/g, "")
+    .replace(/\s*[-–—·:.]\s*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return ["COUNTER STRIKE 2", tournament].filter(Boolean).join(". ");
+  return ["COUNTER STRIKE 2", tournament].filter(Boolean).join(" ");
 }
 
 function compactEsportsTeamName(value: string): string {
@@ -2074,6 +2071,7 @@ export default function Home() {
   const [matchBookmakerChoice, setMatchBookmakerChoice] = useState<Record<string, MatchBookmakerKey>>({});
   const [standingsOpen, setStandingsOpen] = useState(false);
   const [standingsRows, setStandingsRows] = useState<StandingRow[]>([]);
+  const standingsGroupsRef = useRef<HTMLDivElement | null>(null);
   const [counterStrikeRankings, setCounterStrikeRankings] = useState<StandingRow[]>([]);
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [standingsMessage, setStandingsMessage] = useState("");
@@ -2619,6 +2617,23 @@ export default function Home() {
       rows: rows.slice().sort((a, b) => a.rank - b.rank)
     }));
   }, [standingsRows]);
+
+  useEffect(() => {
+    if (!standingsOpen || standingsLoading || !standingsMatch || !isCounterStrikeMatch(standingsMatch)) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const container = standingsGroupsRef.current;
+      const firstHighlighted = container?.querySelector<HTMLElement>(".standings-row.highlighted");
+      if (!container || !firstHighlighted) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const rowRect = firstHighlighted.getBoundingClientRect();
+      const centeredOffset = rowRect.top - containerRect.top - (container.clientHeight - rowRect.height) / 2;
+      container.scrollTo({ top: Math.max(0, container.scrollTop + centeredOffset), behavior: "auto" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [standingsLoading, standingsMatch, standingsOpen, standingsRows]);
 
   const visibleAnalyzedMatches = useMemo(() => uniqueAnalyzedMatches(analyzedMatches), [analyzedMatches]);
 
@@ -5528,7 +5543,7 @@ export default function Home() {
                 {standingsLoading ? (
                   <div className="assistant-empty-hint">{t("Загружаю таблицу...")}</div>
                 ) : standingsGroups.length ? (
-                  <div className="standings-groups">
+                  <div className="standings-groups" ref={standingsGroupsRef}>
                     {standingsGroups.map(group => (
                       <section className="standings-group" key={group.title}>
                         <h3>{group.title}</h3>

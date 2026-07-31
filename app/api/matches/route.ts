@@ -359,14 +359,13 @@ function normalizeEsportsLeagueName(sport: string, league: string): string {
   const value = league
     .replace(/\bbest\s+of\s*([135])\b/gi, "BO$1")
     .replace(/\bbo\s*([135])\b/gi, "BO$1")
-    .replace(/\s*[-–—·:]\s*/g, ". ")
-    .replace(/\s*\.\s*/g, ". ")
+    .replace(/\s*[-–—·:.]\s*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   const bo = esportsBoFormat(value);
   const discipline = esportsDisciplineName(value);
   const tournament = normalizeEsportsTournamentName(value, discipline, bo);
-  return [discipline, tournament, bo].filter(Boolean).join(". ") || value;
+  return [discipline, tournament, bo].filter(Boolean).join(" ") || value;
 }
 
 function esportsDisciplineName(value: string): string | null {
@@ -397,10 +396,7 @@ function normalizeEsportsTournamentName(value: string, discipline: string | null
   return tournament
     .replace(/\bqualification\b/gi, " ")
     .replace(/\bквалификация\b/gi, " ")
-    .replace(/\s*[-–—·:]\s*/g, ". ")
-    .replace(/\s*\.\s*/g, ". ")
-    .replace(/\.{2,}/g, ".")
-    .replace(/^\.+|\.+$/g, "")
+    .replace(/\s*[-–—·:.]\s*/g, " ")
     .replace(/\s+/g, " ")
     .replace(/\blck\b/gi, "LCK")
     .replace(/\blcs\b/gi, "LCS")
