@@ -190,7 +190,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v16";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v17";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
   "stakeversee:line-matches:v13",

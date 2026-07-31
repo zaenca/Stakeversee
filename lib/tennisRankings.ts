@@ -33,6 +33,7 @@ export type TennisRankings = {
 };
 
 const ATP_RANKINGS_URL = "https://www.atptour.com/en/rankings/singles?rankRange=1-100";
+const ATP_FALLBACK_RANKINGS_URL = "https://tenniscompanion.org/rankings/mens/";
 const WTA_RANKINGS_API = "https://api.wtatennis.com/tennis/players/ranked";
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
@@ -104,6 +105,36 @@ function parseAtpRankings(html: string): TennisRankingPlayer[] {
   return players.sort((a, b) => a.rank - b.rank).slice(0, 100);
 }
 
+function parseTennisCompanionAtpRankings(html: string): TennisRankingPlayer[] {
+  const table = html.match(/<table\b[^>]*>[\s\S]*?<\/table>/i)?.[0] || "";
+  const players: TennisRankingPlayer[] = [];
+  const seen = new Set<string>();
+
+  for (const rowMatch of table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...rowMatch[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(match => stripTags(match[1]));
+    if (cells.length < 6) continue;
+
+    const sourceRank = integer(cells[0]);
+    const name = cells[2]?.trim() || "";
+    const identity = slugify(name);
+    if (sourceRank < 1 || sourceRank > 100 || !identity || seen.has(identity)) continue;
+    seen.add(identity);
+    players.push({
+      id: `atp:${identity}`,
+      tour: "ATP",
+      rank: sourceRank,
+      name,
+      country: cells[3]?.trim().toUpperCase() || "",
+      points: integer(cells[5]),
+      age: integer(cells[4]) || undefined,
+      profileUrl: ATP_RANKINGS_URL
+    });
+    if (players.length === 100) break;
+  }
+
+  return players.sort((a, b) => a.rank - b.rank);
+}
+
 function slugify(value: string): string {
   return value
     .normalize("NFD")
@@ -120,6 +151,26 @@ async function fetchHtml(url: string): Promise<string> {
   } as RequestInit & { next: { revalidate: number } });
   if (!response.ok) throw new Error(`${url} HTTP ${response.status}`);
   return response.text();
+}
+
+type RankingFetchResult = {
+  players: TennisRankingPlayer[];
+  source: string;
+};
+
+async function fetchAtpRankings(): Promise<RankingFetchResult> {
+  try {
+    const official = parseAtpRankings(await fetchHtml(ATP_RANKINGS_URL));
+    if (official.length >= 90) return { players: official, source: "ATP" };
+  } catch (error) {
+    console.warn("Official ATP rankings unavailable, using fallback", error);
+  }
+
+  const fallback = parseTennisCompanionAtpRankings(await fetchHtml(ATP_FALLBACK_RANKINGS_URL));
+  if (fallback.length < 90) {
+    throw new Error(`ATP fallback rankings incomplete: ${fallback.length}`);
+  }
+  return { players: fallback, source: "ATP / TennisCompanion" };
 }
 
 type WtaRankedPlayer = {
@@ -199,18 +250,18 @@ async function fetchWtaRankings(): Promise<TennisRankingPlayer[]> {
 
 async function refreshRankings(): Promise<TennisRankings> {
   const [atpResult, wtaResult] = await Promise.allSettled([
-    fetchHtml(ATP_RANKINGS_URL),
+    fetchAtpRankings(),
     fetchWtaRankings()
   ]);
-  const atp = atpResult.status === "fulfilled" ? parseAtpRankings(atpResult.value) : [];
+  const atp = atpResult.status === "fulfilled" ? atpResult.value.players : [];
   const wta = wtaResult.status === "fulfilled" ? wtaResult.value : [];
-  if (atp.length < 90 && wta.length < 90) {
+  if (atp.length < 90 || wta.length < 90) {
     throw new Error(`Tennis rankings unavailable: ATP ${atp.length}, WTA ${wta.length}`);
   }
   return {
     atp,
     wta,
-    source: [atp.length ? "ATP" : "", wta.length ? "WTA" : ""].filter(Boolean).join(" / "),
+    source: `${atpResult.status === "fulfilled" ? atpResult.value.source : "ATP"} / WTA`,
     updatedAt: new Date().toISOString()
   };
 }
