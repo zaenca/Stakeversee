@@ -77,6 +77,7 @@ type MatchRow = {
   startsAt?: string;
   homeTeamId?: string;
   awayTeamId?: string;
+  tennisTour?: TennisTour;
   homePlayers?: TennisParticipant[];
   awayPlayers?: TennisParticipant[];
 };
@@ -190,7 +191,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v17";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v18";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
   "stakeversee:line-matches:v13",
@@ -2197,7 +2198,6 @@ export default function Home() {
   const [standingsOpen, setStandingsOpen] = useState(false);
   const [standingsRows, setStandingsRows] = useState<StandingRow[]>([]);
   const [standingsPage, setStandingsPage] = useState(1);
-  const [tennisStandingsTour, setTennisStandingsTour] = useState<TennisTour>("ATP");
   const [counterStrikeRankings, setCounterStrikeRankings] = useState<StandingRow[]>([]);
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [standingsMessage, setStandingsMessage] = useState("");
@@ -2824,6 +2824,7 @@ export default function Home() {
             startsAt,
             homeTeamId: match.homeTeamId ? String(match.homeTeamId) : undefined,
             awayTeamId: match.awayTeamId ? String(match.awayTeamId) : undefined,
+            tennisTour: match.tennisTour === "WTA" ? "WTA" : match.tennisTour === "ATP" ? "ATP" : undefined,
             homePlayers: Array.isArray(match.homePlayers)
               ? (match.homePlayers as TennisParticipant[]).map(player => ({
                   ...player,
@@ -2875,12 +2876,12 @@ export default function Home() {
   // сохраняет прогнозы в базу, чтобы позже сверить их с результатами
   // (обучение на ошибках — этап 2).
   async function openStandings(match: MatchRow) {
-    const defaultTennisTour = [...(match.homePlayers || []), ...(match.awayPlayers || [])]
-      .find(player => player.rank !== null)?.tour || "ATP";
+    const defaultTennisTour = match.tennisTour
+      || ([...(match.homePlayers || []), ...(match.awayPlayers || [])].find(player => player.tour)?.tour)
+      || "ATP";
     setStandingsOpen(true);
     setStandingsMatch(match);
     setStandingsPage(1);
-    setTennisStandingsTour(defaultTennisTour);
     setStandingsSource("");
     setStandingsTitle(`${match.league} · ${match.home} — ${match.away}`);
     setStandingsLoading(true);
@@ -2949,36 +2950,6 @@ export default function Home() {
       setHeadToHeadRows([]);
     } finally {
       setHeadToHeadLoading(false);
-    }
-  }
-
-  async function switchTennisStandingsTour(tour: TennisTour) {
-    if (!standingsMatch || standingsMatch.sport !== "tennis" || tennisStandingsTour === tour) return;
-    setTennisStandingsTour(tour);
-    setStandingsPage(1);
-    setStandingsLoading(true);
-    setStandingsMessage("");
-    try {
-      const params = new URLSearchParams({
-        sport: "tennis",
-        league: standingsMatch.league,
-        tour
-      });
-      const response = await fetch(`/api/standings?${params.toString()}`, { cache: "no-store" });
-      if (!response.ok) throw new Error("standings unavailable");
-      const payload = await response.json();
-      const normalizedRows = normalizeStandingRows(Array.isArray(payload?.standings) ? payload.standings : []);
-      setStandingsRows(normalizedRows);
-      setStandingsSource(String(payload?.source || tour));
-      setStandingsTitle(`${String(payload?.league || `${tour} · Топ-100`)} · ${standingsMatch.home} — ${standingsMatch.away}`);
-      const selectedIds = new Set([...(standingsMatch.homePlayers || []), ...(standingsMatch.awayPlayers || [])].map(player => player.id));
-      const firstSelectedIndex = normalizedRows.findIndex(row => selectedIds.has(row.id));
-      setStandingsPage(firstSelectedIndex >= 0 ? Math.floor(firstSelectedIndex / 10) + 1 : 1);
-    } catch {
-      setStandingsRows([]);
-      setStandingsMessage(t("Турнирная таблица сейчас недоступна."));
-    } finally {
-      setStandingsLoading(false);
     }
   }
 
@@ -5773,22 +5744,6 @@ export default function Home() {
               >
                 <div className="rail-title">📊 {t("Турнирная таблица")} {standingsTitle}</div>
                 {standingsSource ? <div className="standings-source">{t("Источник")}: {standingsSource}</div> : null}
-                {tennisStandingsOpen ? (
-                  <div className="tennis-tour-switch" role="tablist" aria-label={t("Рейтинг теннисистов")}>
-                    {(["ATP", "WTA"] as TennisTour[]).map(tour => (
-                      <button
-                        aria-selected={tennisStandingsTour === tour}
-                        className={tennisStandingsTour === tour ? "active" : ""}
-                        key={tour}
-                        onClick={() => void switchTennisStandingsTour(tour)}
-                        role="tab"
-                        type="button"
-                      >
-                        {tour}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
                 {standingsMatch?.sport === "baseball" ? (
                   <div className="standings-h2h">
                     <div className="standings-h2h-title">

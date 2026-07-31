@@ -8,7 +8,8 @@ import {
   loadTennisRankings,
   tennisParticipants,
   type TennisParticipant,
-  type TennisRankings
+  type TennisRankings,
+  type TennisTour
 } from "@/lib/tennisRankings";
 
 type BookmakerOdds = {
@@ -35,6 +36,7 @@ type RawMatch = {
   bookmakerOdds: Partial<Record<BookmakerKey, BookmakerOdds>>;
   homeTeamId?: string;
   awayTeamId?: string;
+  tennisTour?: TennisTour;
   homePlayers?: TennisParticipant[];
   awayPlayers?: TennisParticipant[];
 };
@@ -54,6 +56,7 @@ type ApiMatch = {
   startsAt: string;
   homeTeamId?: string;
   awayTeamId?: string;
+  tennisTour?: TennisTour;
   homePlayers?: TennisParticipant[];
   awayPlayers?: TennisParticipant[];
 };
@@ -108,7 +111,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v23-tennis-atp-fallback";
+const API_VERSION = "bookmakers-v24-tennis-gender-split";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -1199,23 +1202,26 @@ function toApiMatch(match: RawMatch): ApiMatch {
     startsAt: match.startsAt,
     homeTeamId: match.homeTeamId,
     awayTeamId: match.awayTeamId,
+    tennisTour: match.tennisTour,
     homePlayers: match.homePlayers,
     awayPlayers: match.awayPlayers
   };
 }
 
+function tennisTourForMatch(match: RawMatch): TennisTour {
+  const context = `${match.country} ${match.league} ${match.home} ${match.away}`;
+  const isWomen = /\bwta\b|\bwomen(?:'s)?\b|\bwoman\b|\bladies\b|\bfemale\b|\bgirls?\b|женщ|девуш|девоч|\(ж\)/i.test(context);
+  return isWomen ? "WTA" : "ATP";
+}
+
 function withTennisRankings(match: RawMatch, rankings: TennisRankings): RawMatch {
   if (match.sport !== "tennis") return match;
-  const tournament = `${match.country} ${match.league}`;
-  const preferredTour = /\bwta\b|женщ/i.test(tournament)
-    ? "WTA"
-    : /\batp\b|мужчин/i.test(tournament)
-      ? "ATP"
-      : undefined;
+  const tennisTour = tennisTourForMatch(match);
   return {
     ...match,
-    homePlayers: tennisParticipants(match.home, rankings, preferredTour),
-    awayPlayers: tennisParticipants(match.away, rankings, preferredTour)
+    tennisTour,
+    homePlayers: tennisParticipants(match.home, rankings, tennisTour),
+    awayPlayers: tennisParticipants(match.away, rankings, tennisTour)
   };
 }
 
