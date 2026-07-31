@@ -193,7 +193,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v20";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v21";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
   "stakeversee:line-matches:v13",
@@ -4739,7 +4739,7 @@ export default function Home() {
                   return (
                   <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
                     <div className={`match-meta ${esportsLeague ? "match-meta-esports" : ""}`}>
-                      <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country, lang)}</span>
+                      {match.sport !== "tennis" ? <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country, lang)}</span> : null}
                       <span className="match-meta-sport" title={getSportLabel(match.sport, lang)}>{getSportIcon(match.sport)} {getSportLabel(match.sport, lang)}</span>
                       {esportsLeague ? <span className="match-meta-discipline">{t(esportsLeague.discipline)}</span> : null}
                       <strong>{t(esportsLeague?.league || match.league)}</strong>

@@ -111,7 +111,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v26-tennis-ranking-merge";
+const API_VERSION = "bookmakers-v27-tennis-event-identity";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -1037,7 +1037,38 @@ function areSimilarParticipants(a: string, b: string, useAcronym = false): boole
   return editDistance(a, b) <= Math.max(1, Math.floor(maxLength * 0.34));
 }
 
+function compactTennisPlayerName(player: TennisParticipant): string {
+  const words = normalizedName(player.sourceName || player.name)
+    .split(" ")
+    .filter(word => word.length > 1);
+  const value = words.join(" ") || normalizedName(player.sourceName || player.name);
+  return value.replace(/[aeiouаеёиоуыэюяьъ]/g, "") || value;
+}
+
+function sameTennisPlayer(left: TennisParticipant, right: TennisParticipant): boolean {
+  const leftRanked = left.rank !== null && !left.id.startsWith("tennis:unranked:");
+  const rightRanked = right.rank !== null && !right.id.startsWith("tennis:unranked:");
+  if (leftRanked && rightRanked) return left.id === right.id;
+  return areSimilarParticipants(compactTennisPlayerName(left), compactTennisPlayerName(right));
+}
+
+function sameTennisSide(left: TennisParticipant[] | undefined, right: TennisParticipant[] | undefined): boolean {
+  if (!left?.length || !right?.length || left.length !== right.length) return false;
+  const unmatched = [...right];
+  return left.every(player => {
+    const index = unmatched.findIndex(candidate => sameTennisPlayer(player, candidate));
+    if (index < 0) return false;
+    unmatched.splice(index, 1);
+    return true;
+  });
+}
+
 function sameParticipants(left: RawMatch, right: RawMatch): boolean {
+  if (left.sport === "tennis" && right.sport === "tennis") {
+    return (sameTennisSide(left.homePlayers, right.homePlayers) && sameTennisSide(left.awayPlayers, right.awayPlayers))
+      || (sameTennisSide(left.homePlayers, right.awayPlayers) && sameTennisSide(left.awayPlayers, right.homePlayers));
+  }
+
   if (left.homeTeamId && left.awayTeamId && right.homeTeamId && right.awayTeamId) {
     const exactTeams = (left.homeTeamId === right.homeTeamId && left.awayTeamId === right.awayTeamId)
       || (left.homeTeamId === right.awayTeamId && left.awayTeamId === right.homeTeamId);
@@ -1075,6 +1106,10 @@ function esportsBoFormat(value: string): string | null {
 }
 
 function mergedLeagueName(current: RawMatch, match: RawMatch): string {
+  if (current.sport === "tennis") {
+    const detailScore = (value: string) => (value.match(/\d+/g)?.length || 0) * 10 + value.split("·").length;
+    return detailScore(match.league) > detailScore(current.league) ? match.league : current.league;
+  }
   if (current.sport === "esports") {
     const currentBo = esportsBoFormat(current.league);
     const nextBo = esportsBoFormat(match.league);
@@ -1225,6 +1260,45 @@ function tennisTourForMatch(match: RawMatch): TennisTour {
   return isWomen ? "WTA" : "ATP";
 }
 
+function tennisVenueName(value: string): string {
+  const normalized = normalizedName(value);
+  const translations: Record<string, string> = {
+    washington: "Вашингтон",
+    memphis: "Мемфис",
+    "great britain": "Великобритания",
+    britain: "Великобритания",
+    usa: "США",
+    "united states": "США"
+  };
+  return translations[normalized] || value.trim();
+}
+
+function tennisLeagueName(match: RawMatch, tour: TennisTour, homePlayers: TennisParticipant[], awayPlayers: TennisParticipant[]): string {
+  const raw = match.league.replace(/[—:]/g, " · ");
+  const tier = raw.match(/\b(?:atp|wta)\s*(1000|500|250|125|100)\b/i)?.[1]
+    || raw.match(/\b(1000|500|250|125|100)\b/)?.[1]
+    || "";
+  const isDoubles = homePlayers.length > 1
+    || awayPlayers.length > 1
+    || /\b(?:doubles?|pairs?)\b|пар(?:ы|ный|ные|н\.?)?/i.test(raw);
+  const venue = raw
+    .split(/[·.]/)
+    .map(part => part
+      .replace(/\b(?:world\s+tennis|tennis|atp|wta)\b/gi, " ")
+      .replace(/\b(?:1000|500|250|125|100)\b/g, " ")
+      .replace(/\b(?:men(?:'s)?|women(?:'s)?|male|female|singles?|doubles?|pairs?|hard|clay|grass|indoor|outdoor|qualification|qualifying)\b/gi, " ")
+      .replace(/мужчин\w*|женщин\w*|одиноч\w*|парн\w*|пары|хард|грунт\w*|трава|квалификац\w*/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim())
+    .find(part => part.length > 1 && !/^(?:world|мир)$/i.test(part));
+  const fallbackVenue = !isWorldCountry(match.country) && !/^(?:atp|wta)$/i.test(match.country)
+    ? match.country
+    : "Место не указано";
+  const level = `${tour}${tier ? ` ${tier}` : ""}`;
+  const gender = tour === "WTA" ? "женщины" : "мужчины";
+  return [level, tennisVenueName(venue || fallbackVenue), gender, isDoubles ? "пары" : ""].filter(Boolean).join(" · ");
+}
+
 function withTennisRankings(match: RawMatch, rankings: TennisRankings): RawMatch {
   if (match.sport !== "tennis") return match;
   const tennisTour = tennisTourForMatch(match);
@@ -1233,6 +1307,7 @@ function withTennisRankings(match: RawMatch, rankings: TennisRankings): RawMatch
   return withTeamIds({
     ...match,
     tennisTour,
+    league: tennisLeagueName(match, tennisTour, homePlayers, awayPlayers),
     home: homePlayers.map(player => player.name).join(" / ") || match.home,
     away: awayPlayers.map(player => player.name).join(" / ") || match.away,
     homePlayers,
