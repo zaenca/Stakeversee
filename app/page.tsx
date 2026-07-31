@@ -193,7 +193,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v19";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v20";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
   "stakeversee:line-matches:v13",
@@ -4788,7 +4788,7 @@ export default function Home() {
                           <div className="tennis-participants">
                             {homeTennisPlayers.map(player => (
                               <button className="match-team-button" key={player.id} onClick={() => openTennisPlayer(player)} type="button">
-                                <strong>{player.sourceName}</strong>
+                                <strong>{player.name}</strong>
                                 {player.rank ? <em className="match-team-ranking">{player.tour} #{player.rank}</em> : null}
                               </button>
                             ))}
@@ -4811,7 +4811,7 @@ export default function Home() {
                           <div className="tennis-participants">
                             {awayTennisPlayers.map(player => (
                               <button className="match-team-button" key={player.id} onClick={() => openTennisPlayer(player)} type="button">
-                                <strong>{player.sourceName}</strong>
+                                <strong>{player.name}</strong>
                                 {player.rank ? <em className="match-team-ranking">{player.tour} #{player.rank}</em> : null}
                               </button>
                             ))}

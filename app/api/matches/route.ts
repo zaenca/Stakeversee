@@ -111,7 +111,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v25-tennis-localized";
+const API_VERSION = "bookmakers-v26-tennis-ranking-merge";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -979,6 +979,17 @@ function canonicalTeamId(match: RawMatch, value: string): string {
 }
 
 function withTeamIds(match: RawMatch): RawMatch {
+  if (match.sport === "tennis" && match.homePlayers?.length && match.awayPlayers?.length) {
+    const sideId = (players: TennisParticipant[]) => players
+      .map(player => player.id)
+      .sort()
+      .join("+");
+    return {
+      ...match,
+      homeTeamId: `tennis-side:${sideId(match.homePlayers)}`,
+      awayTeamId: `tennis-side:${sideId(match.awayPlayers)}`
+    };
+  }
   return {
     ...match,
     homeTeamId: canonicalTeamId(match, match.home),
@@ -1217,12 +1228,16 @@ function tennisTourForMatch(match: RawMatch): TennisTour {
 function withTennisRankings(match: RawMatch, rankings: TennisRankings): RawMatch {
   if (match.sport !== "tennis") return match;
   const tennisTour = tennisTourForMatch(match);
-  return {
+  const homePlayers = tennisParticipants(match.home, rankings, tennisTour);
+  const awayPlayers = tennisParticipants(match.away, rankings, tennisTour);
+  return withTeamIds({
     ...match,
     tennisTour,
-    homePlayers: tennisParticipants(match.home, rankings, tennisTour),
-    awayPlayers: tennisParticipants(match.away, rankings, tennisTour)
-  };
+    home: homePlayers.map(player => player.name).join(" / ") || match.home,
+    away: awayPlayers.map(player => player.name).join(" / ") || match.away,
+    homePlayers,
+    awayPlayers
+  });
 }
 
 async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[]; debug: Record<string, unknown> }> {
@@ -1238,10 +1253,12 @@ async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[
   ]);
   const raw = [...pari, ...fonbet, ...tennisi, ...featuredFallbackMatches(now, horizon)]
     .filter((match) => match.startMs > now && match.startMs <= horizon);
-  const mergedRaw = mergeMatches(raw);
+  const identifiedRaw = rankingsResult.value
+    ? raw.map(match => withTennisRankings(match, rankingsResult.value!))
+    : raw;
+  const mergedRaw = mergeMatches(identifiedRaw);
   const ranked = rankingsResult.value
     ? mergedRaw
-        .map(match => withTennisRankings(match, rankingsResult.value!))
         .filter(match => match.sport !== "tennis"
           || hasTop100Participant(match.homePlayers || [])
           || hasTop100Participant(match.awayPlayers || []))
