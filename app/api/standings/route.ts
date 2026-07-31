@@ -119,7 +119,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sport = searchParams.get("sport");
   const league = searchParams.get("league") || "";
-  const counterStrike = sport === "esports" && /\b(counter[\s.-]*strike|cs2?|кс)\b/i.test(league);
+  const counterStrike = sport === "esports" && /\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/i.test(league);
 
   if (counterStrike) {
     try {
@@ -127,7 +127,7 @@ export async function GET(request: Request) {
       const standings: StandingRow[] = ranking.rows.map(row => ({
         id: row.id,
         rank: row.rank,
-        league: "Counter-Strike",
+        league: "COUNTER STRIKE 2",
         division: "топ-100",
         team: row.team,
         wins: 0,
@@ -143,7 +143,7 @@ export async function GET(request: Request) {
       return NextResponse.json(
         {
           sport: "esports",
-          league: "Counter-Strike · топ-100",
+          league: "COUNTER STRIKE 2 · топ-100",
           source: ranking.source,
           updatedAt: ranking.updatedAt,
           standings
@@ -151,9 +151,9 @@ export async function GET(request: Request) {
         { headers: NO_STORE_HEADERS }
       );
     } catch (error) {
-      console.error("Counter-Strike standings route failed", error);
+      console.error("COUNTER STRIKE 2 standings route failed", error);
       return NextResponse.json(
-        { sport: "esports", league: "Counter-Strike · топ-100", source: "HLTV", standings: [] },
+        { sport: "esports", league: "COUNTER STRIKE 2 · топ-100", source: "HLTV", standings: [] },
         { status: 502, headers: NO_STORE_HEADERS }
       );
     }

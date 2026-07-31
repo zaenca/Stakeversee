@@ -97,7 +97,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v18";
+const API_VERSION = "bookmakers-v19";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -371,7 +371,7 @@ function normalizeEsportsLeagueName(sport: string, league: string): string {
 
 function esportsDisciplineName(value: string): string | null {
   if (/\b(league\s+of\s+legends|lol)\b/i.test(value)) return "LoL";
-  if (/\b(counter\s*strike|cs2?|кс)\b/i.test(value)) return "Counter-Strike";
+  if (/\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/i.test(value)) return "COUNTER STRIKE 2";
   if (/\b(dota\s*2?|дота)\b/i.test(value)) return "Dota 2";
   if (/\b(call\s+of\s+duty|cod)\b/i.test(value)) return "Call of Duty";
   if (/\bvalorant\b/i.test(value)) return "Valorant";
@@ -384,7 +384,9 @@ function esportsDisciplineName(value: string): string | null {
 function normalizeEsportsTournamentName(value: string, discipline: string | null, bo: string | null): string {
   let tournament = value;
   if (discipline === "LoL") tournament = tournament.replace(/\b(league\s+of\s+legends|lol)\b/gi, " ");
-  if (discipline === "Counter-Strike") tournament = tournament.replace(/\b(counter\s*strike|cs2?|кс)\b/gi, " ");
+  if (discipline === "COUNTER STRIKE 2") {
+    tournament = tournament.replace(/\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/gi, " ");
+  }
   if (discipline === "Dota 2") tournament = tournament.replace(/\b(dota\s*2?|дота)\b/gi, " ");
   if (discipline === "Call of Duty") tournament = tournament.replace(/\b(call\s+of\s+duty|cod)\b/gi, " ");
   if (discipline === "Valorant") tournament = tournament.replace(/\bvalorant\b/gi, " ");
@@ -431,7 +433,7 @@ function normalizeCountryName(raw: string): string {
 }
 
 // Список реальных стран — всё что не входит сюда (лиги, туры, дисциплины
-// вроде LoL/Counter-Strike/ATP/UTR Pro) не считается страной и уходит в лигу.
+// вроде LoL/COUNTER STRIKE 2/ATP/UTR Pro) не считается страной и уходит в лигу.
 const KNOWN_COUNTRIES = new Set([
   "russia", "england", "usa", "germany", "france", "spain", "italy", "japan",
   "brazil", "australia", "china", "south korea", "korea", "poland", "turkey",
@@ -525,7 +527,7 @@ function extractCountryAndLeague(data: PariLikeData, item: PariLikeEvent): { cou
     if (isKnownCountry(countryCandidate)) {
       return { country: countryCandidate, league };
     }
-    // Не страна (например LoL, ATP, Counter-Strike, UTR Pro) — переносим в лигу
+    // Не страна (например LoL, ATP, COUNTER STRIKE 2, UTR Pro) — переносим в лигу
     return { country: "World", league: `${countryCandidate} — ${league}` };
   }
   if (nonSport.length === 1) {
@@ -849,11 +851,18 @@ function displayTeamName(match: RawMatch, value: string): string {
 
 function normalizeEsportsParticipantAlias(value: string): string {
   const cleaned = value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[ё]/g, "е")
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+    .replace(/[^a-zа-я0-9]+/gi, " ")
     .replace(/\bs\b/g, " ")
     .replace(/\b(team|vivo|academy|академия|challengers?|esports?|киберспорт)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
+  if (/^(bcg|bc\s+(?:game|gaming))$/.test(cleaned)) return "bcg";
   if (/^keyd(?:\s+stars)?$/.test(cleaned)) return "keyd";
   if (/^life(?:\s+s)?\s+a\s+game$/.test(cleaned)) return "lag";
   if (/^solid$/.test(cleaned)) return "solid";
@@ -889,8 +898,8 @@ function normalizedMatchParticipant(match: RawMatch, value: string): string {
     const normalized = normalizedName(displayTeamName(match, value)).replace(/\bde\b/g, " ").replace(/\s+/g, " ").trim();
     return BASEBALL_TEAM_ID_BY_ALIAS.get(normalized) || normalized;
   }
+  if (match.sport === "esports") return normalizeEsportsParticipantAlias(value);
   const normalized = normalizedName(value);
-  if (match.sport === "esports") return normalizeEsportsParticipantAlias(normalized);
   if (match.sport === "football") return normalizeFootballParticipantAlias(normalized);
   if (match.sport !== "tennis") return normalized;
 

@@ -109,7 +109,7 @@ type EsportsTeamProfile = {
   id: string;
   name: string;
   shortName: string;
-  league: "Counter-Strike";
+  league: "COUNTER STRIKE 2";
   country: "Мир";
   logo: string;
   rank: number;
@@ -152,7 +152,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v14";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v15";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
   "stakeversee:line-matches:v13",
@@ -276,6 +276,9 @@ function normalizeClientMatch(match: MatchRow): MatchRow {
     const inferredCountry = inferFootballCountry(match.league);
     return { ...match, country: inferredCountry || "World" };
   }
+  if (isCounterStrikeMatch(match)) {
+    return { ...match, league: normalizeCounterStrikeLeague(match.league) };
+  }
   if (match.sport !== "baseball") return match;
   const homeCard = resolveKboTeam(match.home, match.homeTeamId);
   const awayCard = resolveKboTeam(match.away, match.awayTeamId);
@@ -366,15 +369,30 @@ function footballMatchPairKey(match: MatchRow): string | null {
 }
 
 function isCounterStrikeMatch(match: MatchRow): boolean {
-  return match.sport === "esports" && /\b(counter[\s.-]*strike|cs2?|кс)\b/i.test(match.league);
+  return match.sport === "esports" && /\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/i.test(match.league);
+}
+
+function normalizeCounterStrikeLeague(value: string): string {
+  const tournament = value
+    .replace(/\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/gi, " ")
+    .replace(/\s*[-–—·:]\s*/g, ". ")
+    .replace(/\s*\.\s*/g, ". ")
+    .replace(/\.{2,}/g, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return ["COUNTER STRIKE 2", tournament].filter(Boolean).join(". ");
 }
 
 function compactEsportsTeamName(value: string): string {
-  const compact = compactMatchName(value)
+  const compact = normalizeSearchValue(value)
     .replace(/\b(team|vivo|academy|академия|challengers?|esports?|киберспорт)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   const aliases: Record<string, string> = {
+    "bc game": "bcg",
+    "bc gaming": "bcg",
+    "bcg": "bcg",
     "life s a game": "lag",
     "life a game": "lag",
     "keyd stars": "keyd",
@@ -403,7 +421,7 @@ function esportsTeamCard(team: string, standing?: StandingRow | null): EsportsTe
     id: standing?.id || `cs:${compactEsportsTeamName(team)}`,
     name: canonicalName,
     shortName: canonicalName,
-    league: "Counter-Strike",
+    league: "COUNTER STRIKE 2",
     country: "Мир",
     logo: standing?.logo || canonicalName.slice(0, 3).toUpperCase(),
     rank: standing?.rank || 0,
@@ -776,7 +794,7 @@ type EsportsDiscipline = {
 };
 
 const ESPORTS_DISCIPLINES: Array<EsportsDiscipline & { pattern: RegExp }> = [
-  { key: "cs2", label: "CS2", icon: "🎯", pattern: /\b(counter[\s.:-]*strike|cs[\s.:-]*(?:go|2)|кс[\s.:-]*(?:го|2)?)\b/i },
+  { key: "cs2", label: "COUNTER STRIKE 2", icon: "🎯", pattern: /\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:go|2)|кс[\s.:-]*(?:го|2)?)\b/i },
   { key: "dota2", label: "Dota 2", icon: "🛡️", pattern: /\bdota\s*2?\b/i },
   { key: "lol", label: "LoL", icon: "⚔️", pattern: /\b(league\s+of\s+legends|lol|lck|lpl|lec|lcs)\b/i },
   { key: "valorant", label: "Valorant", icon: "🔺", pattern: /\bvalorant\b/i },
@@ -2094,7 +2112,7 @@ export default function Home() {
     }
 
     let cancelled = false;
-    void fetch("/api/standings?sport=esports&league=Counter-Strike", { cache: "no-store" })
+    void fetch("/api/standings?sport=esports&league=COUNTER%20STRIKE%202", { cache: "no-store" })
       .then(response => response.ok ? response.json() : Promise.reject(new Error("ranking unavailable")))
       .then(payload => {
         if (cancelled) return;
