@@ -193,7 +193,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v21";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v22";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
   "stakeversee:line-matches:v13",
@@ -2204,12 +2204,14 @@ export default function Home() {
     }
   }, [couponDraft.sourceId, profileLogin, sources]);
   const [countryFilter, setCountryFilter] = useState("all");
+  const [tennisTourFilter, setTennisTourFilter] = useState<"all" | TennisTour>("all");
   const [disciplineFilter, setDisciplineFilter] = useState("all");
   const [leagueFilter, setLeagueFilter] = useState("all");
 
   function selectSport(nextSport: string) {
     setActiveSport(nextSport);
     setCountryFilter("all");
+    setTennisTourFilter("all");
     setDisciplineFilter("all");
     setLeagueFilter("all");
     setMatchFilter("all");
@@ -2677,7 +2679,15 @@ export default function Home() {
 
     return upcomingMatches.filter(match => {
       const sportOk = activeSport === "all" || match.sport === activeSport;
-      const countryOk = activeSport === "esports" || countryFilter === "all" || match.country === countryFilter;
+      const countryOk =
+        activeSport === "esports" ||
+        activeSport === "tennis" ||
+        countryFilter === "all" ||
+        match.country === countryFilter;
+      const tennisTourOk =
+        activeSport !== "tennis" ||
+        tennisTourFilter === "all" ||
+        match.tennisTour === tennisTourFilter;
       const disciplineOk =
         activeSport !== "esports" ||
         disciplineFilter === "all" ||
@@ -2692,9 +2702,9 @@ export default function Home() {
         !queryGroups.length ||
         queryGroups.every(group => group.some(token => haystack.includes(token)));
 
-      return sportOk && countryOk && disciplineOk && leagueOk && tierOk && searchOk;
+      return sportOk && countryOk && tennisTourOk && disciplineOk && leagueOk && tierOk && searchOk;
     });
-  }, [activeSport, countryFilter, disciplineFilter, leagueFilter, matchFilter, lineMatches, matchTimeWindow, searchQuery]);
+  }, [activeSport, countryFilter, disciplineFilter, leagueFilter, matchFilter, lineMatches, matchTimeWindow, searchQuery, tennisTourFilter]);
 
   const matchCounts = useMemo(() => {
     const upcomingMatches = getMatchesInTimeWindow(lineMatches, matchTimeWindow);
@@ -2719,6 +2729,15 @@ export default function Home() {
     return counts;
   }, [lineMatches, matchTimeWindow]);
 
+  const tennisTourCounts = useMemo(() => {
+    const counts = new Map<TennisTour, number>();
+    for (const match of getMatchesInTimeWindow(lineMatches, matchTimeWindow)) {
+      if (match.sport !== "tennis" || !match.tennisTour) continue;
+      counts.set(match.tennisTour, (counts.get(match.tennisTour) || 0) + 1);
+    }
+    return counts;
+  }, [lineMatches, matchTimeWindow]);
+
   const disciplineCounts = useMemo(() => {
     const counts = new Map<string, EsportsDiscipline & { count: number }>();
     for (const match of getMatchesInTimeWindow(lineMatches, matchTimeWindow)) {
@@ -2737,7 +2756,9 @@ export default function Home() {
       const sportOk = activeSport === "all" || match.sport === activeSport;
       const contextOk = activeSport === "esports"
         ? disciplineFilter === "all" || getEsportsDiscipline(match).key === disciplineFilter
-        : countryFilter === "all" || match.country === countryFilter;
+        : activeSport === "tennis"
+          ? tennisTourFilter === "all" || match.tennisTour === tennisTourFilter
+          : countryFilter === "all" || match.country === countryFilter;
       if (!sportOk || !contextOk) continue;
       const l = match.league;
       if (!l) continue;
@@ -2750,7 +2771,7 @@ export default function Home() {
       else counts.set(key, { count: 1, country: match.country || "World", league: l, sport: match.sport });
     }
     return counts;
-  }, [activeSport, countryFilter, disciplineFilter, lineMatches, matchTimeWindow]);
+  }, [activeSport, countryFilter, disciplineFilter, lineMatches, matchTimeWindow, tennisTourFilter]);
 
   const standingsGroups = useMemo(() => {
     const groups = new Map<string, StandingRow[]>();
@@ -4630,6 +4651,28 @@ export default function Home() {
                     placeholderIcon="🎮"
                     placeholderLabel={t("Все дисциплины")}
                     value={disciplineFilter}
+                  />
+                </label>
+              ) : activeSport === "tennis" ? (
+                <label>
+                  <span>{t("Тур:")}</span>
+                  <MatchFilterDropdown
+                    onChange={value => {
+                      setTennisTourFilter(value === "ATP" || value === "WTA" ? value : "all");
+                      setLeagueFilter("all");
+                    }}
+                    options={([
+                      { tour: "ATP" as TennisTour, label: "ATP · Мужчины" },
+                      { tour: "WTA" as TennisTour, label: "WTA · Женщины" }
+                    ]).map(item => ({
+                      count: tennisTourCounts.get(item.tour) || 0,
+                      flag: "🎾",
+                      label: t(item.label),
+                      value: item.tour
+                    }))}
+                    placeholderIcon="🎾"
+                    placeholderLabel="ATP / WTA"
+                    value={tennisTourFilter}
                   />
                 </label>
               ) : (

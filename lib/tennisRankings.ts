@@ -51,6 +51,8 @@ const REQUEST_HEADERS = {
 };
 
 const TENNIS_NAME_RU_OVERRIDES: Record<string, string> = {
+  "caty mcnally": "Кэти Макналли",
+  "katie mcnally": "Кэти Макналли",
   "aryna sabalenka": "Арина Сабаленка",
   "elena rybakina": "Елена Рыбакина",
   "jessica pegula": "Джессика Пегула",
