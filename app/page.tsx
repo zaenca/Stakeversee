@@ -1261,13 +1261,17 @@ function readCachedMatches() {
 function writeCachedMatches(matches: MatchRow[]) {
   if (typeof window === "undefined") return;
 
-  window.localStorage.setItem(
-    MATCH_CACHE_KEY,
-    JSON.stringify({
-      matches: getFutureMatches(matches),
-      updatedAt: new Date().toISOString()
-    })
-  );
+  try {
+    window.localStorage.setItem(
+      MATCH_CACHE_KEY,
+      JSON.stringify({
+        matches: getFutureMatches(matches),
+        updatedAt: new Date().toISOString()
+      })
+    );
+  } catch (error) {
+    console.warn("Match cache could not be updated", error);
+  }
 }
 
 type SourceDropdownProps = {
@@ -2440,7 +2444,7 @@ export default function Home() {
     setMatchesLoading(true);
 
     try {
-      const requestHours = matchTimeWindow === "all" ? 24 * 365 : Math.max(Number(matchTimeWindow), 72);
+      const requestHours = matchTimeWindow === "all" ? 24 * 365 : Number(matchTimeWindow);
       const response = await fetch(`/api/matches?hours=${requestHours}`, { cache: "no-store" });
       if (!response.ok) {
         if (!cachedMatches.length) setLineMatches([]);
@@ -2487,10 +2491,10 @@ export default function Home() {
         return;
       }
 
-      if (normalizedMatches.length) writeCachedMatches(normalizedMatches);
       const upcomingMatches = getMatchesInTimeWindow(normalizedMatches, matchTimeWindow);
       setLineMatches(getFutureMatches(normalizedMatches));
       setMatchesStatus({ kind: "live", count: normalizedMatches.length });
+      if (normalizedMatches.length) writeCachedMatches(normalizedMatches);
       await analyzeMatches(upcomingMatches);
     } catch {
       if (!cachedMatches.length) setLineMatches([]);

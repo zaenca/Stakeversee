@@ -94,10 +94,10 @@ const REQUEST_HEADERS = {
 };
 
 const memoryCache = globalThis as typeof globalThis & {
-  __stakeverseeMatchesCache?: { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> };
+  __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v17";
+const API_VERSION = "bookmakers-v18";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -1172,7 +1172,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const hours = Number(searchParams.get("hours") || 72);
   const now = Date.now();
-  const cached = memoryCache.__stakeverseeMatchesCache;
+  const matchesCache = memoryCache.__stakeverseeMatchesCache ?? new Map();
+  memoryCache.__stakeverseeMatchesCache = matchesCache;
+  const cached = matchesCache.get(hours);
 
   if (cached && now - cached.ts < 4 * 60 * 1000) {
     return NextResponse.json(
@@ -1182,7 +1184,7 @@ export async function GET(request: Request) {
   }
 
   const loaded = await loadBookmakerMatches(hours);
-  memoryCache.__stakeverseeMatchesCache = { ts: now, matches: loaded.matches, debug: loaded.debug };
+  matchesCache.set(hours, { ts: now, matches: loaded.matches, debug: loaded.debug });
 
   return NextResponse.json(
     {
