@@ -97,7 +97,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v19";
+const API_VERSION = "bookmakers-v20";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -515,6 +515,9 @@ function normalizeHockeyLeague(match: RawMatch): RawMatch {
 function normalizeBasketballLeague(match: RawMatch): RawMatch {
   if (match.sport !== "basketball") return match;
   const full = normalizedName(`${match.country} ${match.league}`);
+  if (/\bwnba\b/.test(full)) {
+    return { ...match, country: "USA", league: "WNBA" };
+  }
   if (/vba|vietnam|вьетнам/.test(full)) {
     return { ...match, country: "Vietnam", league: "VBA" };
   }
@@ -735,8 +738,11 @@ async function fetchPariLike(urls: string[], source: "pari" | "fonbet" | "tennis
   }
 }
 
-async function fetchTennisiCategory(category: { categoryId: number; path: string; sport: string }): Promise<RawMatch[]> {
-  const url = `https://tennisi.bet/rt/cgi/!rt_home.CategoryInfo?mcmd=cat&mcmdparam=${category.path}&gameid=5&categoryid=${category.categoryId}&lang=rus&more=today`;
+async function fetchTennisiCategoryPeriod(
+  category: { categoryId: number; path: string; sport: string },
+  period: "today" | "tomorrow"
+): Promise<RawMatch[]> {
+  const url = `https://tennisi.bet/rt/cgi/!rt_home.CategoryInfo?mcmd=cat&mcmdparam=${category.path}&gameid=5&categoryid=${category.categoryId}&lang=rus&more=${period}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), BOOKMAKER_REQUEST_TIMEOUT_MS);
   try {
@@ -748,13 +754,27 @@ async function fetchTennisiCategory(category: { categoryId: number; path: string
     if (!response.ok) throw new Error(`Tennisi ${category.path}: HTTP ${response.status}`);
 
     const html = new TextDecoder("windows-1251").decode(await response.arrayBuffer());
-    return parseTennisiHtml(html, category.sport);
+    return parseTennisiHtml(html, category.sport, period === "tomorrow" ? 1 : 0);
   } finally {
     clearTimeout(timeout);
   }
 }
 
-function parseTennisiHtml(html: string, sport: string): RawMatch[] {
+async function fetchTennisiCategory(category: { categoryId: number; path: string; sport: string }): Promise<RawMatch[]> {
+  const periods: ("today" | "tomorrow")[] = category.sport === "basketball"
+    ? ["today", "tomorrow"]
+    : ["today"];
+  const settled = await Promise.allSettled(periods.map((period) => fetchTennisiCategoryPeriod(category, period)));
+  const matches = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+  if (!matches.length) {
+    const failure = settled.find((result): result is PromiseRejectedResult => result.status === "rejected");
+    if (failure) throw failure.reason;
+  }
+
+  return [...new Map(matches.map((match) => [match.id, match])).values()];
+}
+
+function parseTennisiHtml(html: string, sport: string, initialDayOffset = 0): RawMatch[] {
   const serverDate = html.match(/server_time">(\d{1,2})\s+([А-ЯЁ]+)\s+(\d{4})/i);
   const baseDay = serverDate ? Number(serverDate[1]) : new Date().getUTCDate();
   const baseMonth = serverDate ? TENNISI_MONTH_NAMES[serverDate[2].toUpperCase()] ?? new Date().getUTCMonth() : new Date().getUTCMonth();
@@ -763,7 +783,7 @@ function parseTennisiHtml(html: string, sport: string): RawMatch[] {
   let league = "Tennisi";
   let country = "World";
   let columns: string[] = [];
-  let dayOffset = 0;
+  let dayOffset = initialDayOffset;
   let dateHeader = "";
 
   for (const row of html.matchAll(/<tr\b[\s\S]*?<\/tr>/gi)) {

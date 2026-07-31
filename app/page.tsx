@@ -272,6 +272,9 @@ function clientBaseballTeamId(card: BaseballTeamCard): string {
 }
 
 function normalizeClientMatch(match: MatchRow): MatchRow {
+  if (match.sport === "basketball" && /\bwnba\b/i.test(`${match.country} ${match.league}`)) {
+    return { ...match, country: "USA", league: "WNBA" };
+  }
   if (match.sport === "football" && isWorldCountry(match.country)) {
     const inferredCountry = inferFootballCountry(match.league);
     return { ...match, country: inferredCountry || "World" };
