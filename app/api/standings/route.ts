@@ -36,6 +36,7 @@ type StandingRow = {
   change?: string;
   logo?: string;
   profileUrl?: string;
+  originalName?: string;
   country?: string;
   age?: number;
   tournaments?: number;
@@ -144,6 +145,7 @@ export async function GET(request: Request) {
         form: "-",
         points: player.points,
         profileUrl: player.profileUrl,
+        originalName: player.originalName,
         country: player.country,
         age: player.age,
         tournaments: player.tournaments,

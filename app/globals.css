@@ -2181,6 +2181,16 @@ h1 {
   grid-template-columns: 48px minmax(180px, 1fr) 100px 110px;
 }
 
+.standings-country-flag {
+  align-items: center;
+  display: flex;
+}
+
+.standings-country-flag .flag-icon {
+  height: 18px;
+  width: 24px;
+}
+
 .standings-row strong {
   color: #eaf6ff;
 }

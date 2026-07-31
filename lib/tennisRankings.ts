@@ -5,6 +5,7 @@ export type TennisRankingPlayer = {
   tour: TennisTour;
   rank: number;
   name: string;
+  originalName: string;
   country: string;
   points: number;
   age?: number;
@@ -16,6 +17,7 @@ export type TennisParticipant = {
   id: string;
   sourceName: string;
   name: string;
+  originalName?: string;
   tour: TennisTour | null;
   rank: number | null;
   country: string;
@@ -47,6 +49,98 @@ const REQUEST_HEADERS = {
   "accept-language": "en-US,en;q=0.9",
   "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
 };
+
+const TENNIS_NAME_RU_OVERRIDES: Record<string, string> = {
+  "aryna sabalenka": "Арина Сабаленка",
+  "elena rybakina": "Елена Рыбакина",
+  "jessica pegula": "Джессика Пегула",
+  "coco gauff": "Коко Гауфф",
+  "mirra andreeva": "Мирра Андреева",
+  "karolina muchova": "Каролина Мухова",
+  "linda noskova": "Линда Носкова",
+  "iga swiatek": "Ига Швёнтек",
+  "amanda anisimova": "Аманда Анисимова",
+  "elina svitolina": "Элина Свитолина",
+  "marta kostyuk": "Марта Костюк",
+  "victoria mboko": "Виктория Мбоко",
+  "naomi osaka": "Наоми Осака",
+  "belinda bencic": "Белинда Бенчич",
+  "jasmine paolini": "Жасмин Паолини",
+  "iva jovic": "Ива Йович",
+  "sorana cirstea": "Сорана Кырстя",
+  "diana shnaider": "Диана Шнайдер",
+  "ekaterina alexandrova": "Екатерина Александрова",
+  "anna kalinskaya": "Анна Калинская",
+  "marie bouzkova": "Мария Боузкова",
+  "maja chwalinska": "Майя Хвалиньская",
+  "madison keys": "Мэдисон Киз",
+  "elise mertens": "Элизе Мертенс",
+  "leylah fernandez": "Лейла Фернандес",
+  "barbora krejcikova": "Барбора Крейчикова",
+  "emma navarro": "Эмма Наварро",
+  "anastasia potapova": "Анастасия Потапова",
+  "alexandra eala": "Александра Эала",
+  "clara tauson": "Клара Таусон",
+  "jelena ostapenko": "Елена Остапенко",
+  "ann li": "Энн Ли",
+  "maria sakkari": "Мария Саккари",
+  "hailey baptiste": "Хейли Баптист",
+  "katerina siniakova": "Катерина Синякова",
+  "donna vekic": "Донна Векич",
+  "emma raducanu": "Эмма Радукану",
+  "janice tjen": "Дженис Тьен",
+  "xinyu wang": "Ван Синьюй",
+  "sara bejlek": "Сара Бейлек",
+  "novak djokovic": "Новак Джокович",
+  "jannik sinner": "Янник Синнер",
+  "carlos alcaraz": "Карлос Алькарас",
+  "alexander zverev": "Александр Зверев",
+  "daniil medvedev": "Даниил Медведев",
+  "andrey rublev": "Андрей Рублёв",
+  "karen khachanov": "Карен Хачанов",
+  "holger rune": "Хольгер Руне",
+  "casper ruud": "Каспер Рууд",
+  "stefanos tsitsipas": "Стефанос Циципас"
+};
+
+function transliterateLatinWord(value: string): string {
+  const replacements: [RegExp, string][] = [
+    [/shch/g, "щ"], [/tsch/g, "ч"], [/dzh/g, "дж"], [/zh/g, "ж"],
+    [/kh/g, "х"], [/ch/g, "ч"], [/sh/g, "ш"], [/th/g, "т"],
+    [/ph/g, "ф"], [/ck/g, "к"], [/qu/g, "кв"], [/ya/g, "я"],
+    [/yu/g, "ю"], [/yo/g, "ё"], [/ye/g, "е"], [/ee/g, "и"]
+  ];
+  let word = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  replacements.forEach(([pattern, replacement]) => { word = word.replace(pattern, replacement); });
+  word = word
+    .replace(/c(?=[eiy])/g, "с")
+    .replace(/g(?=[eiy])/g, "дж")
+    .replace(/[a-z]/g, char => ({
+      a: "а", b: "б", c: "к", d: "д", e: "е", f: "ф", g: "г", h: "х",
+      i: "и", j: "дж", k: "к", l: "л", m: "м", n: "н", o: "о", p: "п",
+      q: "к", r: "р", s: "с", t: "т", u: "у", v: "в", w: "в", x: "кс",
+      y: "й", z: "з"
+    }[char] || char));
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+function russianTennisName(value: string): string {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z]+/g, " ")
+    .trim();
+  const override = TENNIS_NAME_RU_OVERRIDES[normalized];
+  if (override) return override;
+  return value
+    .split(/(\s+|-|')/)
+    .map(part => /^[A-Za-zÀ-ž]+$/.test(part) ? transliterateLatinWord(part) : part)
+    .join("");
+}
 
 function decodeHtml(value: string): string {
   return value
@@ -89,13 +183,14 @@ function parseAtpRankings(html: string): TennisRankingPlayer[] {
     const rank = integer(stripTags(rankMatch[1]));
     if (rank < 1 || rank > 100 || seen.has(rank)) continue;
     seen.add(rank);
-    const name = titleFromSlug(profileMatch[2]);
+    const originalName = titleFromSlug(profileMatch[2]);
     const country = row.match(/#flag-([a-z]{3})/i)?.[1]?.toUpperCase() || "";
     players.push({
       id: `atp:${profileMatch[3].toLowerCase()}`,
       tour: "ATP",
       rank,
-      name,
+      name: russianTennisName(originalName),
+      originalName,
       country,
       points: integer(stripTags(pointsMatch?.[1] || "0")),
       profileUrl: `https://www.atptour.com${profileMatch[1]}`
@@ -115,15 +210,16 @@ function parseTennisCompanionAtpRankings(html: string): TennisRankingPlayer[] {
     if (cells.length < 6) continue;
 
     const sourceRank = integer(cells[0]);
-    const name = cells[2]?.trim() || "";
-    const identity = slugify(name);
+    const originalName = cells[2]?.trim() || "";
+    const identity = slugify(originalName);
     if (sourceRank < 1 || sourceRank > 100 || !identity || seen.has(identity)) continue;
     seen.add(identity);
     players.push({
       id: `atp:${identity}`,
       tour: "ATP",
       rank: sourceRank,
-      name,
+      name: russianTennisName(originalName),
+      originalName,
       country: cells[3]?.trim().toUpperCase() || "",
       points: integer(cells[5]),
       age: integer(cells[4]) || undefined,
@@ -229,18 +325,19 @@ async function fetchWtaRankings(): Promise<TennisRankingPlayer[]> {
     .map<TennisRankingPlayer | null>(row => {
       const id = row.player?.id;
       const rank = Number(row.ranking);
-      const name = row.player?.fullName?.trim() || "";
-      if (!id || !name || rank < 1 || rank > 100) return null;
+      const originalName = row.player?.fullName?.trim() || "";
+      if (!id || !originalName || rank < 1 || rank > 100) return null;
       return {
         id: `wta:${id}`,
         tour: "WTA",
         rank,
-        name,
+        name: russianTennisName(originalName),
+        originalName,
         country: row.player?.countryCode?.toUpperCase() || "",
         points: Number(row.points) || 0,
         age: playerAge(row.player?.dateOfBirth),
         tournaments: Number(row.tournamentsPlayed) || undefined,
-        profileUrl: `https://www.wtatennis.com/players/${id}/${slugify(name)}`
+        profileUrl: `https://www.wtatennis.com/players/${id}/${slugify(originalName)}`
       };
     })
     .filter((player): player is TennisRankingPlayer => Boolean(player))
@@ -366,23 +463,27 @@ function matchRankingPlayer(sourceName: string, players: TennisRankingPlayer[]):
   let best: { player: TennisRankingPlayer; score: number } | null = null;
 
   for (const player of players) {
-    const playerTokens = latinName(player.name).split(" ").filter(Boolean);
-    if (!playerTokens.length) continue;
-    const officialFirst = playerTokens[0];
-    const officialSurname = playerTokens[playerTokens.length - 1];
-    const surnameScore = Math.max(...sourceSurnameCandidates.map(token => similarity(token, officialSurname)));
-    const fullScore = similarity(sourceTokens.join(""), playerTokens.join(""));
-    const initialMatches = sourceInitials.some(initial => initial === officialFirst.charAt(0));
-    const containsFullSurname = sourceTokens.includes(officialSurname);
-    const score = Math.max(
-      fullScore,
-      surnameScore + (initialMatches ? 0.12 : 0),
-      containsFullSurname ? 0.96 : 0
-    );
-    if (!best || score > best.score) best = { player, score };
+    const aliases = Array.from(new Set([player.originalName, player.name].filter(Boolean)));
+    for (const alias of aliases) {
+      const playerTokens = latinName(alias).split(" ").filter(Boolean);
+      if (!playerTokens.length) continue;
+      const officialFirst = playerTokens[0];
+      const officialSurname = playerTokens[playerTokens.length - 1];
+      const surnameScore = Math.max(...sourceSurnameCandidates.map(token => similarity(token, officialSurname)));
+      const fullScore = similarity(sourceTokens.join(""), playerTokens.join(""));
+      const initialMatches = sourceInitials.length === 0
+        || sourceInitials.some(initial => initial === officialFirst.charAt(0));
+      const containsFullSurname = sourceTokens.includes(officialSurname);
+
+      // Букмекеры часто отдают «Фамилия И». Без совпадения инициала похожие
+      // окончания (Кужмова / Анисимова) нельзя считать одним игроком.
+      if (!initialMatches || (!containsFullSurname && surnameScore < 0.84)) continue;
+      const score = Math.max(fullScore, surnameScore, containsFullSurname ? 1 : 0);
+      if (!best || score > best.score) best = { player, score };
+    }
   }
 
-  const threshold = sourceTokens.length === 1 ? 0.78 : 0.72;
+  const threshold = sourceTokens.length === 1 ? 0.9 : 0.84;
   return best && best.score >= threshold ? best.player : null;
 }
 

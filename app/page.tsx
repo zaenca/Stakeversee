@@ -88,6 +88,7 @@ type TennisParticipant = {
   id: string;
   sourceName: string;
   name: string;
+  originalName?: string;
   tour: TennisTour | null;
   rank: number | null;
   country: string;
@@ -112,6 +113,7 @@ type StandingRow = {
   change?: string;
   logo?: string;
   profileUrl?: string;
+  originalName?: string;
   country?: string;
   age?: number;
   tournaments?: number;
@@ -191,7 +193,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v18";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v19";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
   "stakeversee:line-matches:v13",
@@ -499,7 +501,11 @@ function tennisPlayerCard(player: TennisParticipant | StandingRow): TennisPlayer
     logo: name.slice(0, 2).toUpperCase(),
     rank: Number(player.rank || 0),
     form: "-",
-    aliases: Array.from(new Set([name, isParticipant ? player.sourceName : ""])).filter(Boolean),
+    aliases: Array.from(new Set([
+      name,
+      player.originalName || "",
+      isParticipant ? player.sourceName : ""
+    ])).filter(Boolean),
     points: player.points === null || player.points === undefined ? undefined : Number(player.points),
     age: player.age,
     tournaments: player.tournaments,
@@ -539,6 +545,7 @@ function normalizeStandingRows(rows: unknown[]): StandingRow[] {
       change: row.change === undefined ? undefined : String(row.change),
       logo: row.logo === undefined ? undefined : String(row.logo),
       profileUrl: row.profileUrl === undefined ? undefined : String(row.profileUrl),
+      originalName: row.originalName === undefined ? undefined : String(row.originalName),
       country: row.country === undefined ? undefined : String(row.country),
       age: row.age === undefined ? undefined : Number(row.age),
       tournaments: row.tournaments === undefined ? undefined : Number(row.tournaments),
@@ -1049,8 +1056,24 @@ const COUNTRY_ISO: Record<string, string> = {
   "Sri Lanka": "lk",
 };
 
+const COUNTRY_ISO3: Record<string, string> = {
+  USA: "us", BLR: "by", KAZ: "kz", RUS: "ru", CZE: "cz", POL: "pl",
+  UKR: "ua", CAN: "ca", JPN: "jp", SUI: "ch", ITA: "it", AUT: "at",
+  PHI: "ph", LAT: "lv", GBR: "gb", GRE: "gr", CRO: "hr", ROU: "ro",
+  ESP: "es", DEN: "dk", CHN: "cn", INA: "id", BEL: "be", FRA: "fr",
+  GER: "de", SRB: "rs", AUS: "au", BRA: "br", ARG: "ar", CHI: "cl",
+  COL: "co", BUL: "bg", HUN: "hu", SVK: "sk", SLO: "si", NED: "nl",
+  TUN: "tn", EGY: "eg", TUR: "tr", MEX: "mx", NZL: "nz", NOR: "no",
+  SWE: "se", FIN: "fi", GEO: "ge", ARM: "am", MDA: "md", EST: "ee",
+  LTU: "lt", THA: "th", IND: "in", RSA: "za", UAE: "ae", MAR: "ma",
+  CYP: "cy", POR: "pt", BIH: "ba", MKD: "mk", TPE: "tw", HKG: "hk",
+  ISR: "il", IRL: "ie", ISL: "is", ALG: "dz", NGR: "ng", UZB: "uz"
+};
+
 function getCountryIso(country: string): string | null {
-  return COUNTRY_ISO[country] ?? null;
+  const normalized = country.trim();
+  if (/^[a-z]{2}$/i.test(normalized)) return normalized.toLowerCase();
+  return COUNTRY_ISO[normalized] ?? COUNTRY_ISO3[normalized.toUpperCase()] ?? null;
 }
 
 function WorldGlobeIcon() {
@@ -5871,7 +5894,9 @@ export default function Home() {
                               ) : <strong>{row.team}</strong>}
                               {tennisRow ? (
                                 <>
-                                  <span>{row.country || "-"}</span>
+                                  <span className="standings-country-flag" title={row.country || undefined}>
+                                    {row.country ? <FlagIcon country={row.country} /> : "-"}
+                                  </span>
                                   <span>{row.points ?? "-"}</span>
                                 </>
                               ) : counterStrikeRow ? (
