@@ -1735,6 +1735,20 @@ h1 {
   color: var(--cyan);
 }
 
+.tennis-participants {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  justify-content: center;
+}
+
+.tennis-participants .match-team-button + .match-team-button::before {
+  color: var(--muted);
+  content: "/";
+  margin-right: 2px;
+}
+
 .match-teams span {
   color: var(--muted);
   font-size: 0.68rem;
@@ -2053,6 +2067,32 @@ h1 {
   text-transform: uppercase;
 }
 
+.tennis-tour-switch {
+  align-self: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(96px, 1fr));
+  margin-top: -10px;
+  padding: 3px;
+}
+
+.tennis-tour-switch button {
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 32px;
+}
+
+.tennis-tour-switch button.active {
+  background: rgba(0, 229, 255, 0.16);
+  color: var(--cyan);
+}
+
 .standings-h2h {
   background: rgba(0, 229, 255, 0.06);
   border: 1px solid rgba(0, 229, 255, 0.18);
@@ -2135,6 +2175,10 @@ h1 {
 
 .standings-row-esports {
   grid-template-columns: 48px minmax(180px, 1fr) 110px 110px;
+}
+
+.standings-row-tennis {
+  grid-template-columns: 48px minmax(180px, 1fr) 100px 110px;
 }
 
 .standings-row strong {

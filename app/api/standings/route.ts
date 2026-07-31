@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { loadHltvRankings } from "@/lib/hltv";
 import { KBO_TEAMS, kboTeamId } from "@/lib/kboTeams";
 import { MLB_TEAMS, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
+import { loadTennisRankings, type TennisTour } from "@/lib/tennisRankings";
 
 type EspnStandingStat = {
   name?: string;
@@ -35,6 +36,10 @@ type StandingRow = {
   change?: string;
   logo?: string;
   profileUrl?: string;
+  country?: string;
+  age?: number;
+  tournaments?: number;
+  tour?: TennisTour;
 };
 
 const BASEBALL_STANDINGS_SLUGS: Array<{ pattern: RegExp; label: string; slug: string }> = [
@@ -119,7 +124,49 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sport = searchParams.get("sport");
   const league = searchParams.get("league") || "";
+  const tour: TennisTour = searchParams.get("tour")?.toUpperCase() === "WTA" ? "WTA" : "ATP";
   const counterStrike = sport === "esports" && /\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/i.test(league);
+
+  if (sport === "tennis") {
+    try {
+      const rankings = await loadTennisRankings();
+      const players = tour === "WTA" ? rankings.wta : rankings.atp;
+      const standings: StandingRow[] = players.map(player => ({
+        id: player.id,
+        rank: player.rank,
+        league: tour,
+        division: "Топ-100",
+        team: player.name,
+        wins: 0,
+        losses: 0,
+        pct: "-",
+        gamesBack: "-",
+        form: "-",
+        points: player.points,
+        profileUrl: player.profileUrl,
+        country: player.country,
+        age: player.age,
+        tournaments: player.tournaments,
+        tour
+      }));
+      return NextResponse.json(
+        {
+          sport: "tennis",
+          league: `${tour} · Топ-100`,
+          source: tour,
+          updatedAt: rankings.updatedAt,
+          standings
+        },
+        { headers: NO_STORE_HEADERS }
+      );
+    } catch (error) {
+      console.error(`${tour} standings route failed`, error);
+      return NextResponse.json(
+        { sport: "tennis", league: `${tour} · Топ-100`, source: tour, standings: [] },
+        { status: 502, headers: NO_STORE_HEADERS }
+      );
+    }
+  }
 
   if (counterStrike) {
     try {

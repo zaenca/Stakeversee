@@ -77,6 +77,23 @@ type MatchRow = {
   startsAt?: string;
   homeTeamId?: string;
   awayTeamId?: string;
+  homePlayers?: TennisParticipant[];
+  awayPlayers?: TennisParticipant[];
+};
+
+type TennisTour = "ATP" | "WTA";
+
+type TennisParticipant = {
+  id: string;
+  sourceName: string;
+  name: string;
+  tour: TennisTour | null;
+  rank: number | null;
+  country: string;
+  points: number | null;
+  age?: number;
+  tournaments?: number;
+  profileUrl?: string;
 };
 
 type StandingRow = {
@@ -94,6 +111,10 @@ type StandingRow = {
   change?: string;
   logo?: string;
   profileUrl?: string;
+  country?: string;
+  age?: number;
+  tournaments?: number;
+  tour?: TennisTour;
 };
 
 type HeadToHeadRow = {
@@ -126,7 +147,24 @@ type EsportsTeamProfile = {
 };
 
 type BaseballTeamCard = KboTeamProfile | MlbTeamProfile;
-type TeamCard = BaseballTeamCard | EsportsTeamProfile;
+type TennisPlayerProfile = {
+  id: string;
+  name: string;
+  shortName: string;
+  league: TennisTour | "Теннис";
+  country: string;
+  logo: string;
+  rank: number;
+  form: string;
+  aliases: string[];
+  points?: number;
+  age?: number;
+  tournaments?: number;
+  profileUrl?: string;
+  kind: "tennis";
+};
+
+type TeamCard = BaseballTeamCard | EsportsTeamProfile | TennisPlayerProfile;
 
 type MatchBookmakerKey = "best" | "pari" | "fonbet" | "tennisi";
 
@@ -152,7 +190,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v15";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v16";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
   "stakeversee:line-matches:v13",
@@ -442,6 +480,46 @@ function isEsportsTeamCard(card: TeamCard): card is EsportsTeamProfile {
   return "kind" in card && card.kind === "esports";
 }
 
+function isTennisPlayerCard(card: TeamCard): card is TennisPlayerProfile {
+  return "kind" in card && card.kind === "tennis";
+}
+
+function tennisPlayerCard(player: TennisParticipant | StandingRow): TennisPlayerProfile {
+  const isParticipant = "sourceName" in player;
+  const name = String("name" in player ? player.name : player.team);
+  const tour = (player.tour === "WTA" ? "WTA" : player.tour === "ATP" ? "ATP" : "Теннис");
+  const country = String(player.country || "Мир");
+  return {
+    id: player.id,
+    name,
+    shortName: name,
+    league: tour,
+    country,
+    logo: name.slice(0, 2).toUpperCase(),
+    rank: Number(player.rank || 0),
+    form: "-",
+    aliases: Array.from(new Set([name, isParticipant ? player.sourceName : ""])).filter(Boolean),
+    points: player.points === null || player.points === undefined ? undefined : Number(player.points),
+    age: player.age,
+    tournaments: player.tournaments,
+    profileUrl: player.profileUrl,
+    kind: "tennis"
+  };
+}
+
+function tennisPlayerNamesMatch(left: string, right: string): boolean {
+  const leftKey = normalizeSearchValue(left);
+  const rightKey = normalizeSearchValue(right);
+  if (!leftKey || !rightKey) return false;
+  if (leftKey === rightKey) return true;
+  const leftParts = leftKey.split(" ");
+  const rightParts = rightKey.split(" ");
+  const leftSurname = leftParts[leftParts.length - 1] || "";
+  const rightSurname = rightParts[rightParts.length - 1] || "";
+  return leftSurname.length >= 4 && rightSurname.length >= 4
+    && (leftSurname.includes(rightSurname) || rightSurname.includes(leftSurname));
+}
+
 function normalizeStandingRows(rows: unknown[]): StandingRow[] {
   return rows.map((value, index) => {
     const row = (value || {}) as Partial<StandingRow> & Record<string, unknown>;
@@ -459,7 +537,11 @@ function normalizeStandingRows(rows: unknown[]): StandingRow[] {
       points: row.points === undefined ? undefined : Number(row.points),
       change: row.change === undefined ? undefined : String(row.change),
       logo: row.logo === undefined ? undefined : String(row.logo),
-      profileUrl: row.profileUrl === undefined ? undefined : String(row.profileUrl)
+      profileUrl: row.profileUrl === undefined ? undefined : String(row.profileUrl),
+      country: row.country === undefined ? undefined : String(row.country),
+      age: row.age === undefined ? undefined : Number(row.age),
+      tournaments: row.tournaments === undefined ? undefined : Number(row.tournaments),
+      tour: (row.tour === "WTA" ? "WTA" : row.tour === "ATP" ? "ATP" : undefined) as TennisTour | undefined
     };
   }).filter(row => row.team);
 }
@@ -2115,6 +2197,7 @@ export default function Home() {
   const [standingsOpen, setStandingsOpen] = useState(false);
   const [standingsRows, setStandingsRows] = useState<StandingRow[]>([]);
   const [standingsPage, setStandingsPage] = useState(1);
+  const [tennisStandingsTour, setTennisStandingsTour] = useState<TennisTour>("ATP");
   const [counterStrikeRankings, setCounterStrikeRankings] = useState<StandingRow[]>([]);
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [standingsMessage, setStandingsMessage] = useState("");
@@ -2662,12 +2745,14 @@ export default function Home() {
   }, [standingsRows]);
 
   const counterStrikeStandingsOpen = Boolean(standingsMatch && isCounterStrikeMatch(standingsMatch));
-  const standingsPageCount = counterStrikeStandingsOpen ? Math.max(1, Math.ceil(standingsRows.length / 10)) : 1;
+  const tennisStandingsOpen = standingsMatch?.sport === "tennis";
+  const pagedStandingsOpen = counterStrikeStandingsOpen || tennisStandingsOpen;
+  const standingsPageCount = pagedStandingsOpen ? Math.max(1, Math.ceil(standingsRows.length / 10)) : 1;
   const visibleStandingsGroups = useMemo(() => {
-    if (!counterStrikeStandingsOpen) return standingsGroups;
+    if (!pagedStandingsOpen) return standingsGroups;
     const start = (standingsPage - 1) * 10;
     return standingsGroups.map(group => ({ ...group, rows: group.rows.slice(start, start + 10) })).filter(group => group.rows.length);
-  }, [counterStrikeStandingsOpen, standingsGroups, standingsPage]);
+  }, [pagedStandingsOpen, standingsGroups, standingsPage]);
   const selectedCounterStrikeTeams = useMemo(() => {
     if (!counterStrikeStandingsOpen || !standingsMatch) return [];
     return [standingsMatch.home, standingsMatch.away].map(team => ({
@@ -2675,6 +2760,16 @@ export default function Home() {
       standing: esportsStandingForTeam(team, standingsRows)
     }));
   }, [counterStrikeStandingsOpen, standingsMatch, standingsRows]);
+  const selectedTennisPlayers = useMemo(() => {
+    if (!tennisStandingsOpen || !standingsMatch) return [];
+    const players = [...(standingsMatch.homePlayers || []), ...(standingsMatch.awayPlayers || [])];
+    return players.map(player => ({
+      player,
+      standing: standingsRows.find(row => (
+        row.id === player.id || tennisPlayerNamesMatch(row.team, player.name)
+      )) || null
+    }));
+  }, [standingsMatch, standingsRows, tennisStandingsOpen]);
 
   useEffect(() => {
     setStandingsPage(current => Math.min(Math.max(1, current), standingsPageCount));
@@ -2728,7 +2823,31 @@ export default function Home() {
             recommendationSide: (["home", "draw", "away"].includes(String(match.recommendationSide)) ? match.recommendationSide : "home") as MatchRow["recommendationSide"],
             startsAt,
             homeTeamId: match.homeTeamId ? String(match.homeTeamId) : undefined,
-            awayTeamId: match.awayTeamId ? String(match.awayTeamId) : undefined
+            awayTeamId: match.awayTeamId ? String(match.awayTeamId) : undefined,
+            homePlayers: Array.isArray(match.homePlayers)
+              ? (match.homePlayers as TennisParticipant[]).map(player => ({
+                  ...player,
+                  id: String(player.id),
+                  sourceName: String(player.sourceName),
+                  name: String(player.name),
+                  tour: player.tour === "WTA" ? "WTA" : player.tour === "ATP" ? "ATP" : null,
+                  rank: player.rank === null ? null : Number(player.rank),
+                  country: String(player.country || ""),
+                  points: player.points === null ? null : Number(player.points)
+                }))
+              : undefined,
+            awayPlayers: Array.isArray(match.awayPlayers)
+              ? (match.awayPlayers as TennisParticipant[]).map(player => ({
+                  ...player,
+                  id: String(player.id),
+                  sourceName: String(player.sourceName),
+                  name: String(player.name),
+                  tour: player.tour === "WTA" ? "WTA" : player.tour === "ATP" ? "ATP" : null,
+                  rank: player.rank === null ? null : Number(player.rank),
+                  country: String(player.country || ""),
+                  points: player.points === null ? null : Number(player.points)
+                }))
+              : undefined
           };
         })
         .filter((match: MatchRow) => match.home && match.away));
@@ -2756,9 +2875,12 @@ export default function Home() {
   // сохраняет прогнозы в базу, чтобы позже сверить их с результатами
   // (обучение на ошибках — этап 2).
   async function openStandings(match: MatchRow) {
+    const defaultTennisTour = [...(match.homePlayers || []), ...(match.awayPlayers || [])]
+      .find(player => player.rank !== null)?.tour || "ATP";
     setStandingsOpen(true);
     setStandingsMatch(match);
     setStandingsPage(1);
+    setTennisStandingsTour(defaultTennisTour);
     setStandingsSource("");
     setStandingsTitle(`${match.league} · ${match.home} — ${match.away}`);
     setStandingsLoading(true);
@@ -2768,7 +2890,12 @@ export default function Home() {
     setHeadToHeadLoading(match.sport === "baseball");
 
     try {
-      const response = await fetch(`/api/standings?sport=${encodeURIComponent(match.sport)}&league=${encodeURIComponent(match.league)}`, { cache: "no-store" });
+      const params = new URLSearchParams({
+        sport: match.sport,
+        league: match.league
+      });
+      if (match.sport === "tennis") params.set("tour", defaultTennisTour);
+      const response = await fetch(`/api/standings?${params.toString()}`, { cache: "no-store" });
       if (!response.ok) throw new Error("standings unavailable");
       const payload = await response.json();
       setStandingsSource(String(payload?.source || ""));
@@ -2781,6 +2908,10 @@ export default function Home() {
         const firstSelectedIndex = normalizedRows.findIndex(row => (
           esportsTeamNamesMatch(row.team, match.home) || esportsTeamNamesMatch(row.team, match.away)
         ));
+        setStandingsPage(firstSelectedIndex >= 0 ? Math.floor(firstSelectedIndex / 10) + 1 : 1);
+      } else if (match.sport === "tennis") {
+        const selectedIds = new Set([...(match.homePlayers || []), ...(match.awayPlayers || [])].map(player => player.id));
+        const firstSelectedIndex = normalizedRows.findIndex(row => selectedIds.has(row.id));
         setStandingsPage(firstSelectedIndex >= 0 ? Math.floor(firstSelectedIndex / 10) + 1 : 1);
       }
     } catch {
@@ -2821,6 +2952,36 @@ export default function Home() {
     }
   }
 
+  async function switchTennisStandingsTour(tour: TennisTour) {
+    if (!standingsMatch || standingsMatch.sport !== "tennis" || tennisStandingsTour === tour) return;
+    setTennisStandingsTour(tour);
+    setStandingsPage(1);
+    setStandingsLoading(true);
+    setStandingsMessage("");
+    try {
+      const params = new URLSearchParams({
+        sport: "tennis",
+        league: standingsMatch.league,
+        tour
+      });
+      const response = await fetch(`/api/standings?${params.toString()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("standings unavailable");
+      const payload = await response.json();
+      const normalizedRows = normalizeStandingRows(Array.isArray(payload?.standings) ? payload.standings : []);
+      setStandingsRows(normalizedRows);
+      setStandingsSource(String(payload?.source || tour));
+      setStandingsTitle(`${String(payload?.league || `${tour} · Топ-100`)} · ${standingsMatch.home} — ${standingsMatch.away}`);
+      const selectedIds = new Set([...(standingsMatch.homePlayers || []), ...(standingsMatch.awayPlayers || [])].map(player => player.id));
+      const firstSelectedIndex = normalizedRows.findIndex(row => selectedIds.has(row.id));
+      setStandingsPage(firstSelectedIndex >= 0 ? Math.floor(firstSelectedIndex / 10) + 1 : 1);
+    } catch {
+      setStandingsRows([]);
+      setStandingsMessage(t("Турнирная таблица сейчас недоступна."));
+    } finally {
+      setStandingsLoading(false);
+    }
+  }
+
   async function openTeamProfile(card: TeamCard, standing?: StandingRow) {
     const initialCard = standing
       ? {
@@ -2841,7 +3002,7 @@ export default function Home() {
     setStandingsOpen(false);
     setTeamCardOpen(true);
 
-    if (standing || isEsportsTeamCard(card)) return;
+    if (standing || isEsportsTeamCard(card) || isTennisPlayerCard(card)) return;
 
     try {
       const response = await fetch(`/api/standings?sport=baseball&league=${encodeURIComponent(card.league)}`, { cache: "no-store" });
@@ -2879,6 +3040,10 @@ export default function Home() {
     const card = clientBaseballTeamCard(name, teamId);
     if (!card) return;
     void openTeamProfile(card);
+  }
+
+  function openTennisPlayer(player: TennisParticipant) {
+    void openTeamProfile(tennisPlayerCard(player));
   }
 
   async function analyzeMatches(matches: MatchRow[], openAssistant = false) {
@@ -4574,6 +4739,8 @@ export default function Home() {
                   const homeTeamClickable = Boolean(clientBaseballTeamCard(match.home, match.homeTeamId) || counterStrikeMatch);
                   const awayTeamClickable = Boolean(clientBaseballTeamCard(match.away, match.awayTeamId) || counterStrikeMatch);
                   const esportsLeague = match.sport === "esports" ? esportsLeaguePresentation(match.league) : null;
+                  const homeTennisPlayers = match.sport === "tennis" ? match.homePlayers || [] : [];
+                  const awayTennisPlayers = match.sport === "tennis" ? match.awayPlayers || [] : [];
 
                   return (
                   <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
@@ -4582,7 +4749,7 @@ export default function Home() {
                       <span className="match-meta-sport" title={getSportLabel(match.sport, lang)}>{getSportIcon(match.sport)} {getSportLabel(match.sport, lang)}</span>
                       {esportsLeague ? <span className="match-meta-discipline">{t(esportsLeague.discipline)}</span> : null}
                       <strong>{t(esportsLeague?.league || match.league)}</strong>
-                      {match.sport === "baseball" || isCounterStrikeMatch(match) ? (
+                      {match.sport === "baseball" || match.sport === "tennis" || isCounterStrikeMatch(match) ? (
                         <button className="match-standings-button" onClick={() => openStandings(match)} type="button">{t("Таблица")}</button>
                       ) : null}
                       <time>{formatMatchDateTime(match, lang)}</time>
@@ -4623,7 +4790,16 @@ export default function Home() {
 
                     <div className="match-teams">
                       <div>
-                        {homeTeamClickable ? (
+                        {homeTennisPlayers.length ? (
+                          <div className="tennis-participants">
+                            {homeTennisPlayers.map(player => (
+                              <button className="match-team-button" key={player.id} onClick={() => openTennisPlayer(player)} type="button">
+                                <strong>{player.sourceName}</strong>
+                                {player.rank ? <em className="match-team-ranking">{player.tour} #{player.rank}</em> : null}
+                              </button>
+                            ))}
+                          </div>
+                        ) : homeTeamClickable ? (
                           <button className="match-team-button" onClick={() => openTeamCard(match, "home")} title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined} type="button">
                             <strong>{match.home}</strong>
                             {homeEsportsStanding ? <em className="match-team-ranking">HLTV #{homeEsportsStanding.rank}</em> : null}
@@ -4631,11 +4807,22 @@ export default function Home() {
                         ) : (
                           <strong title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined}>{match.home}</strong>
                         )}
-                        <span>{homeEsportsStanding ? `Очки HLTV: ${homeEsportsStanding.points ?? "-"}` : t("форма 5к · вес 3")}</span>
+                        <span>{homeTennisPlayers.length
+                          ? homeTennisPlayers.filter(player => player.rank).map(player => `${player.tour} #${player.rank}`).join(" · ")
+                          : homeEsportsStanding ? `Очки HLTV: ${homeEsportsStanding.points ?? "-"}` : t("форма 5к · вес 3")}</span>
                       </div>
                       <b>-</b>
                       <div>
-                        {awayTeamClickable ? (
+                        {awayTennisPlayers.length ? (
+                          <div className="tennis-participants">
+                            {awayTennisPlayers.map(player => (
+                              <button className="match-team-button" key={player.id} onClick={() => openTennisPlayer(player)} type="button">
+                                <strong>{player.sourceName}</strong>
+                                {player.rank ? <em className="match-team-ranking">{player.tour} #{player.rank}</em> : null}
+                              </button>
+                            ))}
+                          </div>
+                        ) : awayTeamClickable ? (
                           <button className="match-team-button" onClick={() => openTeamCard(match, "away")} title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined} type="button">
                             <strong>{match.away}</strong>
                             {awayEsportsStanding ? <em className="match-team-ranking">HLTV #{awayEsportsStanding.rank}</em> : null}
@@ -4643,7 +4830,9 @@ export default function Home() {
                         ) : (
                           <strong title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined}>{match.away}</strong>
                         )}
-                        <span>{awayEsportsStanding ? `Очки HLTV: ${awayEsportsStanding.points ?? "-"}` : t("форма 5к · вес 3")}</span>
+                        <span>{awayTennisPlayers.length
+                          ? awayTennisPlayers.filter(player => player.rank).map(player => `${player.tour} #${player.rank}`).join(" · ")
+                          : awayEsportsStanding ? `Очки HLTV: ${awayEsportsStanding.points ?? "-"}` : t("форма 5к · вес 3")}</span>
                       </div>
                     </div>
 
@@ -5506,7 +5695,7 @@ export default function Home() {
                   <div>
                     <span>{selectedTeamCard.country} · {selectedTeamCard.league}</span>
                     <h2>{selectedTeamCard.name}</h2>
-                    <small>{t("ID команды")}: {selectedTeamCard.id}</small>
+                    <small>{isTennisPlayerCard(selectedTeamCard) ? t("ID игрока") : t("ID команды")}: {selectedTeamCard.id}</small>
                   </div>
                 </div>
                 <div className="team-card-stats">
@@ -5522,7 +5711,22 @@ export default function Home() {
                     <span>{t("Лига")}</span>
                     <strong>{selectedTeamCard.league}</strong>
                   </div>
-                  {isEsportsTeamCard(selectedTeamCard) ? (
+                  {isTennisPlayerCard(selectedTeamCard) ? (
+                    <>
+                      <div>
+                        <span>{t("Очки")}</span>
+                        <strong>{selectedTeamCard.points ?? "-"}</strong>
+                      </div>
+                      <div>
+                        <span>{t("Возраст")}</span>
+                        <strong>{selectedTeamCard.age ?? "-"}</strong>
+                      </div>
+                      <div>
+                        <span>{t("Турниров")}</span>
+                        <strong>{selectedTeamCard.tournaments ?? "-"}</strong>
+                      </div>
+                    </>
+                  ) : isEsportsTeamCard(selectedTeamCard) ? (
                     <>
                       <div>
                         <span>Очки HLTV</span>
@@ -5569,6 +5773,22 @@ export default function Home() {
               >
                 <div className="rail-title">📊 {t("Турнирная таблица")} {standingsTitle}</div>
                 {standingsSource ? <div className="standings-source">{t("Источник")}: {standingsSource}</div> : null}
+                {tennisStandingsOpen ? (
+                  <div className="tennis-tour-switch" role="tablist" aria-label={t("Рейтинг теннисистов")}>
+                    {(["ATP", "WTA"] as TennisTour[]).map(tour => (
+                      <button
+                        aria-selected={tennisStandingsTour === tour}
+                        className={tennisStandingsTour === tour ? "active" : ""}
+                        key={tour}
+                        onClick={() => void switchTennisStandingsTour(tour)}
+                        role="tab"
+                        type="button"
+                      >
+                        {tour}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 {standingsMatch?.sport === "baseball" ? (
                   <div className="standings-h2h">
                     <div className="standings-h2h-title">
@@ -5612,12 +5832,33 @@ export default function Home() {
                         })}
                       </div>
                     ) : null}
+                    {tennisStandingsOpen ? (
+                      <div className="standings-selected-teams">
+                        {selectedTennisPlayers.map(({ player, standing }) => {
+                          const card = tennisPlayerCard(standing || player);
+                          return (
+                            <button key={`${player.id}-${player.sourceName}`} onClick={() => void openTeamProfile(card, standing || undefined)} type="button">
+                              <span>{standing ? `#${standing.rank}` : "—"}</span>
+                              <strong>{standing?.team || player.name}</strong>
+                              <small>{standing ? `${standing.points ?? "-"} ${t("очков")}` : t("Нет в этом рейтинге")}</small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                     <div className="standings-groups">
                     {visibleStandingsGroups.map(group => (
                       <section className="standings-group" key={group.title}>
                         <h3>{group.title}</h3>
                         <div className="standings-table">
-                          {standingsMatch && isCounterStrikeMatch(standingsMatch) ? (
+                          {tennisStandingsOpen ? (
+                            <div className="standings-row standings-row-tennis standings-head">
+                              <span>#</span>
+                              <span>{t("Игрок")}</span>
+                              <span>{t("Страна")}</span>
+                              <span>{t("Очки")}</span>
+                            </div>
+                          ) : standingsMatch && isCounterStrikeMatch(standingsMatch) ? (
                             <div className="standings-row standings-row-esports standings-head">
                               <span>#</span>
                               <span>{t("Команда")}</span>
@@ -5643,7 +5884,11 @@ export default function Home() {
                             const awayTeamId = standingsMatch?.awayTeamId || "";
                             const rowTeamCard = clientBaseballTeamCard(row.team, row.id);
                             const counterStrikeRow = Boolean(standingsMatch && isCounterStrikeMatch(standingsMatch));
-                            const highlighted = Boolean(standingsMatch) && (counterStrikeRow
+                            const tennisRow = Boolean(standingsMatch?.sport === "tennis");
+                            const selectedPlayerIds = new Set(selectedTennisPlayers.map(item => item.player.id));
+                            const highlighted = Boolean(standingsMatch) && (tennisRow
+                              ? selectedPlayerIds.has(row.id) || selectedTennisPlayers.some(item => tennisPlayerNamesMatch(row.team, item.player.name))
+                              : counterStrikeRow
                               ? esportsTeamNamesMatch(row.team, standingsMatch!.home) || esportsTeamNamesMatch(row.team, standingsMatch!.away)
                               : (
                                 row.id === homeTeamId || row.id === awayTeamId
@@ -5651,11 +5896,16 @@ export default function Home() {
                                 || rowName.includes(awayName) || awayName.includes(rowName)
                               ));
                             const rowEsportsCard = counterStrikeRow ? esportsTeamCard(row.team, row) : null;
+                            const rowTennisCard = tennisRow ? tennisPlayerCard(row) : null;
 
                             return (
-                            <div className={`standings-row ${counterStrikeRow ? "standings-row-esports" : ""} ${highlighted ? "highlighted" : ""}`} key={row.id}>
+                            <div className={`standings-row ${counterStrikeRow ? "standings-row-esports" : ""} ${tennisRow ? "standings-row-tennis" : ""} ${highlighted ? "highlighted" : ""}`} key={row.id}>
                               <span>{row.rank}</span>
-                              {rowEsportsCard ? (
+                              {rowTennisCard ? (
+                                <button className="standings-team-button" onClick={() => void openTeamProfile(rowTennisCard, row)} type="button">
+                                  <strong>{row.team}</strong>
+                                </button>
+                              ) : rowEsportsCard ? (
                                 <button className="standings-team-button" onClick={() => void openTeamProfile(rowEsportsCard, row)} type="button">
                                   <strong>{row.team}</strong>
                                 </button>
@@ -5664,7 +5914,12 @@ export default function Home() {
                                   <strong>{rowTeamCard.name}</strong>
                                 </button>
                               ) : <strong>{row.team}</strong>}
-                              {counterStrikeRow ? (
+                              {tennisRow ? (
+                                <>
+                                  <span>{row.country || "-"}</span>
+                                  <span>{row.points ?? "-"}</span>
+                                </>
+                              ) : counterStrikeRow ? (
                                 <>
                                   <span>{row.points ?? "-"}</span>
                                   <span>{row.change || "-"}</span>
@@ -5685,7 +5940,7 @@ export default function Home() {
                       </section>
                     ))}
                     </div>
-                    {counterStrikeStandingsOpen && standingsPageCount > 1 ? (
+                    {pagedStandingsOpen && standingsPageCount > 1 ? (
                       <nav className="standings-pagination" aria-label={t("Страницы рейтинга")}>
                         <button
                           aria-label={t("Предыдущая страница")}

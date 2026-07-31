@@ -3,6 +3,13 @@
 import { inferFootballCountry, isWorldCountry } from "@/lib/footballCountries";
 import { KBO_TEAMS, isKboMatchContext, kboTeamId, resolveKboTeam } from "@/lib/kboTeams";
 import { MLB_TEAMS, isMlbMatchContext, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
+import {
+  hasTop100Participant,
+  loadTennisRankings,
+  tennisParticipants,
+  type TennisParticipant,
+  type TennisRankings
+} from "@/lib/tennisRankings";
 
 type BookmakerOdds = {
   home: number;
@@ -28,6 +35,8 @@ type RawMatch = {
   bookmakerOdds: Partial<Record<BookmakerKey, BookmakerOdds>>;
   homeTeamId?: string;
   awayTeamId?: string;
+  homePlayers?: TennisParticipant[];
+  awayPlayers?: TennisParticipant[];
 };
 
 type ApiMatch = {
@@ -45,6 +54,8 @@ type ApiMatch = {
   startsAt: string;
   homeTeamId?: string;
   awayTeamId?: string;
+  homePlayers?: TennisParticipant[];
+  awayPlayers?: TennisParticipant[];
 };
 
 type Analysis = {
@@ -97,7 +108,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v21";
+const API_VERSION = "bookmakers-v22-tennis-top100";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -1187,21 +1198,49 @@ function toApiMatch(match: RawMatch): ApiMatch {
     recommendationSide: match.recommendationSide,
     startsAt: match.startsAt,
     homeTeamId: match.homeTeamId,
-    awayTeamId: match.awayTeamId
+    awayTeamId: match.awayTeamId,
+    homePlayers: match.homePlayers,
+    awayPlayers: match.awayPlayers
+  };
+}
+
+function withTennisRankings(match: RawMatch, rankings: TennisRankings): RawMatch {
+  if (match.sport !== "tennis") return match;
+  const tournament = `${match.country} ${match.league}`;
+  const preferredTour = /\bwta\b|женщ/i.test(tournament)
+    ? "WTA"
+    : /\batp\b|мужчин/i.test(tournament)
+      ? "ATP"
+      : undefined;
+  return {
+    ...match,
+    homePlayers: tennisParticipants(match.home, rankings, preferredTour),
+    awayPlayers: tennisParticipants(match.away, rankings, preferredTour)
   };
 }
 
 async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[]; debug: Record<string, unknown> }> {
   const now = Date.now();
   const horizon = now + Math.max(1, hours) * 60 * 60 * 1000;
-  const [pari, fonbet, tennisi] = await Promise.all([
+  const [pari, fonbet, tennisi, rankingsResult] = await Promise.all([
     fetchPariLike(PARI_LINE_URLS, "pari"),
     fetchPariLike(FONBET_LINE_URLS, "fonbet"),
-    fetchTennisiMatches()
+    fetchTennisiMatches(),
+    loadTennisRankings()
+      .then(value => ({ value, error: "" }))
+      .catch(error => ({ value: null, error: error instanceof Error ? error.message : String(error) }))
   ]);
   const raw = [...pari, ...fonbet, ...tennisi, ...featuredFallbackMatches(now, horizon)]
     .filter((match) => match.startMs > now && match.startMs <= horizon);
-  const merged = mergeMatches(raw).flatMap((match) => {
+  const mergedRaw = mergeMatches(raw);
+  const ranked = rankingsResult.value
+    ? mergedRaw
+        .map(match => withTennisRankings(match, rankingsResult.value!))
+        .filter(match => match.sport !== "tennis"
+          || hasTop100Participant(match.homePlayers || [])
+          || hasTop100Participant(match.awayPlayers || []))
+    : mergedRaw.filter(match => match.sport !== "tennis");
+  const merged = ranked.flatMap((match) => {
     try {
       return [toApiMatch(match)];
     } catch (error) {
@@ -1216,6 +1255,11 @@ async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[
       fonbet: fonbet.length,
       tennisi: tennisi.length,
       raw: raw.length,
+      tennisBeforeTop100: mergedRaw.filter(match => match.sport === "tennis").length,
+      tennisAfterTop100: ranked.filter(match => match.sport === "tennis").length,
+      tennisRankings: rankingsResult.value
+        ? { atp: rankingsResult.value.atp.length, wta: rankingsResult.value.wta.length, source: rankingsResult.value.source }
+        : { error: rankingsResult.error },
       merged: merged.length
     }
   };
