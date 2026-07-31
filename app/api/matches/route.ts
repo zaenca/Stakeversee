@@ -451,7 +451,7 @@ function isKnownCountry(name: string): boolean {
 
 const HOCKEY_FRIENDLY_COUNTRY_HINTS: Array<[RegExp, string]> = [
   [/беларус|минск|лида|авиатор\s+барановичи|барановичи|брест|шахтер\s+солигорск|солигорск/i, "Belarus"],
-  [/\b(кхл|khl)\b|адмирал|нефтехимик|челны|ак\s*барс|сибирь|локомотив|трактор|северсталь|салават|ска|лада|спартак|торпедо|автомобилист|динамо\s+москва/i, "Russia"]
+  [/\b(кхл|khl)\b|адмирал|нефтехимик|челны|ак\s*барс|сибирь|локомотив|трактор|северсталь|салават|ска|лада|спартак|торпедо|автомобилист|динамо\s+москва|рязань|саратов/i, "Russia"]
 ];
 
 function normalizeBaseballLeague(match: RawMatch): RawMatch {
@@ -1003,10 +1003,6 @@ function sameParticipants(left: RawMatch, right: RawMatch): boolean {
   const leftAway = compactParticipantName(left, left.away);
   const rightHome = compactParticipantName(right, right.home);
   const rightAway = compactParticipantName(right, right.away);
-  if (left.sport === "ice-hockey" && right.sport === "ice-hockey") {
-    return (leftHome === rightHome && leftAway === rightAway)
-      || (leftHome === rightAway && leftAway === rightHome);
-  }
   const useAcronym = left.sport === "esports" || right.sport === "esports";
 
   return (areSimilarParticipants(leftHome, rightHome, useAcronym) && areSimilarParticipants(leftAway, rightAway, useAcronym))
