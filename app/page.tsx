@@ -469,8 +469,48 @@ function esportsMatchPairKey(match: MatchRow): string | null {
 }
 
 function esportsBoFormat(value: string): string | null {
-  const match = value.match(/\b(?:bo|best\s+of)\s*([135])\b/i);
+  const match = value.match(/\b(?:bo|best\s+of)\s*(\d+)\b/i);
   return match ? `BO${match[1]}` : null;
+}
+
+function esportsDisciplineName(value: string): string {
+  if (/\b(league\s+of\s+legends|lol)\b/i.test(value)) return "LoL";
+  if (/\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/i.test(value)) return "COUNTER STRIKE 2";
+  if (/\b(dota\s*2?|дота)\b/i.test(value)) return "Dota 2";
+  if (/\b(call\s+of\s+duty|cod)\b/i.test(value)) return "Call of Duty";
+  if (/\bvalorant\b/i.test(value)) return "Valorant";
+  if (/\boverwatch\b/i.test(value)) return "Overwatch";
+  if (/\brainbow\s*six\b/i.test(value)) return "Rainbow Six";
+  if (/\bstarcraft\b/i.test(value)) return "StarCraft";
+  return "Киберспорт";
+}
+
+function esportsLeaguePresentation(value: string): { discipline: string; league: string } {
+  const discipline = esportsDisciplineName(value);
+  const bo = esportsBoFormat(value);
+  let league = value;
+
+  if (discipline === "LoL") league = league.replace(/\b(league\s+of\s+legends|lol)\b/gi, " ");
+  if (discipline === "COUNTER STRIKE 2") {
+    league = league.replace(/\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/gi, " ");
+  }
+  if (discipline === "Dota 2") league = league.replace(/\b(dota\s*2?|дота)\b/gi, " ");
+  if (discipline === "Call of Duty") league = league.replace(/\b(call\s+of\s+duty|cod)\b/gi, " ");
+  if (discipline === "Valorant") league = league.replace(/\bvalorant\b/gi, " ");
+  if (discipline === "Overwatch") league = league.replace(/\boverwatch\b/gi, " ");
+  if (discipline === "Rainbow Six") league = league.replace(/\brainbow\s*six\b/gi, " ");
+  if (discipline === "StarCraft") league = league.replace(/\bstarcraft\b/gi, " ");
+  if (bo) league = league.replace(new RegExp(`\\b${bo}\\b`, "gi"), " ");
+
+  const tournament = league
+    .replace(/\s*[-–—·:.]\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return {
+    discipline,
+    league: [tournament, bo].filter(Boolean).join(". ")
+  };
 }
 
 function preferredEsportsLeague(current: string, next: string): string {
@@ -2071,7 +2111,7 @@ export default function Home() {
   const [matchBookmakerChoice, setMatchBookmakerChoice] = useState<Record<string, MatchBookmakerKey>>({});
   const [standingsOpen, setStandingsOpen] = useState(false);
   const [standingsRows, setStandingsRows] = useState<StandingRow[]>([]);
-  const standingsGroupsRef = useRef<HTMLDivElement | null>(null);
+  const [standingsPage, setStandingsPage] = useState(1);
   const [counterStrikeRankings, setCounterStrikeRankings] = useState<StandingRow[]>([]);
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [standingsMessage, setStandingsMessage] = useState("");
@@ -2618,22 +2658,24 @@ export default function Home() {
     }));
   }, [standingsRows]);
 
+  const counterStrikeStandingsOpen = Boolean(standingsMatch && isCounterStrikeMatch(standingsMatch));
+  const standingsPageCount = counterStrikeStandingsOpen ? Math.max(1, Math.ceil(standingsRows.length / 10)) : 1;
+  const visibleStandingsGroups = useMemo(() => {
+    if (!counterStrikeStandingsOpen) return standingsGroups;
+    const start = (standingsPage - 1) * 10;
+    return standingsGroups.map(group => ({ ...group, rows: group.rows.slice(start, start + 10) })).filter(group => group.rows.length);
+  }, [counterStrikeStandingsOpen, standingsGroups, standingsPage]);
+  const selectedCounterStrikeTeams = useMemo(() => {
+    if (!counterStrikeStandingsOpen || !standingsMatch) return [];
+    return [standingsMatch.home, standingsMatch.away].map(team => ({
+      requestedName: team,
+      standing: esportsStandingForTeam(team, standingsRows)
+    }));
+  }, [counterStrikeStandingsOpen, standingsMatch, standingsRows]);
+
   useEffect(() => {
-    if (!standingsOpen || standingsLoading || !standingsMatch || !isCounterStrikeMatch(standingsMatch)) return;
-
-    const frame = window.requestAnimationFrame(() => {
-      const container = standingsGroupsRef.current;
-      const firstHighlighted = container?.querySelector<HTMLElement>(".standings-row.highlighted");
-      if (!container || !firstHighlighted) return;
-
-      const containerRect = container.getBoundingClientRect();
-      const rowRect = firstHighlighted.getBoundingClientRect();
-      const centeredOffset = rowRect.top - containerRect.top - (container.clientHeight - rowRect.height) / 2;
-      container.scrollTo({ top: Math.max(0, container.scrollTop + centeredOffset), behavior: "auto" });
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [standingsLoading, standingsMatch, standingsOpen, standingsRows]);
+    setStandingsPage(current => Math.min(Math.max(1, current), standingsPageCount));
+  }, [standingsPageCount]);
 
   const visibleAnalyzedMatches = useMemo(() => uniqueAnalyzedMatches(analyzedMatches), [analyzedMatches]);
 
@@ -2713,6 +2755,7 @@ export default function Home() {
   async function openStandings(match: MatchRow) {
     setStandingsOpen(true);
     setStandingsMatch(match);
+    setStandingsPage(1);
     setStandingsSource("");
     setStandingsTitle(`${match.league} · ${match.home} — ${match.away}`);
     setStandingsLoading(true);
@@ -2730,7 +2773,13 @@ export default function Home() {
       const rows = Array.isArray(payload?.standings) ? payload.standings : [];
       const normalizedRows = normalizeStandingRows(rows);
       setStandingsRows(normalizedRows);
-      if (isCounterStrikeMatch(match)) setCounterStrikeRankings(normalizedRows);
+      if (isCounterStrikeMatch(match)) {
+        setCounterStrikeRankings(normalizedRows);
+        const firstSelectedIndex = normalizedRows.findIndex(row => (
+          esportsTeamNamesMatch(row.team, match.home) || esportsTeamNamesMatch(row.team, match.away)
+        ));
+        setStandingsPage(firstSelectedIndex >= 0 ? Math.floor(firstSelectedIndex / 10) + 1 : 1);
+      }
     } catch {
       setStandingsRows([]);
       setStandingsMessage(t("Турнирная таблица сейчас недоступна."));
@@ -4521,13 +4570,15 @@ export default function Home() {
                   const awayEsportsStanding = counterStrikeMatch ? esportsStandingForTeam(match.away, counterStrikeRankings) : null;
                   const homeTeamClickable = Boolean(clientBaseballTeamCard(match.home, match.homeTeamId) || counterStrikeMatch);
                   const awayTeamClickable = Boolean(clientBaseballTeamCard(match.away, match.awayTeamId) || counterStrikeMatch);
+                  const esportsLeague = match.sport === "esports" ? esportsLeaguePresentation(match.league) : null;
 
                   return (
                   <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
-                    <div className="match-meta">
+                    <div className={`match-meta ${esportsLeague ? "match-meta-esports" : ""}`}>
                       <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country, lang)}</span>
                       <span className="match-meta-sport" title={getSportLabel(match.sport, lang)}>{getSportIcon(match.sport)} {getSportLabel(match.sport, lang)}</span>
-                      <strong>{t(match.league)}</strong>
+                      {esportsLeague ? <span className="match-meta-discipline">{t(esportsLeague.discipline)}</span> : null}
+                      <strong>{t(esportsLeague?.league || match.league)}</strong>
                       {match.sport === "baseball" || isCounterStrikeMatch(match) ? (
                         <button className="match-standings-button" onClick={() => openStandings(match)} type="button">{t("Таблица")}</button>
                       ) : null}
@@ -5543,8 +5594,23 @@ export default function Home() {
                 {standingsLoading ? (
                   <div className="assistant-empty-hint">{t("Загружаю таблицу...")}</div>
                 ) : standingsGroups.length ? (
-                  <div className="standings-groups" ref={standingsGroupsRef}>
-                    {standingsGroups.map(group => (
+                  <>
+                    {counterStrikeStandingsOpen ? (
+                      <div className="standings-selected-teams">
+                        {selectedCounterStrikeTeams.map(({ requestedName, standing }) => {
+                          const card = esportsTeamCard(requestedName, standing);
+                          return (
+                            <button key={requestedName} onClick={() => void openTeamProfile(card, standing || undefined)} type="button">
+                              <span>{standing ? `#${standing.rank}` : "—"}</span>
+                              <strong>{standing?.team || requestedName}</strong>
+                              <small>{standing?.points ? `${standing.points} ${t("очков")}` : t("Нет в рейтинге")}</small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                    <div className="standings-groups">
+                    {visibleStandingsGroups.map(group => (
                       <section className="standings-group" key={group.title}>
                         <h3>{group.title}</h3>
                         <div className="standings-table">
@@ -5615,7 +5681,39 @@ export default function Home() {
                         </div>
                       </section>
                     ))}
-                  </div>
+                    </div>
+                    {counterStrikeStandingsOpen && standingsPageCount > 1 ? (
+                      <nav className="standings-pagination" aria-label={t("Страницы рейтинга")}>
+                        <button
+                          aria-label={t("Предыдущая страница")}
+                          disabled={standingsPage === 1}
+                          onClick={() => setStandingsPage(page => Math.max(1, page - 1))}
+                          type="button"
+                        >
+                          ‹
+                        </button>
+                        {Array.from({ length: standingsPageCount }, (_, index) => index + 1).map(page => (
+                          <button
+                            aria-current={page === standingsPage ? "page" : undefined}
+                            className={page === standingsPage ? "active" : ""}
+                            key={page}
+                            onClick={() => setStandingsPage(page)}
+                            type="button"
+                          >
+                            {page}
+                          </button>
+                        ))}
+                        <button
+                          aria-label={t("Следующая страница")}
+                          disabled={standingsPage === standingsPageCount}
+                          onClick={() => setStandingsPage(page => Math.min(standingsPageCount, page + 1))}
+                          type="button"
+                        >
+                          ›
+                        </button>
+                      </nav>
+                    ) : null}
+                  </>
                 ) : (
                   <div className="assistant-empty-hint">{standingsMessage || t("Турнирная таблица сейчас недоступна.")}</div>
                 )}

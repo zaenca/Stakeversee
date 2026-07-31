@@ -1498,7 +1498,16 @@ h1 {
   text-transform: uppercase;
 }
 
+.match-meta-esports {
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+}
+
 .match-meta-sport {
+  white-space: nowrap;
+}
+
+.match-meta-discipline {
+  color: #d8f8ff;
   white-space: nowrap;
 }
 
@@ -1943,30 +1952,79 @@ h1 {
   display: grid;
   flex: 1 1 auto;
   gap: 12px;
-  height: 100%;
-  max-height: calc(min(760px, 90vh) - 92px);
+  max-height: none;
   min-height: 0;
-  overscroll-behavior: contain;
-  overflow-x: hidden;
-  overflow-y: scroll;
-  padding-right: 8px;
-  scrollbar-color: rgba(0, 229, 255, 0.75) rgba(255, 255, 255, 0.06);
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
 }
 
-.standings-groups::-webkit-scrollbar {
-  width: 9px;
+.standings-selected-teams {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.standings-groups::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 999px;
+.standings-selected-teams button {
+  align-items: center;
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.36);
+  border-radius: 7px;
+  color: #eaf6ff;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 42px;
+  padding: 8px 10px;
+  text-align: left;
 }
 
-.standings-groups::-webkit-scrollbar-thumb {
-  background: rgba(0, 229, 255, 0.72);
-  border-radius: 999px;
+.standings-selected-teams button:hover {
+  background: rgba(0, 229, 255, 0.16);
+}
+
+.standings-selected-teams span,
+.standings-selected-teams small {
+  color: var(--cyan);
+  white-space: nowrap;
+}
+
+.standings-selected-teams strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standings-pagination {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.standings-pagination button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  color: #eaf6ff;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  height: 30px;
+  justify-content: center;
+  min-width: 30px;
+  padding: 0 8px;
+}
+
+.standings-pagination button.active {
+  background: rgba(0, 229, 255, 0.16);
+  border-color: rgba(0, 229, 255, 0.5);
+  color: var(--cyan);
+}
+
+.standings-pagination button:disabled {
+  cursor: default;
+  opacity: 0.35;
 }
 
 .standings-group {
@@ -4429,6 +4487,18 @@ h1 {
 @media (max-width: 760px) {
   .stats-modal-backdrop {
     padding: 10px;
+  }
+
+  .match-meta-esports {
+    grid-template-columns: auto auto;
+  }
+
+  .match-meta-esports > strong {
+    grid-column: 1 / -1;
+  }
+
+  .standings-selected-teams {
+    grid-template-columns: 1fr;
   }
 
   .stats-panel {

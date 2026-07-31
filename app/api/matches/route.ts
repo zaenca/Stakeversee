@@ -357,8 +357,8 @@ function splitTennisiCountryLeague(prefix: string, value: string): { country: st
 function normalizeEsportsLeagueName(sport: string, league: string): string {
   if (sport !== "esports") return league;
   const value = league
-    .replace(/\bbest\s+of\s*([135])\b/gi, "BO$1")
-    .replace(/\bbo\s*([135])\b/gi, "BO$1")
+    .replace(/\bbest\s+of\s*(\d+)\b/gi, "BO$1")
+    .replace(/\bbo\s*(\d+)\b/gi, "BO$1")
     .replace(/\s*[-–—·:.]\s*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -998,7 +998,7 @@ function mergeTimeToleranceMs(sport: string): number {
 }
 
 function esportsBoFormat(value: string): string | null {
-  const match = value.match(/\b(?:bo|best\s+of)\s*([135])\b/i);
+  const match = value.match(/\b(?:bo|best\s+of)\s*(\d+)\b/i);
   return match ? `BO${match[1]}` : null;
 }
 
