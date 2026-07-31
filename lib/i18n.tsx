@@ -50,8 +50,10 @@ export const translations: Record<string, string> = {
 
   // ── Match filters ──────────────────────────────────────────
   "Страна:": "Country:",
+  "Дисциплина:": "Discipline:",
   "Лига:": "League:",
   "Все страны": "All countries",
+  "Все дисциплины": "All disciplines",
   "Все лиги": "All leagues",
   "🔥 Горячие": "🔥 Hot",
   "✅ Хорошие": "✅ Good",

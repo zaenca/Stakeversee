@@ -769,6 +769,49 @@ function getSportLabel(sport: string, lang: Lang): string {
   return translate(tab ? tab.label : sport, lang);
 }
 
+type EsportsDiscipline = {
+  key: string;
+  label: string;
+  icon: string;
+};
+
+const ESPORTS_DISCIPLINES: Array<EsportsDiscipline & { pattern: RegExp }> = [
+  { key: "cs2", label: "CS2", icon: "🎯", pattern: /\b(counter[\s.:-]*strike|cs[\s.:-]*(?:go|2)|кс[\s.:-]*(?:го|2)?)\b/i },
+  { key: "dota2", label: "Dota 2", icon: "🛡️", pattern: /\bdota\s*2?\b/i },
+  { key: "lol", label: "LoL", icon: "⚔️", pattern: /\b(league\s+of\s+legends|lol|lck|lpl|lec|lcs)\b/i },
+  { key: "valorant", label: "Valorant", icon: "🔺", pattern: /\bvalorant\b/i },
+  { key: "honor-of-kings", label: "Honor of Kings", icon: "👑", pattern: /\b(honor\s+of\s+kings|king\s+of\s+glory|kog)\b/i },
+  { key: "call-of-duty", label: "Call of Duty", icon: "🎖️", pattern: /\b(call\s+of\s+duty|cod|cdl)\b/i },
+  { key: "mobile-legends", label: "Mobile Legends", icon: "📱", pattern: /\b(mobile\s+legends|mlbb)\b/i },
+  { key: "rainbow-six", label: "Rainbow Six", icon: "🛡️", pattern: /\b(rainbow\s+six|r6)\b/i },
+  { key: "overwatch", label: "Overwatch", icon: "🦾", pattern: /\boverwatch\b/i },
+  { key: "pubg", label: "PUBG", icon: "🪖", pattern: /\bpubg\b/i },
+  { key: "starcraft", label: "StarCraft", icon: "🚀", pattern: /\bstarcraft\b/i },
+  { key: "rocket-league", label: "Rocket League", icon: "🚗", pattern: /\brocket\s+league\b/i },
+  { key: "arena-of-valor", label: "Arena of Valor", icon: "🏰", pattern: /\barena\s+of\s+valor\b/i },
+  { key: "wild-rift", label: "Wild Rift", icon: "⚔️", pattern: /\bwild\s+rift\b/i },
+  { key: "efootball", label: "EA Sports FC", icon: "⚽", pattern: /\b(ea\s+sports\s+fc|efootball|fifa)\b/i },
+  { key: "hearthstone", label: "Hearthstone", icon: "🃏", pattern: /\bhearthstone\b/i },
+  { key: "world-of-tanks", label: "World of Tanks", icon: "🪖", pattern: /\bworld\s+of\s+tanks\b/i }
+];
+
+function getEsportsDiscipline(match: MatchRow): EsportsDiscipline {
+  const source = `${match.league} ${match.country}`;
+  const known = ESPORTS_DISCIPLINES.find(discipline => discipline.pattern.test(source));
+  if (known) return { key: known.key, label: known.label, icon: known.icon };
+
+  const rawLabel = match.league
+    .split(/\s*[.·|]\s*|\s+-\s+/)[0]
+    .replace(/\b(?:bo|best\s+of)\s*[135]\b/gi, "")
+    .trim();
+  const label = rawLabel || "Другое";
+  return {
+    key: `other:${compactMatchName(label) || "other"}`,
+    label,
+    icon: "🎮"
+  };
+}
+
 const COUNTRY_FLAGS: Record<string, string> = {
   "Russia": "🇷🇺", "Россия": "🇷🇺",
   "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Англия": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "GB": "🇬🇧",
@@ -1997,11 +2040,13 @@ export default function Home() {
     }
   }, [couponDraft.sourceId, profileLogin, sources]);
   const [countryFilter, setCountryFilter] = useState("all");
+  const [disciplineFilter, setDisciplineFilter] = useState("all");
   const [leagueFilter, setLeagueFilter] = useState("all");
 
   function selectSport(nextSport: string) {
     setActiveSport(nextSport);
     setCountryFilter("all");
+    setDisciplineFilter("all");
     setLeagueFilter("all");
     setMatchFilter("all");
     setSearchQuery("");
@@ -2467,7 +2512,11 @@ export default function Home() {
 
     return upcomingMatches.filter(match => {
       const sportOk = activeSport === "all" || match.sport === activeSport;
-      const countryOk = countryFilter === "all" || match.country === countryFilter;
+      const countryOk = activeSport === "esports" || countryFilter === "all" || match.country === countryFilter;
+      const disciplineOk =
+        activeSport !== "esports" ||
+        disciplineFilter === "all" ||
+        getEsportsDiscipline(match).key === disciplineFilter;
       const leagueOk = leagueFilter === "all" || match.league === leagueFilter;
       const tierOk =
         matchFilter === "all" ||
@@ -2478,9 +2527,9 @@ export default function Home() {
         !queryGroups.length ||
         queryGroups.every(group => group.some(token => haystack.includes(token)));
 
-      return sportOk && countryOk && leagueOk && tierOk && searchOk;
+      return sportOk && countryOk && disciplineOk && leagueOk && tierOk && searchOk;
     });
-  }, [activeSport, countryFilter, leagueFilter, matchFilter, lineMatches, matchTimeWindow, searchQuery]);
+  }, [activeSport, countryFilter, disciplineFilter, leagueFilter, matchFilter, lineMatches, matchTimeWindow, searchQuery]);
 
   const matchCounts = useMemo(() => {
     const upcomingMatches = getMatchesInTimeWindow(lineMatches, matchTimeWindow);
@@ -2505,12 +2554,26 @@ export default function Home() {
     return counts;
   }, [lineMatches, matchTimeWindow]);
 
+  const disciplineCounts = useMemo(() => {
+    const counts = new Map<string, EsportsDiscipline & { count: number }>();
+    for (const match of getMatchesInTimeWindow(lineMatches, matchTimeWindow)) {
+      if (match.sport !== "esports") continue;
+      const discipline = getEsportsDiscipline(match);
+      const existing = counts.get(discipline.key);
+      if (existing) existing.count += 1;
+      else counts.set(discipline.key, { ...discipline, count: 1 });
+    }
+    return counts;
+  }, [lineMatches, matchTimeWindow]);
+
   const leagueCounts = useMemo(() => {
     const counts = new Map<string, { count: number; country: string; league: string; sport: string }>();
     for (const match of getMatchesInTimeWindow(lineMatches, matchTimeWindow)) {
       const sportOk = activeSport === "all" || match.sport === activeSport;
-      const countryOk = countryFilter === "all" || match.country === countryFilter;
-      if (!sportOk || !countryOk) continue;
+      const contextOk = activeSport === "esports"
+        ? disciplineFilter === "all" || getEsportsDiscipline(match).key === disciplineFilter
+        : countryFilter === "all" || match.country === countryFilter;
+      if (!sportOk || !contextOk) continue;
       const l = match.league;
       if (!l) continue;
       // Ключ включает вид спорта, иначе одноимённые лиги разных видов спорта
@@ -2522,7 +2585,7 @@ export default function Home() {
       else counts.set(key, { count: 1, country: match.country || "World", league: l, sport: match.sport });
     }
     return counts;
-  }, [activeSport, countryFilter, lineMatches, matchTimeWindow]);
+  }, [activeSport, countryFilter, disciplineFilter, lineMatches, matchTimeWindow]);
 
   const standingsGroups = useMemo(() => {
     const groups = new Map<string, StandingRow[]>();
@@ -4298,23 +4361,52 @@ export default function Home() {
             </nav>
 
             <div className="match-filters">
-              <label>
-                <span>{t("Страна:")}</span>
-                <MatchFilterDropdown
-                  onChange={value => { setCountryFilter(value); setLeagueFilter("all"); }}
-                  options={Array.from(countryCounts.entries())
-                    .map(([country, count]) => ({
-                      count,
-                      flag: <FlagIcon country={country} />,
-                      label: getCountryLabel(country, lang),
-                      value: country
-                    }))
-                    .sort((a, b) => a.label.localeCompare(b.label, lang === "en" ? "en" : "ru"))}
-                  placeholderIcon="🌍"
-                  placeholderLabel={t("Все страны")}
-                  value={countryFilter}
-                />
-              </label>
+              {activeSport === "esports" ? (
+                <label>
+                  <span>{t("Дисциплина:")}</span>
+                  <MatchFilterDropdown
+                    onChange={value => { setDisciplineFilter(value); setLeagueFilter("all"); }}
+                    options={Array.from(disciplineCounts.values())
+                      .sort((a, b) => {
+                        const orderA = ESPORTS_DISCIPLINES.findIndex(item => item.key === a.key);
+                        const orderB = ESPORTS_DISCIPLINES.findIndex(item => item.key === b.key);
+                        if (orderA !== orderB) {
+                          if (orderA === -1) return 1;
+                          if (orderB === -1) return -1;
+                          return orderA - orderB;
+                        }
+                        return a.label.localeCompare(b.label, lang === "en" ? "en" : "ru");
+                      })
+                      .map(discipline => ({
+                        count: discipline.count,
+                        flag: discipline.icon,
+                        label: discipline.label,
+                        value: discipline.key
+                      }))}
+                    placeholderIcon="🎮"
+                    placeholderLabel={t("Все дисциплины")}
+                    value={disciplineFilter}
+                  />
+                </label>
+              ) : (
+                <label>
+                  <span>{t("Страна:")}</span>
+                  <MatchFilterDropdown
+                    onChange={value => { setCountryFilter(value); setLeagueFilter("all"); }}
+                    options={Array.from(countryCounts.entries())
+                      .map(([country, count]) => ({
+                        count,
+                        flag: <FlagIcon country={country} />,
+                        label: getCountryLabel(country, lang),
+                        value: country
+                      }))
+                      .sort((a, b) => a.label.localeCompare(b.label, lang === "en" ? "en" : "ru"))}
+                    placeholderIcon="🌍"
+                    placeholderLabel={t("Все страны")}
+                    value={countryFilter}
+                  />
+                </label>
+              )}
               <label>
                 <span>{t("Лига:")}</span>
                 <MatchFilterDropdown
