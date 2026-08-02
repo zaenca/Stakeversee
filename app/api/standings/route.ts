@@ -3,6 +3,7 @@ import { loadHltvRankings } from "@/lib/hltv";
 import { KBO_TEAMS, kboTeamId } from "@/lib/kboTeams";
 import { MLB_TEAMS, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 import { loadTennisRankings, type TennisTour } from "@/lib/tennisRankings";
+import { WNBA_TEAMS, resolveWnbaTeam, wnbaTeamId } from "@/lib/wnbaTeams";
 
 type EspnStandingStat = {
   name?: string;
@@ -11,7 +12,7 @@ type EspnStandingStat = {
 };
 
 type EspnStandingEntry = {
-  team?: { id?: string; displayName?: string };
+  team?: { id?: string; displayName?: string; logos?: Array<{ href?: string }> };
   stats?: EspnStandingStat[];
 };
 
@@ -78,6 +79,19 @@ const MLB_REFERENCE_STANDINGS: StandingRow[] = MLB_TEAMS.map((team, index) => {
   };
 });
 
+const WNBA_REFERENCE_STANDINGS: StandingRow[] = WNBA_TEAMS.map((team, index) => ({
+  id: wnbaTeamId(team),
+  rank: index + 1,
+  league: "WNBA",
+  division: "WNBA",
+  team: team.name,
+  wins: 0,
+  losses: 0,
+  pct: "-",
+  gamesBack: "-",
+  form: "-"
+}));
+
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   Pragma: "no-cache",
@@ -110,6 +124,40 @@ async function loadBaseballStandings(slug: string, fallbackLeague: string): Prom
       };
     });
   }).sort((a, b) => a.league.localeCompare(b.league) || a.rank - b.rank);
+}
+
+function translateWnbaGroup(value: string): string {
+  if (/east|восток/i.test(value)) return "Восточная конференция";
+  if (/west|запад/i.test(value)) return "Западная конференция";
+  return "WNBA";
+}
+
+async function loadWnbaStandings(): Promise<StandingRow[]> {
+  const response = await fetch("https://site.api.espn.com/apis/v2/sports/basketball/wnba/standings", { cache: "no-store" });
+  if (!response.ok) throw new Error(`ESPN WNBA standings HTTP ${response.status}`);
+
+  const payload = await response.json() as { children?: EspnStandingGroup[] };
+  return (payload.children || []).flatMap(group => {
+    const division = translateWnbaGroup(group.name || group.abbreviation || "WNBA");
+    return (group.standings?.entries || []).flatMap((entry, index) => {
+      const team = resolveWnbaTeam(entry.team?.displayName || "", entry.team?.id);
+      if (!team) return [];
+      const stat = (name: string) => entry.stats?.find(item => item.name === name);
+      return [{
+        id: wnbaTeamId(team),
+        rank: Number(stat("playoffSeed")?.value || index + 1),
+        league: "WNBA",
+        division,
+        team: team.name,
+        wins: Number(stat("wins")?.value || 0),
+        losses: Number(stat("losses")?.value || 0),
+        pct: stat("winPercent")?.displayValue || "-",
+        gamesBack: stat("gamesBehind")?.displayValue || "-",
+        form: stat("streak")?.displayValue || "-",
+        logo: entry.team?.logos?.[0]?.href
+      } satisfies StandingRow];
+    });
+  }).sort((a, b) => a.division.localeCompare(b.division) || a.rank - b.rank);
 }
 
 function translateMlbGroup(value: string): string {
@@ -204,6 +252,22 @@ export async function GET(request: Request) {
       return NextResponse.json(
         { sport: "esports", league: "COUNTER STRIKE 2 · топ-100", source: "HLTV", standings: [] },
         { status: 502, headers: NO_STORE_HEADERS }
+      );
+    }
+  }
+
+  if (sport === "basketball" && /\bwnba\b/i.test(league)) {
+    try {
+      const standings = await loadWnbaStandings();
+      return NextResponse.json(
+        { sport: "basketball", league: "WNBA", source: standings.length ? "ESPN" : "Справочник", standings: standings.length ? standings : WNBA_REFERENCE_STANDINGS },
+        { headers: NO_STORE_HEADERS }
+      );
+    } catch (error) {
+      console.error("WNBA standings route failed", error);
+      return NextResponse.json(
+        { sport: "basketball", league: "WNBA", source: "Справочник", standings: WNBA_REFERENCE_STANDINGS },
+        { headers: NO_STORE_HEADERS }
       );
     }
   }

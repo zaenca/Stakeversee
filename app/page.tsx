@@ -17,6 +17,12 @@ import {
   resolveMlbTeam,
   type MlbTeamProfile
 } from "@/lib/mlbTeams";
+import {
+  isWnbaMatchContext,
+  resolveWnbaTeam,
+  wnbaTeamId,
+  type WnbaTeamProfile
+} from "@/lib/wnbaTeams";
 
 type AuthMode = "login" | "register";
 type AuthStatus = "idle" | "loading" | "ok" | "error";
@@ -150,6 +156,7 @@ type EsportsTeamProfile = {
 };
 
 type BaseballTeamCard = KboTeamProfile | MlbTeamProfile;
+type LeagueTeamCard = BaseballTeamCard | WnbaTeamProfile;
 type TennisPlayerProfile = {
   id: string;
   name: string;
@@ -167,7 +174,7 @@ type TennisPlayerProfile = {
   kind: "tennis";
 };
 
-type TeamCard = BaseballTeamCard | EsportsTeamProfile | TennisPlayerProfile;
+type TeamCard = LeagueTeamCard | EsportsTeamProfile | TennisPlayerProfile;
 
 type MatchBookmakerKey = "best" | "pari" | "fonbet" | "tennisi";
 
@@ -193,7 +200,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v22";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v23";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
   "stakeversee:line-matches:v13",
@@ -312,9 +319,33 @@ function clientBaseballTeamId(card: BaseballTeamCard): string {
   return card.league === "KBO" ? kboTeamId(card) : mlbTeamId(card);
 }
 
+function clientLeagueTeamCard(value: string, teamId?: string): LeagueTeamCard | null {
+  if (teamId?.startsWith("basketball:")) return resolveWnbaTeam(value, teamId);
+  if (teamId?.startsWith("baseball:")) return clientBaseballTeamCard(value, teamId);
+
+  const wnbaTeam = resolveWnbaTeam(value, teamId);
+  const baseballTeam = clientBaseballTeamCard(value, teamId);
+  if (wnbaTeam && !baseballTeam) return wnbaTeam;
+  return baseballTeam || wnbaTeam;
+}
+
+function clientLeagueTeamId(card: LeagueTeamCard): string {
+  return card.league === "WNBA" ? wnbaTeamId(card) : clientBaseballTeamId(card);
+}
+
 function normalizeClientMatch(match: MatchRow): MatchRow {
-  if (match.sport === "basketball" && /\bwnba\b/i.test(`${match.country} ${match.league}`)) {
-    return { ...match, country: "USA", league: "WNBA" };
+  if (match.sport === "basketball" && isWnbaMatchContext(match.country, match.league, match.home, match.away)) {
+    const home = resolveWnbaTeam(match.home, match.homeTeamId);
+    const away = resolveWnbaTeam(match.away, match.awayTeamId);
+    return {
+      ...match,
+      country: "USA",
+      league: "WNBA",
+      home: home?.name || match.home,
+      away: away?.name || match.away,
+      homeTeamId: home ? wnbaTeamId(home) : match.homeTeamId,
+      awayTeamId: away ? wnbaTeamId(away) : match.awayTeamId
+    };
   }
   if (match.sport === "football" && isWorldCountry(match.country)) {
     const inferredCountry = inferFootballCountry(match.league);
@@ -403,6 +434,13 @@ function baseballMatchPairKey(match: MatchRow): string | null {
     return home && away ? `MLB|${[home.id, away.id].sort().join("~")}` : null;
   }
   return null;
+}
+
+function wnbaMatchPairKey(match: MatchRow): string | null {
+  if (match.sport !== "basketball" || !isWnbaMatchContext(match.country, match.league, match.home, match.away)) return null;
+  const home = resolveWnbaTeam(match.home, match.homeTeamId);
+  const away = resolveWnbaTeam(match.away, match.awayTeamId);
+  return home && away ? `WNBA|${[home.id, away.id].sort().join("~")}` : null;
 }
 
 function footballMatchPairKey(match: MatchRow): string | null {
@@ -619,8 +657,16 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
 
   matches.map(normalizeClientMatch).forEach(match => {
     const startKey = match.startsAt ? Math.round(new Date(match.startsAt).getTime() / (15 * 60 * 1000)) : compactMatchName(match.time);
-    const homeKey = match.sport === "baseball" ? clientBaseballTeamKey(match.home, match.homeTeamId) : compactMatchName(match.home);
-    const awayKey = match.sport === "baseball" ? clientBaseballTeamKey(match.away, match.awayTeamId) : compactMatchName(match.away);
+    const homeKey = match.sport === "baseball"
+      ? clientBaseballTeamKey(match.home, match.homeTeamId)
+      : match.sport === "basketball"
+        ? resolveWnbaTeam(match.home, match.homeTeamId)?.id || compactMatchName(match.home)
+        : compactMatchName(match.home);
+    const awayKey = match.sport === "baseball"
+      ? clientBaseballTeamKey(match.away, match.awayTeamId)
+      : match.sport === "basketball"
+        ? resolveWnbaTeam(match.away, match.awayTeamId)?.id || compactMatchName(match.away)
+        : compactMatchName(match.away);
     const teamKey = [homeKey, awayKey].sort().join("~");
     const key = [
       match.sport,
@@ -633,6 +679,17 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
     const existingBaseballKey = baseballPairKey
       ? Array.from(byKey.entries()).find(([, candidate]) => {
           if (baseballMatchPairKey(candidate) !== baseballPairKey) return false;
+          const matchStart = match.startsAt ? new Date(match.startsAt).getTime() : 0;
+          const candidateStart = candidate.startsAt ? new Date(candidate.startsAt).getTime() : 0;
+          return matchStart && candidateStart
+            ? Math.abs(matchStart - candidateStart) <= 90 * 60 * 1000
+            : compactMatchName(match.time) === compactMatchName(candidate.time);
+        })?.[0]
+      : undefined;
+    const wnbaPairKey = wnbaMatchPairKey(match);
+    const existingWnbaKey = wnbaPairKey
+      ? Array.from(byKey.entries()).find(([, candidate]) => {
+          if (wnbaMatchPairKey(candidate) !== wnbaPairKey) return false;
           const matchStart = match.startsAt ? new Date(match.startsAt).getTime() : 0;
           const candidateStart = candidate.startsAt ? new Date(candidate.startsAt).getTime() : 0;
           return matchStart && candidateStart
@@ -662,7 +719,7 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
             : compactMatchName(match.time) === compactMatchName(candidate.time);
         })?.[0]
       : undefined;
-    const resolvedKey = existingBaseballKey || existingFootballKey || existingEsportsKey || key;
+    const resolvedKey = existingBaseballKey || existingWnbaKey || existingFootballKey || existingEsportsKey || key;
     const current = byKey.get(resolvedKey);
 
     if (!current) {
@@ -674,12 +731,14 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
     const best = bestClientOdds(bookmakerOdds);
     const chosen = match.confidence > current.confidence ? match : current;
     const mergedOdds = best.odds.some(odd => odd && odd !== "-") ? best.odds : current.odds;
-    const canonicalHome = clientBaseballTeamCard(current.home, current.homeTeamId);
-    const canonicalAway = clientBaseballTeamCard(current.away, current.awayTeamId);
+    const canonicalHome = clientLeagueTeamCard(current.home, current.homeTeamId);
+    const canonicalAway = clientLeagueTeamCard(current.away, current.awayTeamId);
     const canonicalLeague = baseballPairKey?.startsWith("KBO|")
       ? "KBO"
       : baseballPairKey?.startsWith("MLB|")
         ? "MLB"
+        : wnbaPairKey
+          ? "WNBA"
         : existingEsportsKey
           ? preferredEsportsLeague(current.league, match.league)
           : current.league;
@@ -687,6 +746,8 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
       ? "South Korea"
       : canonicalLeague === "MLB"
         ? "USA"
+        : canonicalLeague === "WNBA"
+          ? "USA"
         : existingFootballKey && isWorldCountry(current.country)
           ? match.country
           : current.country;
@@ -698,8 +759,8 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
       league: canonicalLeague,
       home: canonicalHome?.name || (/[а-яё]/i.test(current.home) ? current.home : match.home),
       away: canonicalAway?.name || (/[а-яё]/i.test(current.away) ? current.away : match.away),
-      homeTeamId: canonicalHome ? clientBaseballTeamId(canonicalHome) : current.homeTeamId,
-      awayTeamId: canonicalAway ? clientBaseballTeamId(canonicalAway) : current.awayTeamId,
+      homeTeamId: canonicalHome ? clientLeagueTeamId(canonicalHome) : current.homeTeamId,
+      awayTeamId: canonicalAway ? clientLeagueTeamId(canonicalAway) : current.awayTeamId,
       bookmakerOdds,
       odds: mergedOdds,
       bestBookmakers: best.labels,
@@ -3020,13 +3081,14 @@ export default function Home() {
     if (standing || isEsportsTeamCard(card) || isTennisPlayerCard(card)) return;
 
     try {
-      const response = await fetch(`/api/standings?sport=baseball&league=${encodeURIComponent(card.league)}`, { cache: "no-store" });
+      const profileSport = card.league === "WNBA" ? "basketball" : "baseball";
+      const response = await fetch(`/api/standings?sport=${profileSport}&league=${encodeURIComponent(card.league)}`, { cache: "no-store" });
       if (!response.ok) return;
       const payload = await response.json();
       const rows = Array.isArray(payload?.standings) ? payload.standings : [];
       const teamStanding = rows.find((row: Partial<StandingRow>) => (
-        row.id === clientBaseballTeamId(card)
-        || clientBaseballTeamCard(String(row.team || ""), String(row.id || ""))?.id === card.id
+        row.id === clientLeagueTeamId(card)
+        || clientLeagueTeamCard(String(row.team || ""), String(row.id || ""))?.id === card.id
       ));
       if (!teamStanding) return;
       setSelectedTeamCard(current => current?.id === card.id ? {
@@ -3052,7 +3114,7 @@ export default function Home() {
     }
 
     const teamId = side === "home" ? match.homeTeamId : match.awayTeamId;
-    const card = clientBaseballTeamCard(name, teamId);
+    const card = clientLeagueTeamCard(name, teamId);
     if (!card) return;
     void openTeamProfile(card);
   }
@@ -4773,8 +4835,8 @@ export default function Home() {
                   const counterStrikeMatch = isCounterStrikeMatch(match);
                   const homeEsportsStanding = counterStrikeMatch ? esportsStandingForTeam(match.home, counterStrikeRankings) : null;
                   const awayEsportsStanding = counterStrikeMatch ? esportsStandingForTeam(match.away, counterStrikeRankings) : null;
-                  const homeTeamClickable = Boolean(clientBaseballTeamCard(match.home, match.homeTeamId) || counterStrikeMatch);
-                  const awayTeamClickable = Boolean(clientBaseballTeamCard(match.away, match.awayTeamId) || counterStrikeMatch);
+                  const homeTeamClickable = Boolean(clientLeagueTeamCard(match.home, match.homeTeamId) || counterStrikeMatch);
+                  const awayTeamClickable = Boolean(clientLeagueTeamCard(match.away, match.awayTeamId) || counterStrikeMatch);
                   const esportsLeague = match.sport === "esports" ? esportsLeaguePresentation(match.league) : null;
                   const homeTennisPlayers = match.sport === "tennis" ? match.homePlayers || [] : [];
                   const awayTennisPlayers = match.sport === "tennis" ? match.awayPlayers || [] : [];
@@ -4786,7 +4848,7 @@ export default function Home() {
                       <span className="match-meta-sport" title={getSportLabel(match.sport, lang)}>{getSportIcon(match.sport)} {getSportLabel(match.sport, lang)}</span>
                       {esportsLeague ? <span className="match-meta-discipline">{t(esportsLeague.discipline)}</span> : null}
                       <strong>{t(esportsLeague?.league || match.league)}</strong>
-                      {match.sport === "baseball" || match.sport === "tennis" || isCounterStrikeMatch(match) ? (
+                      {match.sport === "baseball" || match.sport === "tennis" || isCounterStrikeMatch(match) || wnbaMatchPairKey(match) ? (
                         <button className="match-standings-button" onClick={() => openStandings(match)} type="button">{t("Таблица")}</button>
                       ) : null}
                       <time>{formatMatchDateTime(match, lang)}</time>
@@ -5903,7 +5965,7 @@ export default function Home() {
                             const awayName = standingsMatch ? searchHaystack(standingsMatch.away) : "";
                             const homeTeamId = standingsMatch?.homeTeamId || "";
                             const awayTeamId = standingsMatch?.awayTeamId || "";
-                            const rowTeamCard = clientBaseballTeamCard(row.team, row.id);
+                            const rowTeamCard = clientLeagueTeamCard(row.team, row.id);
                             const counterStrikeRow = Boolean(standingsMatch && isCounterStrikeMatch(standingsMatch));
                             const tennisRow = Boolean(standingsMatch?.sport === "tennis");
                             const selectedPlayerIds = new Set(selectedTennisPlayers.map(item => item.player.id));

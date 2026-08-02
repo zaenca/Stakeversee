@@ -3,6 +3,7 @@
 import { inferFootballCountry, isWorldCountry } from "@/lib/footballCountries";
 import { KBO_TEAMS, isKboMatchContext, kboTeamId, resolveKboTeam } from "@/lib/kboTeams";
 import { MLB_TEAMS, isMlbMatchContext, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
+import { isWnbaMatchContext, resolveWnbaTeam, wnbaTeamId } from "@/lib/wnbaTeams";
 import {
   hasTop100Participant,
   loadTennisRankings,
@@ -111,7 +112,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v28-tennis-tour-filter";
+const API_VERSION = "bookmakers-v29-wnba-directory";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -529,8 +530,18 @@ function normalizeHockeyLeague(match: RawMatch): RawMatch {
 function normalizeBasketballLeague(match: RawMatch): RawMatch {
   if (match.sport !== "basketball") return match;
   const full = normalizedName(`${match.country} ${match.league}`);
-  if (/\bwnba\b/.test(full)) {
-    return { ...match, country: "USA", league: "WNBA" };
+  if (/\bwnba\b/.test(full) || isWnbaMatchContext(match.country, match.league, match.home, match.away)) {
+    const home = resolveWnbaTeam(match.home, match.homeTeamId);
+    const away = resolveWnbaTeam(match.away, match.awayTeamId);
+    return {
+      ...match,
+      country: "USA",
+      league: "WNBA",
+      home: home?.name || match.home,
+      away: away?.name || match.away,
+      homeTeamId: home ? wnbaTeamId(home) : match.homeTeamId,
+      awayTeamId: away ? wnbaTeamId(away) : match.awayTeamId
+    };
   }
   if (/vba|vietnam|вьетнам/.test(full)) {
     return { ...match, country: "Vietnam", league: "VBA" };
@@ -898,6 +909,9 @@ function normalizedName(value: string): string {
 }
 
 function displayTeamName(match: RawMatch, value: string): string {
+  if (match.sport === "basketball" && isWnbaMatchContext(match.country, match.league, match.home, match.away)) {
+    return resolveWnbaTeam(value)?.name || value;
+  }
   if (match.sport !== "baseball") return value;
   const kboTeam = resolveKboTeam(value);
   if (kboTeam && isKboMatchContext(match.country, match.league, match.home, match.away)) return kboTeam.name;
@@ -951,6 +965,9 @@ function normalizeFootballParticipantAlias(value: string): string {
 }
 
 function normalizedMatchParticipant(match: RawMatch, value: string): string {
+  if (match.sport === "basketball" && isWnbaMatchContext(match.country, match.league, match.home, match.away)) {
+    return resolveWnbaTeam(value)?.id || normalizedName(value);
+  }
   if (match.sport === "baseball") {
     const normalized = normalizedName(displayTeamName(match, value)).replace(/\bde\b/g, " ").replace(/\s+/g, " ").trim();
     return BASEBALL_TEAM_ID_BY_ALIAS.get(normalized) || normalized;
@@ -967,6 +984,8 @@ function normalizedMatchParticipant(match: RawMatch, value: string): string {
 }
 
 function canonicalTeamId(match: RawMatch, value: string): string {
+  const wnbaTeam = match.sport === "basketball" ? resolveWnbaTeam(value) : null;
+  if (wnbaTeam && isWnbaMatchContext(match.country, match.league, match.home, match.away)) return wnbaTeamId(wnbaTeam);
   const kboTeam = match.sport === "baseball" ? resolveKboTeam(value) : null;
   if (kboTeam && isKboMatchContext(match.country, match.league, match.home, match.away)) return kboTeamId(kboTeam);
   const mlbTeam = match.sport === "baseball" ? resolveMlbTeam(value) : null;
@@ -1095,7 +1114,7 @@ function dedupeKey(match: RawMatch): string {
 
 function mergeTimeToleranceMs(sport: string): number {
   if (sport === "football") return 3 * 60 * 60 * 1000;
-  if (sport === "baseball") return 90 * 60 * 1000;
+  if (sport === "baseball" || sport === "basketball") return 90 * 60 * 1000;
   if (sport === "esports") return 90 * 60 * 1000;
   return sport === "tennis" ? 90 * 60 * 1000 : 45 * 60 * 1000;
 }
