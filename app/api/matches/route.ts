@@ -112,7 +112,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v29-wnba-directory";
+const API_VERSION = "bookmakers-v30-tennis-line-coverage";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -549,11 +549,25 @@ function normalizeBasketballLeague(match: RawMatch): RawMatch {
   return match;
 }
 
+const TENNIS_VENUE_COUNTRY_HINTS: Array<[RegExp, string]> = [
+  [/(?:торонто|toronto|монреаль|montreal)/i, "Canada"],
+  [/(?:вашингтон|washington)/i, "USA"]
+];
+
+function normalizeTennisLocale(match: RawMatch): RawMatch {
+  if (match.sport !== "tennis") return match;
+  const context = `${match.country} ${match.league}`;
+  const inferredCountry = TENNIS_VENUE_COUNTRY_HINTS.find(([pattern]) => pattern.test(context))?.[1];
+  return inferredCountry ? { ...match, country: inferredCountry } : match;
+}
+
 function normalizeMatchLocale(match: RawMatch): RawMatch {
   const baseballMatch = normalizeBaseballLeague(match);
   if (baseballMatch !== match) return withTeamIds(baseballMatch);
   const basketballMatch = normalizeBasketballLeague(match);
   if (basketballMatch !== match) return withTeamIds(basketballMatch);
+  const tennisMatch = normalizeTennisLocale(match);
+  if (tennisMatch !== match) return withTeamIds(tennisMatch);
   if (match.sport === "football" && isWorldCountry(match.country)) {
     const inferredCountry = inferFootballCountry(match.league);
     return withTeamIds({ ...match, country: inferredCountry || "World" });
@@ -764,7 +778,7 @@ async function fetchPariLike(urls: string[], source: "pari" | "fonbet" | "tennis
 }
 
 async function fetchTennisiCategory(category: { categoryId: number; path: string; sport: string }): Promise<RawMatch[]> {
-  const url = `https://tennisi.bet/rt/cgi/!rt_home.CategoryInfo?mcmd=cat&mcmdparam=${category.path}&gameid=5&categoryid=${category.categoryId}&lang=rus&more=today`;
+  const url = `https://tennisi.bet/rt/cgi/!rt_home.CategoryInfo?mcmd=cat&mcmdparam=${category.path}&gameid=5&categoryid=${category.categoryId}&lang=rus`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), BOOKMAKER_REQUEST_TIMEOUT_MS);
   try {
