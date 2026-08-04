@@ -4828,6 +4828,39 @@ h1 {
   border-radius: 999px;
 }
 
+.source-dropdown-search-wrap {
+  background: #0b111b;
+  padding: 2px 2px 4px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.source-dropdown-search {
+  background: #111b28;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: #eaf6ff;
+  min-height: 34px;
+  outline: none;
+  padding: 6px 9px;
+  width: 100%;
+}
+
+.source-dropdown-search:focus {
+  border-color: rgba(0, 229, 255, 0.7);
+}
+
+.source-dropdown-search::placeholder {
+  color: var(--muted);
+}
+
+.source-dropdown-empty {
+  color: var(--muted);
+  padding: 12px 10px;
+  text-align: center;
+}
+
 .source-dropdown-item {
   align-items: center;
   background: transparent;
@@ -4870,7 +4903,7 @@ h1 {
 
 .source-dropdown-roi {
   border-radius: 8px;
-  color: #ffffff;
+  color: #05090d;
   flex-shrink: 0;
   font-size: 11px;
   font-weight: 900;

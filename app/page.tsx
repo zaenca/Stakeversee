@@ -1637,13 +1637,19 @@ type SourceDropdownProps = {
 function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sources, value }: SourceDropdownProps) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
+  const [sourceSearch, setSourceSearch] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  const closeDropdown = () => {
+    setOpen(false);
+    setSourceSearch("");
+  };
 
   useEffect(() => {
     if (!open) return;
     const handleOutside = (event: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
+        closeDropdown();
       }
     };
     document.addEventListener("mousedown", handleOutside);
@@ -1652,12 +1658,19 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
 
   const selected = sources.find(source => source.id === value);
   const selectedStat = selected ? roiById.get(selected.id) : undefined;
+  const normalizedSourceSearch = sourceSearch.trim().toLocaleLowerCase("ru");
+  const filteredSources = normalizedSourceSearch
+    ? sources.filter(source => source.name.toLocaleLowerCase("ru").includes(normalizedSourceSearch))
+    : sources;
 
   return (
     <div className="source-dropdown" ref={rootRef}>
       <button
         className="source-dropdown-trigger"
-        onClick={() => setOpen(current => !current)}
+        onClick={() => {
+          if (open) closeDropdown();
+          else setOpen(true);
+        }}
         type="button"
       >
         <span className="source-dropdown-trigger-label">
@@ -1673,17 +1686,28 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
       </button>
       {open ? (
         <div className="source-dropdown-menu" role="listbox">
+          <div className="source-dropdown-search-wrap">
+            <input
+              aria-label={t("Поиск источника")}
+              autoComplete="off"
+              className="source-dropdown-search"
+              onChange={event => setSourceSearch(event.target.value)}
+              placeholder={t("Поиск источника...")}
+              type="search"
+              value={sourceSearch}
+            />
+          </div>
           <button
             className="source-dropdown-item add-source"
             onClick={() => {
               onAddSource();
-              setOpen(false);
+              closeDropdown();
             }}
             type="button"
           >
             + {t("Добавить источник")}
           </button>
-          {sources.map(source => {
+          {filteredSources.map(source => {
             const stat = roiById.get(source.id);
             return (
               <button
@@ -1691,7 +1715,7 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
                 key={source.id}
                 onClick={() => {
                   onChange(source.id);
-                  setOpen(false);
+                  closeDropdown();
                 }}
                 role="option"
                 aria-selected={source.id === value}
@@ -1707,6 +1731,9 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
               </button>
             );
           })}
+          {!filteredSources.length ? (
+            <div className="source-dropdown-empty">{t("Источники не найдены")}</div>
+          ) : null}
         </div>
       ) : null}
     </div>
