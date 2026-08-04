@@ -996,6 +996,16 @@ h1 {
   padding: 0 12px;
 }
 
+.settings-currency-select {
+  background: #111b28;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #eaf6ff;
+  min-height: 38px;
+  padding: 0 12px;
+  width: min(420px, 100%);
+}
+
 .settings-inline-login input,
 .settings-password-grid input {
   background: #111b28;
@@ -3235,6 +3245,20 @@ h1 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.calendar-bet-edit-row > .source-dropdown {
+  min-width: 0;
+}
+
+.calendar-bet-edit-type {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  min-height: 38px;
+  min-width: 100px;
+  padding: 0 9px;
+}
+
 .calendar-bet-edit-result-row {
   display: grid;
   gap: 6px;
@@ -4944,6 +4968,17 @@ h1 {
 
 .right-rail .coupon-controls .source-dropdown:first-child {
   grid-column: 1 / -1;
+}
+
+.coupon-stake-combined {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.coupon-stake-combined select {
+  min-width: 92px;
 }
 
 .right-rail .coupon-item-grid {

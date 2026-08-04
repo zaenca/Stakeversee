@@ -47,6 +47,7 @@ type BetRow = {
   event_name: string;
   sport: string | null;
   bookmaker: string | null;
+  is_freebet: boolean;
   market: string;
   selection: string;
   odds: number | string;
@@ -785,9 +786,17 @@ function parseMoneyValue(value: unknown): number {
   return Number.isFinite(amount) ? amount : 0;
 }
 
-function profitForStake(result: BetRow["result"], stake: number, odds: number): number {
+function isFreebetBet(bet: Pick<BetRow, "is_freebet" | "bookmaker">): boolean {
+  return Boolean(bet.is_freebet) || /\s*·\s*Фрибет\s*$/i.test(bet.bookmaker || "");
+}
+
+function cleanBookmakerName(bookmaker: string | null): string {
+  return (bookmaker || "").replace(/\s*·\s*Фрибет\s*$/i, "").trim();
+}
+
+function profitForStake(result: BetRow["result"], stake: number, odds: number, isFreebet = false): number {
   if (result === "win") return stake * odds - stake;
-  if (result === "loss") return -stake;
+  if (result === "loss") return isFreebet ? 0 : -stake;
   return 0;
 }
 
@@ -825,13 +834,13 @@ function makeSourceStakeMap(sourceIds: string[], fallbackStake: number, existing
 function betProfitValue(bet: BetRow): number {
   const odds = Number(bet.odds || 0);
   return betStakeEntries(bet).reduce((sum, entry) => (
-    sum + profitForStake(bet.result, entry.stake, odds)
+    sum + profitForStake(bet.result, entry.stake, odds, isFreebetBet(bet))
   ), 0);
 }
 
 function betSourceProfitValue(bet: BetRow, sourceId: string): number {
   const stake = sourceId === "__no_source__" ? parseMoneyValue(bet.stake) : getBetSourceStake(bet, sourceId);
-  return profitForStake(bet.result, stake, Number(bet.odds || 0));
+  return profitForStake(bet.result, stake, Number(bet.odds || 0), isFreebetBet(bet));
 }
 
 function betTotalStakeValue(bet: BetRow): number {
@@ -1340,11 +1349,35 @@ function confidenceTierLabel(tier: "hot" | "good" | "neutral", t: (text: string)
   return t("нейтрально");
 }
 
-function formatMoney(value: number) {
+type CurrencyCode = "RUB" | "BYN" | "KZT" | "USD" | "EUR";
+type StakeKind = "cash" | "freebet";
+
+const CURRENCY_OPTIONS: readonly { code: CurrencyCode; label: string }[] = [
+  { code: "RUB", label: "Российский рубль" },
+  { code: "BYN", label: "Белорусский рубль" },
+  { code: "KZT", label: "Тенге" },
+  { code: "USD", label: "Доллар США" },
+  { code: "EUR", label: "Евро" }
+];
+
+function getUserCurrency(user: User | null): CurrencyCode {
+  const currency = user?.user_metadata?.currency;
+  return CURRENCY_OPTIONS.some(option => option.code === currency) ? currency as CurrencyCode : "RUB";
+}
+
+function currencySymbol(currency: CurrencyCode): string {
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency,
+    currencyDisplay: "narrowSymbol"
+  }).formatToParts(0).find(part => part.type === "currency")?.value || currency;
+}
+
+function formatMoney(value: number, currency: CurrencyCode = "RUB") {
   return new Intl.NumberFormat("ru-RU", {
     maximumFractionDigits: 0,
     style: "currency",
-    currency: "RUB"
+    currency
   }).format(value);
 }
 
@@ -1626,6 +1659,7 @@ function writeCachedMatches(matches: MatchRow[]) {
 }
 
 type SourceDropdownProps = {
+  currency: CurrencyCode;
   onAddSource: () => void;
   onChange: (sourceId: string) => void;
   placeholder?: string;
@@ -1634,7 +1668,7 @@ type SourceDropdownProps = {
   value: string;
 };
 
-function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sources, value }: SourceDropdownProps) {
+function SourceDropdownField({ currency, onAddSource, onChange, placeholder, roiById, sources, value }: SourceDropdownProps) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [sourceSearch, setSourceSearch] = useState("");
@@ -1679,7 +1713,7 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
         {selected && selectedStat ? (
           <span className={`source-dropdown-roi ${selectedStat.roi >= 0 ? "positive" : "negative"}`}>
             {selectedStat.roi >= 0 ? "+" : ""}{selectedStat.roi.toFixed(1)}%
-            <small>{selectedStat.profit >= 0 ? "+" : ""}{formatMoney(selectedStat.profit)}</small>
+            <small>{selectedStat.profit >= 0 ? "+" : ""}{formatMoney(selectedStat.profit, currency)}</small>
           </span>
         ) : null}
         <span className="source-dropdown-caret" aria-hidden="true">▾</span>
@@ -1725,7 +1759,7 @@ function SourceDropdownField({ onAddSource, onChange, placeholder, roiById, sour
                 {stat ? (
                   <span className={`source-dropdown-roi ${stat.roi >= 0 ? "positive" : "negative"}`}>
                     {stat.roi >= 0 ? "+" : ""}{stat.roi.toFixed(1)}%
-                    <small>{stat.profit >= 0 ? "+" : ""}{formatMoney(stat.profit)}</small>
+                    <small>{stat.profit >= 0 ? "+" : ""}{formatMoney(stat.profit, currency)}</small>
                   </span>
                 ) : null}
               </button>
@@ -1918,6 +1952,7 @@ function SortableTh({ field, label, onSort, sort }: SortableThProps) {
 type EditBetForm = {
   event_name: string;
   bookmaker: string;
+  is_freebet: boolean;
   odds: string;
   source_stakes: Record<string, string>;
   stake: string;
@@ -1926,6 +1961,7 @@ type EditBetForm = {
 
 type BetCardProps = {
   bet: BetRow;
+  currency: CurrencyCode;
   dataLoading: boolean;
   editForm: EditBetForm | null;
   editingBetId: string | null;
@@ -1948,6 +1984,7 @@ type BetCardProps = {
 
 function BetCard({
   bet,
+  currency,
   dataLoading,
   editForm,
   editingBetId,
@@ -1969,6 +2006,7 @@ function BetCard({
 }: BetCardProps) {
   const { lang, t } = useLanguage();
   const odds = Number(bet.odds || 0);
+  const freebet = isFreebetBet(bet);
   const isEditing = editingBetId === bet.id && !!editForm;
   const cardRef = useRef<HTMLElement | null>(null);
   const attachedSourceIds = getBetSourceIds(bet);
@@ -2029,7 +2067,7 @@ function BetCard({
                 const nextValue = event.target.value;
                 setEditForm(current => (current ? { ...current, stake: nextValue } : current));
               }}
-              placeholder={t("Сумма ₽")}
+              placeholder={`${t("Сумма")} ${currencySymbol(currency)}`}
               style={attachedSourceIds.length ? { display: "none" } : undefined}
               value={editForm.stake}
             />
@@ -2051,19 +2089,33 @@ function BetCard({
                         }
                       } : current);
                     }}
-                    placeholder={t("Ð¡ÑƒÐ¼Ð¼Ð° â‚½")}
+                    placeholder={`${t("Сумма")} ${currencySymbol(currency)}`}
                     value={editForm.source_stakes[sourceId] ?? editForm.stake}
                   />
                 </label>
               ))}
             </div>
           ) : null}
-          <BookmakerDropdownField
-            onChange={bookmaker => setEditForm(current => (current ? { ...current, bookmaker } : current))}
-            options={bookmakerOptions}
-            placeholder={t("Букмекер")}
-            value={editForm.bookmaker}
-          />
+          <div className="calendar-bet-edit-row">
+            <BookmakerDropdownField
+              onChange={bookmaker => setEditForm(current => (current ? { ...current, bookmaker } : current))}
+              options={bookmakerOptions}
+              placeholder={t("Букмекер")}
+              value={editForm.bookmaker}
+            />
+            <select
+              aria-label={t("Тип ставки")}
+              className="calendar-bet-edit-type"
+              onChange={event => {
+                const is_freebet = event.target.value === "freebet";
+                setEditForm(current => (current ? { ...current, is_freebet } : current));
+              }}
+              value={editForm.is_freebet ? "freebet" : "cash"}
+            >
+              <option value="cash">{t("Деньги")}</option>
+              <option value="freebet">{t("Фрибет")}</option>
+            </select>
+          </div>
           <div className="calendar-bet-edit-result-row">
             {(["win", "loss", "return", "pending"] as const).map(option => (
               <button
@@ -2089,13 +2141,15 @@ function BetCard({
           </div>
           <div className="calendar-bet-meta">
             {extraMeta ? <span>{extraMeta}</span> : null}
-            <span>{formatMoney(displayedStake)}</span>
-            <span>{bet.bookmaker ? translateBookmakerLabel(bet.bookmaker, lang) : t("БК не указан")}</span>
+            <span>{formatMoney(displayedStake, currency)}{freebet ? ` ${t("Фрибет")}` : ""}</span>
+            <span>{bet.bookmaker ? translateBookmakerLabel(cleanBookmakerName(bet.bookmaker), lang) : t("БК не указан")}</span>
           </div>
           <div className="calendar-bet-sources">
             {attachedSourceIds.length ? attachedSourceIds.map(sourceId => (
               <span className="calendar-bet-source-tag" key={sourceId}>
-                <small className="calendar-bet-source-stake">{formatMoney(getBetSourceStake(bet, sourceId))}</small>
+                <small className="calendar-bet-source-stake">
+                  {formatMoney(getBetSourceStake(bet, sourceId), currency)}{freebet ? ` ${t("Фрибет")}` : ""}
+                </small>
                 {sourceDisplayName(sourceById.get(sourceId)?.name)}
                 <button
                   aria-label={t("Убрать источник")}
@@ -2142,7 +2196,7 @@ function BetCard({
           ) : (
             <div className="calendar-bet-result">
               {bet.result === "win" ? t("Выигрыш") : bet.result === "loss" ? t("Проигрыш") : t("Возврат")}
-              <strong>{formatMoney(displayedProfit)}</strong>
+              <strong>{formatMoney(displayedProfit, currency)}</strong>
             </div>
           )}
         </>
@@ -2198,7 +2252,7 @@ export default function Home() {
     bookmaker: "",
     sourceId: "",
     stake: "",
-    freebet: ""
+    stakeType: "cash" as StakeKind
   });
   const [sourcePopupOpen, setSourcePopupOpen] = useState(false);
   const [bankrollForm, setBankrollForm] = useState({
@@ -2416,10 +2470,9 @@ export default function Home() {
     }, 1);
   }, [couponItems]);
 
-  const couponRealStake = Number(couponDraft.stake.replace(",", ".")) || 0;
-  const couponFreebet = Number(couponDraft.freebet.replace(",", ".")) || 0;
+  const couponStake = Number(couponDraft.stake.replace(",", ".")) || 0;
   const couponPotentialWin = couponTotalOdds > 1
-    ? couponRealStake * couponTotalOdds + couponFreebet * (couponTotalOdds - 1)
+    ? couponStake * (couponDraft.stakeType === "freebet" ? couponTotalOdds - 1 : couponTotalOdds)
     : 0;
   const bankrollStats = useMemo(() => {
     const map = new Map<string, BankrollEventRow>();
@@ -3366,7 +3419,7 @@ export default function Home() {
         .order("name", { ascending: true }),
       supabase
         .from("bets")
-        .select("id,source_id,extra_source_ids,source_stakes,event_name,sport,bookmaker,market,selection,odds,stake,result,profit,settled_at,created_at")
+        .select("id,source_id,extra_source_ids,source_stakes,event_name,sport,bookmaker,is_freebet,market,selection,odds,stake,result,profit,settled_at,created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(1000),
@@ -3667,7 +3720,7 @@ export default function Home() {
       setDataMessage("");
       const assistantStake = getUserAssistantStake(user);
       if (assistantStake > 0) {
-        setCouponDraft(draft => ({ ...draft, stake: String(assistantStake), freebet: "" }));
+        setCouponDraft(draft => ({ ...draft, stake: String(assistantStake) }));
       }
       return [...current, buildCouponItem(match, bookmaker)];
     });
@@ -3680,9 +3733,8 @@ export default function Home() {
   async function saveCoupon() {
     if (!user) return;
 
-    const stake = Number(couponDraft.stake.replace(",", ".")) || 0;
-    const freebet = Number(couponDraft.freebet.replace(",", ".")) || 0;
-    const activeStake = stake > 0 ? stake : freebet;
+    const activeStake = Number(couponDraft.stake.replace(",", ".")) || 0;
+    const isFreebet = couponDraft.stakeType === "freebet";
 
     if (!couponItems.length) {
       setDataMessage(t("Добавь хотя бы один матч в купон."));
@@ -3704,7 +3756,6 @@ export default function Home() {
       return;
     }
 
-    const bookmaker = freebet > 0 && stake <= 0 ? `${couponDraft.bookmaker} · Фрибет` : couponDraft.bookmaker;
     const existingOutcomeSignatures = new Set(resolvedBets.map(bet => betOutcomeSignature(bet)));
     const duplicateOutcome = couponItems.find(item => existingOutcomeSignatures.has(betOutcomeSignature({
       event_name: item.eventName,
@@ -3737,7 +3788,8 @@ export default function Home() {
     const { error } = await supabase.from("bets").insert({
       user_id: user.id,
       source_id: couponDraft.sourceId,
-      bookmaker,
+      bookmaker: couponDraft.bookmaker,
+      is_freebet: isFreebet,
       stake: activeStake,
       source_stakes: { [couponDraft.sourceId]: activeStake },
       result: "pending",
@@ -3748,7 +3800,7 @@ export default function Home() {
       setDataMessage(error.message);
     } else {
       setCouponItems([]);
-      setCouponDraft(current => ({ ...current, stake: "", freebet: "" }));
+      setCouponDraft(current => ({ ...current, stake: "" }));
       setCouponOpen(false);
       setDataMessage(t("Купон сохранён в ставки."));
       await loadWorkspaceData(user.id);
@@ -3831,7 +3883,7 @@ export default function Home() {
 
     const stake = parseMoneyValue(bet.stake);
     const odds = Number(bet.odds || 0);
-    const profit = profitForStake(result, stake, odds);
+    const profit = profitForStake(result, stake, odds, isFreebetBet(bet));
     const bankrollAmount = betTotalProfitValue({ ...bet, result });
     const settledAt = new Date().toISOString();
 
@@ -3898,7 +3950,8 @@ export default function Home() {
     setEditingBetId(bet.id);
     setEditForm({
       event_name: formatEventName(bet.event_name),
-      bookmaker: bet.bookmaker || "",
+      bookmaker: cleanBookmakerName(bet.bookmaker),
+      is_freebet: isFreebetBet(bet),
       odds: String(bet.odds ?? ""),
       stake: String(bet.stake ?? ""),
       source_stakes: sourceIds.reduce<Record<string, string>>((map, sourceId) => {
@@ -3931,7 +3984,7 @@ export default function Home() {
       : {};
     const primaryStake = sourceIds.length ? (sourceStakes[sourceIds[0]] || 0) : fallbackStake;
     const eventName = editForm.event_name.trim() || bet.event_name;
-    const bookmaker = editForm.bookmaker.trim();
+    const bookmaker = cleanBookmakerName(editForm.bookmaker);
     const result = editForm.result;
 
     if (odds <= 0 || primaryStake < 0 || Object.values(sourceStakes).some(stake => stake < 0)) {
@@ -3946,15 +3999,17 @@ export default function Home() {
       odds,
       stake: primaryStake,
       source_stakes: sourceStakes,
+      is_freebet: editForm.is_freebet,
       result
     };
-    const profit = result === "pending" ? null : profitForStake(result, primaryStake, odds);
+    const profit = result === "pending" ? null : profitForStake(result, primaryStake, odds, editForm.is_freebet);
     const bankrollAmount = result === "pending" ? null : betTotalProfitValue(nextBetForTotals);
     const settledAt = result === "pending" ? null : (bet.settled_at || new Date().toISOString());
 
     const payload: {
       event_name: string;
       bookmaker: string | null;
+      is_freebet: boolean;
       odds: number;
       stake: number;
       source_stakes: Record<string, number>;
@@ -3964,6 +4019,7 @@ export default function Home() {
     } = {
       event_name: eventName,
       bookmaker: bookmaker || null,
+      is_freebet: editForm.is_freebet,
       odds,
       stake: primaryStake,
       source_stakes: sourceStakes,
@@ -4051,7 +4107,7 @@ export default function Home() {
 
     const { data: allBets, error: betsError } = await supabase
       .from("bets")
-      .select("id,source_id,extra_source_ids,source_stakes,event_name,market,selection,odds,stake,result,profit,settled_at,created_at")
+      .select("id,source_id,extra_source_ids,source_stakes,event_name,sport,bookmaker,is_freebet,market,selection,odds,stake,result,profit,settled_at,created_at")
       .eq("user_id", user.id)
       .neq("result", "pending")
       .limit(5000);
@@ -4189,6 +4245,17 @@ export default function Home() {
       setDataMessage(error.message);
     } else if (data.user) {
       setUser(data.user);
+    }
+  }
+
+  async function saveCurrency(currency: CurrencyCode) {
+    if (!user) return;
+    const { data, error } = await supabase.auth.updateUser({ data: { currency } });
+    if (error) {
+      setDataMessage(error.message);
+    } else if (data.user) {
+      setUser(data.user);
+      setDataMessage("");
     }
   }
 
@@ -4395,6 +4462,7 @@ export default function Home() {
     const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || t("Игрок");
     const avatarUrl: string | null = user.user_metadata?.avatar_url || null;
     const timezoneOffsetMinutes = getUserTimezoneOffsetMinutes(user);
+    const profileCurrency = getUserCurrency(user);
     const flatStake = getUserFlatStake(user);
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
@@ -4512,6 +4580,24 @@ export default function Home() {
               <div className="settings-divider" />
 
               <div className="settings-section">
+                <div className="settings-section-title">{t("Валюта")}</div>
+                <select
+                  aria-label={t("Валюта")}
+                  className="settings-currency-select"
+                  onChange={event => saveCurrency(event.target.value as CurrencyCode)}
+                  value={profileCurrency}
+                >
+                  {CURRENCY_OPTIONS.map(option => (
+                    <option key={option.code} value={option.code}>
+                      {t(option.label)} ({currencySymbol(option.code)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="settings-divider" />
+
+              <div className="settings-section">
                 <div className="settings-section-title">Пароль</div>
                 <div className="settings-password-actions">
                   <button
@@ -4579,7 +4665,7 @@ export default function Home() {
                   <input
                     inputMode="decimal"
                     onChange={event => setFlatStakeInput(event.target.value)}
-                    placeholder={t("Сумма флэта ₽")}
+                    placeholder={`${t("Сумма флэта")} ${currencySymbol(profileCurrency)}`}
                     value={flatStakeInput}
                   />
                   <button
@@ -4594,7 +4680,7 @@ export default function Home() {
                   </button>
                 </div>
                 {flatStake > 0 ? (
-                  <div className="settings-flat-hint">{t("Текущий флэт:")} {formatMoney(flatStake)} · ½ {t("флэта:")} {formatMoney(flatStake / 2)}</div>
+                  <div className="settings-flat-hint">{t("Текущий флэт:")} {formatMoney(flatStake, profileCurrency)} · ½ {t("флэта:")} {formatMoney(flatStake / 2, profileCurrency)}</div>
                 ) : (
                   <div className="settings-flat-hint">{t("Задай фиксированную сумму ставки, чтобы быстро выбирать её в купоне.")}</div>
                 )}
@@ -4621,7 +4707,7 @@ export default function Home() {
                             const amount = Number(raw.replace(",", "."));
                             saveSourceFixedStake(source.id, Number.isFinite(amount) && amount > 0 ? amount : null);
                           }}
-                          placeholder={t("Сумма ₽")}
+                          placeholder={`${t("Сумма")} ${currencySymbol(profileCurrency)}`}
                           ref={element => { if (element) settingsSourceStakeRefs.current[source.id] = element; }}
                         />
                         <button
@@ -5010,6 +5096,7 @@ export default function Home() {
                 </div>
                 <form className="compact-bet-form" onSubmit={handleBetSubmit}>
                   <SourceDropdownField
+                    currency={profileCurrency}
                     onAddSource={() => setSourcePopupOpen(true)}
                     onChange={sourceId => setBetForm(current => ({ ...current, sourceId }))}
                     placeholder={t("Источник")}
@@ -5036,7 +5123,7 @@ export default function Home() {
                   <input
                     inputMode="decimal"
                     onChange={event => setBetForm(current => ({ ...current, stake: event.target.value }))}
-                    placeholder={t("Сумма")}
+                    placeholder={`${t("Сумма")} ${currencySymbol(profileCurrency)}`}
                     value={betForm.stake}
                   />
                   <button disabled={dataLoading} type="submit">{t("Добавить")}</button>
@@ -5111,7 +5198,7 @@ export default function Home() {
                       type="button"
                     >
                       {day.day}
-                      {dayProfit !== 0 ? <small>{dayProfit > 0 ? "+" : ""}{dayProfit}{"\u20bd"}</small> : null}
+                      {dayProfit !== 0 ? <small>{dayProfit > 0 ? "+" : ""}{formatMoney(dayProfit, profileCurrency)}</small> : null}
                     </button>
                   );
                 })}
@@ -5162,6 +5249,7 @@ export default function Home() {
 
                   <div className="coupon-controls">
                     <SourceDropdownField
+                      currency={profileCurrency}
                       onAddSource={() => setSourcePopupOpen(true)}
                       onChange={sourceId => {
                         const selectedSource = sources.find(source => source.id === sourceId);
@@ -5180,25 +5268,32 @@ export default function Home() {
                       options={bookmakerOptions}
                       value={couponDraft.bookmaker}
                     />
-                    <input
-                      inputMode="decimal"
-                      onChange={event => setCouponDraft(current => ({ ...current, stake: event.target.value }))}
-                      placeholder={t("Ставка ₽")}
-                      value={couponDraft.stake}
-                    />
-                    <input
-                      inputMode="decimal"
-                      onChange={event => setCouponDraft(current => ({ ...current, freebet: event.target.value }))}
-                      placeholder={t("Фрибет")}
-                      value={couponDraft.freebet}
-                    />
+                    <div className="coupon-stake-combined">
+                      <input
+                        inputMode="decimal"
+                        onChange={event => setCouponDraft(current => ({ ...current, stake: event.target.value }))}
+                        placeholder={`${t("Сумма")} ${currencySymbol(profileCurrency)}`}
+                        value={couponDraft.stake}
+                      />
+                      <select
+                        aria-label={t("Тип ставки")}
+                        onChange={event => setCouponDraft(current => ({
+                          ...current,
+                          stakeType: event.target.value as StakeKind
+                        }))}
+                        value={couponDraft.stakeType}
+                      >
+                        <option value="cash">{t("Деньги")}</option>
+                        <option value="freebet">{t("Фрибет")}</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div className="coupon-stake-quickpick">
                     <button
                       disabled={flatStake <= 0}
                       onClick={() => setCouponDraft(current => ({ ...current, stake: String(flatStake) }))}
-                      title={flatStake > 0 ? formatMoney(flatStake) : t("Задай флэт в настройках профиля")}
+                      title={flatStake > 0 ? formatMoney(flatStake, profileCurrency) : t("Задай флэт в настройках профиля")}
                       type="button"
                     >
                       {t("Флэт")}
@@ -5206,7 +5301,7 @@ export default function Home() {
                     <button
                       disabled={flatStake <= 0}
                       onClick={() => setCouponDraft(current => ({ ...current, stake: String(Math.round((flatStake / 2) * 100) / 100) }))}
-                      title={flatStake > 0 ? formatMoney(flatStake / 2) : t("Задай флэт в настройках профиля")}
+                      title={flatStake > 0 ? formatMoney(flatStake / 2, profileCurrency) : t("Задай флэт в настройках профиля")}
                       type="button"
                     >
                       ½ {t("Флэта")}
@@ -5240,7 +5335,7 @@ export default function Home() {
                     </div>
                     <div>
                       <span>{t("Возможный выигрыш")}</span>
-                      <strong>{couponPotentialWin > 0 ? formatMoney(couponPotentialWin) : "—"}</strong>
+                      <strong>{couponPotentialWin > 0 ? formatMoney(couponPotentialWin, profileCurrency) : "—"}</strong>
                     </div>
                   </div>
 
@@ -5292,7 +5387,7 @@ export default function Home() {
               <div className="bank-balance">
                 <div>
                   <span>{t("Баланс")}</span>
-                  <strong>{formatMoney(displayedBalance)}</strong>
+                  <strong>{formatMoney(displayedBalance, profileCurrency)}</strong>
                 </div>
                 <div className="bank-actions">
                   <button
@@ -5411,7 +5506,7 @@ export default function Home() {
                       autoFocus
                       inputMode="decimal"
                       onChange={event => setBankrollForm(current => ({ ...current, amount: event.target.value }))}
-                      placeholder={t("Сумма")}
+                      placeholder={`${t("Сумма")} ${currencySymbol(profileCurrency)}`}
                       value={bankrollForm.amount}
                     />
                     <div className="bank-modal-actions">
@@ -5458,6 +5553,7 @@ export default function Home() {
                       {calendarBets.map(bet => (
                         <BetCard
                           bet={bet}
+                          currency={profileCurrency}
                           dataLoading={dataLoading}
                           editForm={editForm}
                           editingBetId={editingBetId}
@@ -5566,7 +5662,7 @@ export default function Home() {
                                       onClick={event => toggleFixedStakePopover(source.id, event.currentTarget)}
                                       title={
                                         sources.find(row => row.id === source.id)?.fixed_stake
-                                          ? `${t("Фикс. ставка:")} ${formatMoney(Number(sources.find(row => row.id === source.id)?.fixed_stake))}`
+                                          ? `${t("Фикс. ставка:")} ${formatMoney(Number(sources.find(row => row.id === source.id)?.fixed_stake), profileCurrency)}`
                                           : t("Задать фиксированную ставку для этого источника")
                                       }
                                       type="button"
@@ -5583,7 +5679,7 @@ export default function Home() {
                                           autoFocus
                                           inputMode="decimal"
                                           onChange={event => setSourceFixedStakeInput(event.target.value)}
-                                          placeholder={t("Сумма ₽")}
+                                          placeholder={`${t("Сумма")} ${currencySymbol(profileCurrency)}`}
                                           value={sourceFixedStakeInput}
                                         />
                                         <button
@@ -5614,14 +5710,14 @@ export default function Home() {
                               </td>
                               <td>
                                 <span className={source.roi >= 0 ? "roi-positive" : "roi-negative"}>{source.roi >= 0 ? "+" : ""}{source.roi.toFixed(1)}%</span>
-                                <span className={`stats-roi-amount ${source.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}`}>{source.profit >= 0 ? "+" : ""}{formatMoney(source.profit)}</span>
+                                <span className={`stats-roi-amount ${source.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}`}>{source.profit >= 0 ? "+" : ""}{formatMoney(source.profit, profileCurrency)}</span>
                               </td>
                               <td>{source.bets}</td>
                               <td>{source.wins}/{source.losses}</td>
                               <td>{source.winrate.toFixed(0)}%</td>
                               <td>{source.avgOdds.toFixed(2)}</td>
-                              <td>{formatMoney(source.stake)}</td>
-                              <td>{formatMoney(source.avgStake)}</td>
+                              <td>{formatMoney(source.stake, profileCurrency)}</td>
+                              <td>{formatMoney(source.avgStake, profileCurrency)}</td>
                               <td>
                                 <button
                                   className="source-stat-view-button"
@@ -5695,13 +5791,13 @@ export default function Home() {
                               <td className="stats-table-name">{translateBookmakerLabel(bookmaker.name, lang)}</td>
                               <td>
                                 <span className={bookmaker.roi >= 0 ? "roi-positive" : "roi-negative"}>{bookmaker.roi >= 0 ? "+" : ""}{bookmaker.roi.toFixed(1)}%</span>
-                                <span className={`stats-roi-amount ${bookmaker.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}`}>{bookmaker.profit >= 0 ? "+" : ""}{formatMoney(bookmaker.profit)}</span>
+                                <span className={`stats-roi-amount ${bookmaker.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}`}>{bookmaker.profit >= 0 ? "+" : ""}{formatMoney(bookmaker.profit, profileCurrency)}</span>
                               </td>
                               <td>{bookmaker.bets}</td>
                               <td>{bookmaker.wins}/{bookmaker.losses}</td>
                               <td>{bookmaker.winrate.toFixed(0)}%</td>
                               <td>{bookmaker.avgOdds.toFixed(2)}</td>
-                              <td>{formatMoney(bookmaker.stake)}</td>
+                              <td>{formatMoney(bookmaker.stake, profileCurrency)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -5718,16 +5814,16 @@ export default function Home() {
                   <div className="bankroll-summary-grid">
                     <div>
                       <span>{t("Пополнено")}</span>
-                      <strong className="roi-positive-text">{formatMoney(bankrollStats.deposits)}</strong>
+                      <strong className="roi-positive-text">{formatMoney(bankrollStats.deposits, profileCurrency)}</strong>
                     </div>
                     <div>
                       <span>{t("Выведено")}</span>
-                      <strong className="roi-negative-text">{formatMoney(bankrollStats.withdrawals)}</strong>
+                      <strong className="roi-negative-text">{formatMoney(bankrollStats.withdrawals, profileCurrency)}</strong>
                     </div>
                     <div>
                       <span>{t("Итого")}</span>
                       <strong className={bankrollStats.deposits - bankrollStats.withdrawals >= 0 ? "roi-positive-text" : "roi-negative-text"}>
-                        {formatMoney(bankrollStats.deposits - bankrollStats.withdrawals)}
+                        {formatMoney(bankrollStats.deposits - bankrollStats.withdrawals, profileCurrency)}
                       </strong>
                     </div>
                   </div>
@@ -5739,7 +5835,7 @@ export default function Home() {
                         </span>
                         <span className="bankroll-adjustment-note">{event.note ? t(event.note) : t(event.kind === "deposit" ? "Пополнение" : "Вывод")}</span>
                         <strong className={event.kind === "deposit" ? "roi-positive-text" : "roi-negative-text"}>
-                          {event.kind === "deposit" ? "+" : ""}{formatMoney(Number(event.amount || 0))}
+                          {event.kind === "deposit" ? "+" : ""}{formatMoney(Number(event.amount || 0), profileCurrency)}
                         </strong>
                       </div>
                     )) : <span className="empty">{t("Пополнения и выводы появятся здесь после первой операции с балансом.")}</span>}
@@ -5774,6 +5870,7 @@ export default function Home() {
                       return (
                         <BetCard
                           bet={bet}
+                          currency={profileCurrency}
                           dataLoading={dataLoading}
                           editForm={editForm}
                           editingBetId={editingBetId}
@@ -6163,7 +6260,7 @@ export default function Home() {
                       <div><span>{t("Проиграло")}</span><strong className="roi-negative-text">{assistantForecastStats.losses}</strong></div>
                       <div><span>{t("Средний кэф")}</span><strong>{assistantForecastStats.avgOdds.toFixed(2)}</strong></div>
                       <div><span>{t("ROI")}</span><strong className={assistantForecastStats.roi >= 0 ? "roi-positive-text" : "roi-negative-text"}>{assistantForecastStats.roi.toFixed(1)}%</strong></div>
-                      <div><span>{t("Профит")}</span><strong className={assistantForecastStats.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(assistantForecastStats.profit)}</strong></div>
+                      <div><span>{t("Профит")}</span><strong className={assistantForecastStats.profit >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(assistantForecastStats.profit, profileCurrency)}</strong></div>
                     </div>
 
                     <div className="assistant-feed assistant-stats-list">
@@ -6181,7 +6278,7 @@ export default function Home() {
                               <strong>
                                 {bet.result === "win" ? t("Прогноз выиграл") : bet.result === "loss" ? t("Прогноз проиграл") : t("Возврат")}
                               </strong>
-                              <span className={betTotalProfitValue(bet) >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(betTotalProfitValue(bet))}</span>
+                              <span className={betTotalProfitValue(bet) >= 0 ? "roi-positive-text" : "roi-negative-text"}>{formatMoney(betTotalProfitValue(bet), profileCurrency)}</span>
                             </div>
                           </div>
                         ))
@@ -6197,7 +6294,7 @@ export default function Home() {
                     <div className="assistant-settings">
                       <div className="assistant-setting-card">
                         <span>{t("Фиксированная ставка")}</span>
-                        <strong>{getUserAssistantStake(user) > 0 ? formatMoney(getUserAssistantStake(user)) : t("Не задана")}</strong>
+                        <strong>{getUserAssistantStake(user) > 0 ? formatMoney(getUserAssistantStake(user), profileCurrency) : t("Не задана")}</strong>
                         <p>{t("Эта сумма будет автоматически подставляться в купон для прогнозов AI ассистента. Перед сохранением купона её можно изменить вручную.")}</p>
                       </div>
                       <label className="assistant-setting-field">
@@ -6205,7 +6302,7 @@ export default function Home() {
                         <input
                           inputMode="decimal"
                           onChange={event => setAssistantStakeInput(event.target.value)}
-                          placeholder={t("Например 100 ₽")}
+                          placeholder={`${t("Например")} 100 ${currencySymbol(profileCurrency)}`}
                           value={assistantStakeInput}
                         />
                       </label>
