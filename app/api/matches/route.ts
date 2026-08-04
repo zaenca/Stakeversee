@@ -3,6 +3,7 @@
 import { inferFootballCountry, isWorldCountry } from "@/lib/footballCountries";
 import { KBO_TEAMS, isKboMatchContext, kboTeamId, resolveKboTeam } from "@/lib/kboTeams";
 import { MLB_TEAMS, isMlbMatchContext, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
+import { NPB_TEAMS, isNpbMatchContext, npbTeamId, resolveNpbTeam } from "@/lib/npbTeams";
 import { isWnbaMatchContext, resolveWnbaTeam, wnbaTeamId } from "@/lib/wnbaTeams";
 import {
   hasTop100Participant,
@@ -112,7 +113,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v30-tennis-line-coverage";
+const API_VERSION = "bookmakers-v31-npb-canonical";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -128,7 +129,8 @@ const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["tigres quintana roo", ["tigres quintana roo", "tigres de quintana roo", "quintana roo", "тигрес"]],
   ["leones yucatan", ["leones yucatan", "leones de yucatan", "yucatan", "юкатан"]],
   ...KBO_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]]),
-  ...MLB_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]])
+  ...MLB_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]]),
+  ...NPB_TEAMS.map(team => [team.id, [team.id, team.name, team.shortName, ...team.aliases]] as [string, string[]])
 ];
 
 const BASEBALL_TEAM_ID_BY_ALIAS = new Map(
@@ -474,6 +476,11 @@ const HOCKEY_FRIENDLY_COUNTRY_HINTS: Array<[RegExp, string]> = [
 function normalizeBaseballLeague(match: RawMatch): RawMatch {
   if (match.sport !== "baseball") return match;
   const full = normalizedName(`${match.country} ${match.league}`);
+  const isNpbReserve = /reserve|резерв|farm|minor/.test(full)
+    && /\bnpb\b|japan|япон|чемпионат японии/.test(full);
+  if (isNpbReserve) {
+    return { ...match, country: "Japan", league: "NPB. Резерв" };
+  }
   const home = resolveKboTeam(match.home, match.homeTeamId);
   const away = resolveKboTeam(match.away, match.awayTeamId);
   if (/kbo|korea|south korea|коре|южн\s+коре|чемпионат\s+южн\s+коре/.test(full)
@@ -495,6 +502,17 @@ function normalizeBaseballLeague(match: RawMatch): RawMatch {
       league: "MLB",
       home: mlbHome?.name || match.home,
       away: mlbAway?.name || match.away
+    };
+  }
+  const npbHome = resolveNpbTeam(match.home, match.homeTeamId);
+  const npbAway = resolveNpbTeam(match.away, match.awayTeamId);
+  if (isNpbMatchContext(match.country, match.league, match.home, match.away)) {
+    return {
+      ...match,
+      country: "Japan",
+      league: "NPB",
+      home: npbHome?.name || match.home,
+      away: npbAway?.name || match.away
     };
   }
   if (/lmb|mexico|мексик/.test(full)) {
@@ -931,6 +949,8 @@ function displayTeamName(match: RawMatch, value: string): string {
   if (kboTeam && isKboMatchContext(match.country, match.league, match.home, match.away)) return kboTeam.name;
   const mlbTeam = resolveMlbTeam(value);
   if (mlbTeam && isMlbMatchContext(match.country, match.league, match.home, match.away)) return mlbTeam.name;
+  const npbTeam = resolveNpbTeam(value);
+  if (npbTeam && isNpbMatchContext(match.country, match.league, match.home, match.away)) return npbTeam.name;
   return value;
 }
 
@@ -1004,6 +1024,8 @@ function canonicalTeamId(match: RawMatch, value: string): string {
   if (kboTeam && isKboMatchContext(match.country, match.league, match.home, match.away)) return kboTeamId(kboTeam);
   const mlbTeam = match.sport === "baseball" ? resolveMlbTeam(value) : null;
   if (mlbTeam && isMlbMatchContext(match.country, match.league, match.home, match.away)) return mlbTeamId(mlbTeam);
+  const npbTeam = match.sport === "baseball" ? resolveNpbTeam(value) : null;
+  if (npbTeam && isNpbMatchContext(match.country, match.league, match.home, match.away)) return npbTeamId(npbTeam);
   const participant = normalizedMatchParticipant(match, value);
   return [match.sport, match.country, match.league, participant]
     .map(part => normalizedName(part))

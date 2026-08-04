@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { loadHltvRankings } from "@/lib/hltv";
 import { KBO_TEAMS, kboTeamId } from "@/lib/kboTeams";
 import { MLB_TEAMS, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
+import { NPB_TEAMS, npbTeamId, resolveNpbTeam } from "@/lib/npbTeams";
 import { loadTennisRankings, type TennisTour } from "@/lib/tennisRankings";
 import { WNBA_TEAMS, resolveWnbaTeam, wnbaTeamId } from "@/lib/wnbaTeams";
 
@@ -92,6 +93,19 @@ const WNBA_REFERENCE_STANDINGS: StandingRow[] = WNBA_TEAMS.map((team, index) => 
   form: "-"
 }));
 
+const NPB_REFERENCE_STANDINGS: StandingRow[] = NPB_TEAMS.map(team => ({
+  id: npbTeamId(team),
+  rank: team.rank,
+  league: "NPB",
+  division: team.division,
+  team: team.name,
+  wins: 0,
+  losses: 0,
+  pct: "-",
+  gamesBack: "-",
+  form: "-"
+}));
+
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   Pragma: "no-cache",
@@ -158,6 +172,72 @@ async function loadWnbaStandings(): Promise<StandingRow[]> {
       } satisfies StandingRow];
     });
   }).sort((a, b) => a.division.localeCompare(b.division) || a.rank - b.rank);
+}
+
+function decodeNpbHtml(value: string): string {
+  return value
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)));
+}
+
+function npbCellText(value: string): string {
+  return decodeNpbHtml(value.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+}
+
+function parseNpbStandingsHtml(html: string, division: string): StandingRow[] {
+  const found = new Map<string, StandingRow>();
+  const rows = html.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || [];
+
+  rows.forEach(row => {
+    const cells = (row.match(/<t[dh]\b[^>]*>[\s\S]*?<\/t[dh]>/gi) || []).map(npbCellText);
+    const teamIndex = cells.findIndex(cell => Boolean(resolveNpbTeam(cell)));
+    if (teamIndex < 0) return;
+
+    const team = resolveNpbTeam(cells[teamIndex]);
+    const values = cells.slice(teamIndex + 1);
+    if (!team || values.length < 6) return;
+
+    const wins = Number(values[1]);
+    const losses = Number(values[2]);
+    if (!Number.isFinite(wins) || !Number.isFinite(losses)) return;
+
+    found.set(team.id, {
+      id: npbTeamId(team),
+      rank: found.size + 1,
+      league: "NPB",
+      division,
+      team: team.name,
+      wins,
+      losses,
+      pct: values[4] || "-",
+      gamesBack: values[5] || "-",
+      form: "-"
+    });
+  });
+
+  return Array.from(found.values()).map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
+async function loadNpbStandings(): Promise<StandingRow[]> {
+  const year = new Date().getUTCFullYear();
+  const groups = [
+    { division: "Центральная лига", url: `https://npb.jp/bis/eng/${year}/stats/std_c.html` },
+    { division: "Тихоокеанская лига", url: `https://npb.jp/bis/eng/${year}/stats/std_p.html` }
+  ];
+  const standings = (await Promise.all(groups.map(async group => {
+    const response = await fetch(group.url, {
+      cache: "no-store",
+      headers: { "user-agent": "Mozilla/5.0 Stakeversee/1.0" }
+    });
+    if (!response.ok) throw new Error(`NPB standings HTTP ${response.status}`);
+    return parseNpbStandingsHtml(await response.text(), group.division);
+  }))).flat();
+
+  if (standings.length < 10) throw new Error(`NPB standings returned ${standings.length} teams`);
+  return standings;
 }
 
 function translateMlbGroup(value: string): string {
@@ -267,6 +347,22 @@ export async function GET(request: Request) {
       console.error("WNBA standings route failed", error);
       return NextResponse.json(
         { sport: "basketball", league: "WNBA", source: "Справочник", standings: WNBA_REFERENCE_STANDINGS },
+        { headers: NO_STORE_HEADERS }
+      );
+    }
+  }
+
+  if (sport === "baseball" && /\bnpb\b|japan|япон|чемпионат японии/i.test(league) && !/reserve|резерв/i.test(league)) {
+    try {
+      const standings = await loadNpbStandings();
+      return NextResponse.json(
+        { sport: "baseball", league: "NPB", source: "NPB.jp", standings },
+        { headers: NO_STORE_HEADERS }
+      );
+    } catch (error) {
+      console.error("NPB standings route failed", error);
+      return NextResponse.json(
+        { sport: "baseball", league: "NPB", source: "Справочник", standings: NPB_REFERENCE_STANDINGS },
         { headers: NO_STORE_HEADERS }
       );
     }

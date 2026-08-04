@@ -18,6 +18,12 @@ import {
   type MlbTeamProfile
 } from "@/lib/mlbTeams";
 import {
+  isNpbMatchContext,
+  npbTeamId,
+  resolveNpbTeam,
+  type NpbTeamProfile
+} from "@/lib/npbTeams";
+import {
   isWnbaMatchContext,
   resolveWnbaTeam,
   wnbaTeamId,
@@ -156,7 +162,7 @@ type EsportsTeamProfile = {
   kind: "esports";
 };
 
-type BaseballTeamCard = KboTeamProfile | MlbTeamProfile;
+type BaseballTeamCard = KboTeamProfile | MlbTeamProfile | NpbTeamProfile;
 type LeagueTeamCard = BaseballTeamCard | WnbaTeamProfile;
 type TennisPlayerProfile = {
   id: string;
@@ -313,11 +319,13 @@ function clientBaseballTeamKey(value: string, teamId?: string): string {
 }
 
 function clientBaseballTeamCard(value: string, teamId?: string): BaseballTeamCard | null {
-  return resolveKboTeam(value, teamId) || resolveMlbTeam(value, teamId);
+  return resolveKboTeam(value, teamId) || resolveMlbTeam(value, teamId) || resolveNpbTeam(value, teamId);
 }
 
 function clientBaseballTeamId(card: BaseballTeamCard): string {
-  return card.league === "KBO" ? kboTeamId(card) : mlbTeamId(card);
+  if (card.league === "KBO") return kboTeamId(card);
+  if (card.league === "MLB") return mlbTeamId(card);
+  return npbTeamId(card);
 }
 
 function clientLeagueTeamCard(value: string, teamId?: string): LeagueTeamCard | null {
@@ -385,6 +393,33 @@ function normalizeClientMatch(match: MatchRow): MatchRow {
     };
   }
 
+  const baseballContext = compactMatchName(`${match.country} ${match.league}`);
+  const isNpbReserve = /reserve|резерв|farm|minor/.test(baseballContext)
+    && /\bnpb\b|japan|япон|чемпионат японии/.test(baseballContext);
+  if (isNpbReserve) {
+    return {
+      ...match,
+      country: "Japan",
+      league: "NPB. Резерв",
+      homeTeamId: `baseball:japan:npb-reserve:${compactMatchName(match.home)}`,
+      awayTeamId: `baseball:japan:npb-reserve:${compactMatchName(match.away)}`
+    };
+  }
+
+  const npbHomeCard = resolveNpbTeam(match.home, match.homeTeamId);
+  const npbAwayCard = resolveNpbTeam(match.away, match.awayTeamId);
+  if (isNpbMatchContext(match.country, match.league, match.home, match.away)) {
+    return {
+      ...match,
+      country: "Japan",
+      league: "NPB",
+      home: npbHomeCard?.name || match.home,
+      away: npbAwayCard?.name || match.away,
+      homeTeamId: npbHomeCard ? npbTeamId(npbHomeCard) : match.homeTeamId,
+      awayTeamId: npbAwayCard ? npbTeamId(npbAwayCard) : match.awayTeamId
+    };
+  }
+
   const homeKey = clientBaseballTeamKey(match.home, match.homeTeamId);
   const awayKey = clientBaseballTeamKey(match.away, match.awayTeamId);
   const full = compactMatchName(`${match.country} ${match.league}`);
@@ -433,6 +468,11 @@ function baseballMatchPairKey(match: MatchRow): string | null {
     const home = resolveMlbTeam(match.home, match.homeTeamId);
     const away = resolveMlbTeam(match.away, match.awayTeamId);
     return home && away ? `MLB|${[home.id, away.id].sort().join("~")}` : null;
+  }
+  if (isNpbMatchContext(match.country, match.league, match.home, match.away)) {
+    const home = resolveNpbTeam(match.home, match.homeTeamId);
+    const away = resolveNpbTeam(match.away, match.awayTeamId);
+    return home && away ? `NPB|${[home.id, away.id].sort().join("~")}` : null;
   }
   return null;
 }
@@ -738,20 +778,24 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
       ? "KBO"
       : baseballPairKey?.startsWith("MLB|")
         ? "MLB"
-        : wnbaPairKey
-          ? "WNBA"
-        : existingEsportsKey
-          ? preferredEsportsLeague(current.league, match.league)
-          : current.league;
+        : baseballPairKey?.startsWith("NPB|")
+          ? "NPB"
+          : wnbaPairKey
+            ? "WNBA"
+            : existingEsportsKey
+              ? preferredEsportsLeague(current.league, match.league)
+              : current.league;
     const canonicalCountry = canonicalLeague === "KBO"
       ? "South Korea"
       : canonicalLeague === "MLB"
         ? "USA"
-        : canonicalLeague === "WNBA"
-          ? "USA"
-        : existingFootballKey && isWorldCountry(current.country)
-          ? match.country
-          : current.country;
+        : canonicalLeague === "NPB"
+          ? "Japan"
+          : canonicalLeague === "WNBA"
+            ? "USA"
+            : existingFootballKey && isWorldCountry(current.country)
+              ? match.country
+              : current.country;
 
     byKey.set(resolvedKey, {
       ...current,
@@ -1371,6 +1415,10 @@ function currencySymbol(currency: CurrencyCode): string {
     currency,
     currencyDisplay: "narrowSymbol"
   }).formatToParts(0).find(part => part.type === "currency")?.value || currency;
+}
+
+function currencyStakeLabel(currency: CurrencyCode): string {
+  return `${currency} ${currencySymbol(currency)}`;
 }
 
 function formatMoney(value: number, currency: CurrencyCode = "RUB") {
@@ -2112,7 +2160,7 @@ function BetCard({
               }}
               value={editForm.is_freebet ? "freebet" : "cash"}
             >
-              <option value="cash">{t("Деньги")}</option>
+              <option value="cash">{currencyStakeLabel(currency)}</option>
               <option value="freebet">{t("Фрибет")}</option>
             </select>
           </div>
@@ -5283,7 +5331,7 @@ export default function Home() {
                         }))}
                         value={couponDraft.stakeType}
                       >
-                        <option value="cash">{t("Деньги")}</option>
+                        <option value="cash">{currencyStakeLabel(profileCurrency)}</option>
                         <option value="freebet">{t("Фрибет")}</option>
                       </select>
                     </div>
