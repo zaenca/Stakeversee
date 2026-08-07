@@ -5331,7 +5331,7 @@ export default function Home() {
                         }))}
                         value={couponDraft.stakeType}
                       >
-                        <option value="cash">{currencyStakeLabel(profileCurrency)}</option>
+                        <option value="cash">{currencySymbol(profileCurrency)}</option>
                         <option value="freebet">{t("Фрибет")}</option>
                       </select>
                     </div>
