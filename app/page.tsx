@@ -661,24 +661,27 @@ function normalizeStandingRows(rows: unknown[]): StandingRow[] {
 
 function formatStandingForm(value?: string): string {
   const raw = String(value || "").trim();
-  if (!raw || raw === "-") return "-";
-  const streak = raw.toUpperCase().match(/^([WLDВПН])\s*(\d+)$/);
+  if (!raw || raw === "-") return "⚪⚪⚪⚪⚪";
+  const upper = raw.toUpperCase();
+  const win = "🟢";
+  const loss = "🔴";
+  const draw = "🟡";
+  const unknown = "⚪";
+  const streak = upper.match(/^([WLDВПН])\s*(\d+)$/);
   if (streak) {
     const [, mark, countValue] = streak;
     const count = Math.min(5, Math.max(1, Number(countValue) || 1));
-    return Array.from({ length: count }, () => {
-      if (mark === "W" || mark === "В") return "🟢";
-      if (mark === "D" || mark === "Н") return "🟡";
-      return "🔴";
-    }).join("");
+    const symbol = mark === "W" || mark === "В" ? win : mark === "D" || mark === "Н" ? draw : loss;
+    return `${symbol.repeat(count)}${unknown.repeat(5 - count)}`;
   }
-  const marks = Array.from(raw.toUpperCase().replace(/[^WLDВПН]/g, "")).slice(0, 5);
+  const marks = Array.from(upper.replace(/[^WLDВПН]/g, "")).slice(0, 5);
   if (!marks.length) return raw;
-  return marks.map(mark => {
-    if (mark === "W" || mark === "В") return "🟢";
-    if (mark === "D" || mark === "Н") return "🟡";
-    return "🔴";
-  }).join("");
+  const symbols = marks.map(mark => {
+    if (mark === "W" || mark === "В") return win;
+    if (mark === "D" || mark === "Н") return draw;
+    return loss;
+  });
+  return `${symbols.join("")}${unknown.repeat(Math.max(0, 5 - symbols.length))}`;
 }
 
 function esportsMatchPairKey(match: MatchRow): string | null {
@@ -6175,7 +6178,6 @@ export default function Home() {
                               <span>{t("В")}</span>
                               <span>{t("П")}</span>
                               <span>{t("Поб. %")}</span>
-                              <span>{t("Отст.")}</span>
                               <span>{t("Форма")}</span>
                             </div>
                           )}
@@ -6234,8 +6236,7 @@ export default function Home() {
                                   <span>{row.wins}</span>
                                   <span>{row.losses}</span>
                                   <span>{row.pct}</span>
-                                  <span>{row.gamesBack}</span>
-                                  <span className="standings-form" title={row.form || "-"}>{formatStandingForm(row.form)}</span>
+                                  <span className="standings-form">{formatStandingForm(row.form)}</span>
                                 </>
                               )}
                             </div>

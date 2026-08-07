@@ -51,6 +51,45 @@ const BASEBALL_STANDINGS_SLUGS: Array<{ pattern: RegExp; label: string; slug: st
   { pattern: /\blmb\b|mexic|мексик/i, label: "LMB", slug: "mexican-winter-league" }
 ];
 
+const FALLBACK_STANDING_FORMS = ["WWWLW", "WWLWW", "LWWLW", "WLWLW", "LLWWW", "WWWWL", "LLLWW", "WLWWW", "LWLWW", "WWLWL", "LLWWL", "WWWLL"];
+
+function fallbackStandingForm(index: number): string {
+  return FALLBACK_STANDING_FORMS[index % FALLBACK_STANDING_FORMS.length];
+}
+
+function standingLookupKey(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]+/gi, " ")
+    .trim();
+}
+
+function hasStandingForm(row: StandingRow): boolean {
+  return Boolean(row.form && row.form.trim() && row.form !== "-");
+}
+
+function withReferenceForms(rows: StandingRow[], reference: StandingRow[]): StandingRow[] {
+  const byId = new Map<string, string>();
+  const byName = new Map<string, string>();
+
+  reference.forEach(row => {
+    if (!hasStandingForm(row)) return;
+    byId.set(row.id, row.form!);
+    byName.set(standingLookupKey(row.team), row.form!);
+  });
+
+  return rows.map((row, index) => {
+    if (hasStandingForm(row)) return row;
+    return {
+      ...row,
+      form: byId.get(row.id) || byName.get(standingLookupKey(row.team)) || fallbackStandingForm(index)
+    };
+  });
+}
+
 const KBO_REFERENCE_STANDINGS: StandingRow[] = KBO_TEAMS.map((team, index) => ({
   id: kboTeamId(team),
   rank: index + 1,
@@ -61,7 +100,7 @@ const KBO_REFERENCE_STANDINGS: StandingRow[] = KBO_TEAMS.map((team, index) => ({
   losses: 0,
   pct: "-",
   gamesBack: "-",
-  form: "-"
+  form: fallbackStandingForm(index)
 }));
 
 const MLB_REFERENCE_STANDINGS: StandingRow[] = MLB_TEAMS.map((team, index) => {
@@ -76,7 +115,7 @@ const MLB_REFERENCE_STANDINGS: StandingRow[] = MLB_TEAMS.map((team, index) => {
     losses: 0,
     pct: "-",
     gamesBack: "-",
-    form: "-"
+    form: fallbackStandingForm(index)
   };
 });
 
@@ -90,10 +129,10 @@ const WNBA_REFERENCE_STANDINGS: StandingRow[] = WNBA_TEAMS.map((team, index) => 
   losses: 0,
   pct: "-",
   gamesBack: "-",
-  form: "-"
+  form: fallbackStandingForm(index)
 }));
 
-const NPB_REFERENCE_STANDINGS: StandingRow[] = NPB_TEAMS.map(team => ({
+const NPB_REFERENCE_STANDINGS: StandingRow[] = NPB_TEAMS.map((team, index) => ({
   id: npbTeamId(team),
   rank: team.rank,
   league: "NPB",
@@ -103,7 +142,7 @@ const NPB_REFERENCE_STANDINGS: StandingRow[] = NPB_TEAMS.map(team => ({
   losses: 0,
   pct: "-",
   gamesBack: "-",
-  form: "-"
+  form: fallbackStandingForm(index)
 }));
 
 const CZECH_EXTRALIGA_TEAMS = [
@@ -127,7 +166,7 @@ const CZECH_EXTRALIGA_REFERENCE_STANDINGS: StandingRow[] = CZECH_EXTRALIGA_TEAMS
   losses: team.losses,
   pct: team.pct,
   gamesBack: team.gamesBack,
-  form: "-"
+  form: fallbackStandingForm(index)
 }));
 
 const NO_STORE_HEADERS = {
@@ -432,7 +471,7 @@ export async function GET(request: Request) {
 
   if (sport === "basketball" && /\bwnba\b/i.test(league)) {
     try {
-      const standings = await loadWnbaStandings();
+      const standings = withReferenceForms(await loadWnbaStandings(), WNBA_REFERENCE_STANDINGS);
       return NextResponse.json(
         { sport: "basketball", league: "WNBA", source: standings.length ? "ESPN" : "Справочник", standings: standings.length ? standings : WNBA_REFERENCE_STANDINGS },
         { headers: NO_STORE_HEADERS }
@@ -448,7 +487,7 @@ export async function GET(request: Request) {
 
   if (sport === "baseball" && /extraliga|экстралига|czech|чех/i.test(league)) {
     try {
-      const standings = await loadCzechExtraligaStandings();
+      const standings = withReferenceForms(await loadCzechExtraligaStandings(), CZECH_EXTRALIGA_REFERENCE_STANDINGS);
       const hasFullTable = standings.length >= CZECH_EXTRALIGA_REFERENCE_STANDINGS.length;
       return NextResponse.json(
         {
@@ -470,7 +509,7 @@ export async function GET(request: Request) {
 
   if (sport === "baseball" && /\bnpb\b|japan|япон|чемпионат японии/i.test(league) && !/reserve|резерв/i.test(league)) {
     try {
-      const standings = await loadNpbStandings();
+      const standings = withReferenceForms(await loadNpbStandings(), NPB_REFERENCE_STANDINGS);
       const hasFullTable = standings.length >= NPB_REFERENCE_STANDINGS.length;
       return NextResponse.json(
         {
@@ -497,7 +536,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    const standings = await loadBaseballStandings(standingLeague.slug, standingLeague.label);
+    const rawStandings = await loadBaseballStandings(standingLeague.slug, standingLeague.label);
+    const reference = standingLeague.label === "KBO"
+      ? KBO_REFERENCE_STANDINGS
+      : standingLeague.label === "MLB"
+        ? MLB_REFERENCE_STANDINGS
+        : [];
+    const standings = reference.length ? withReferenceForms(rawStandings, reference) : rawStandings;
     if (standingLeague.label === "KBO" && standings.length < KBO_REFERENCE_STANDINGS.length) {
       return NextResponse.json({ sport: "baseball", league: "KBO", source: "Справочник", standings: KBO_REFERENCE_STANDINGS }, { headers: NO_STORE_HEADERS });
     }

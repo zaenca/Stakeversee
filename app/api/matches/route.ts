@@ -113,7 +113,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v31-npb-canonical";
+const API_VERSION = "bookmakers-v32-standings-form-mlb-tennisi";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -1144,8 +1144,12 @@ function sameParticipants(left: RawMatch, right: RawMatch): boolean {
 
 function dedupeKey(match: RawMatch): string {
   const bucket = Math.round(match.startMs / (15 * 60 * 1000));
-  const teams = [match.homeTeamId || canonicalTeamId(match, match.home), match.awayTeamId || canonicalTeamId(match, match.away)].sort().join("~");
+  const teams = participantIdPair(match);
   return `${match.sport}|${bucket}|${normalizedName(match.country)}|${normalizedName(match.league)}|${teams}`;
+}
+
+function participantIdPair(match: RawMatch): string {
+  return [match.homeTeamId || canonicalTeamId(match, match.home), match.awayTeamId || canonicalTeamId(match, match.away)].sort().join("~");
 }
 
 function mergeTimeToleranceMs(sport: string): number {
@@ -1183,6 +1187,7 @@ function findMergeKey(byKey: Map<string, RawMatch>, match: RawMatch): string | n
   for (const [key, current] of byKey) {
     if (current.sport !== match.sport) continue;
     if (Math.abs(current.startMs - match.startMs) > mergeTimeToleranceMs(match.sport)) continue;
+    if (match.sport === "baseball" && participantIdPair(current) === participantIdPair(match)) return key;
     if (sameParticipants(current, match)) return key;
   }
 

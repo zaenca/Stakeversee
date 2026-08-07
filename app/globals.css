@@ -1866,6 +1866,7 @@ h1 {
   gap: 12px;
   height: min(760px, 90vh);
   max-width: 860px;
+  min-height: 0;
   padding: 22px;
   position: relative;
   overflow: hidden;
@@ -1979,11 +1980,13 @@ h1 {
 }
 
 .standings-groups {
+  align-content: start;
   display: grid;
   flex: 1 1 auto;
   gap: 12px;
-  max-height: min(58vh, 560px);
+  max-height: none;
   min-height: 0;
+  overscroll-behavior: contain;
   overflow-y: auto;
   padding-right: 8px;
   scrollbar-color: var(--cyan) rgba(255, 255, 255, 0.08);
@@ -2005,8 +2008,11 @@ h1 {
 }
 
 .standings-form {
-  font-size: 0.86rem;
-  letter-spacing: 0.12em;
+  display: inline-block;
+  font-size: 0.43rem;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  min-width: 34px;
   white-space: nowrap;
 }
 
@@ -2208,7 +2214,7 @@ h1 {
   display: grid;
   font-size: 0.78rem;
   gap: 8px;
-  grid-template-columns: 34px minmax(150px, 1fr) 42px 42px 58px 48px 72px;
+  grid-template-columns: 34px minmax(150px, 1fr) 42px 42px 58px 54px;
   min-height: 34px;
   padding: 0 10px;
 }
