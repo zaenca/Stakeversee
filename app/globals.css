@@ -746,6 +746,71 @@ h1 {
   color: var(--text);
 }
 
+.workspace-shell.theme-dark {
+  --bg: #000;
+  --panel: #050505;
+  --panel-soft: #101010;
+  --line: rgba(255, 255, 255, 0.16);
+  --muted: #aab3c2;
+  --text: #fff;
+  background: #000;
+  color: #fff;
+}
+
+.workspace-shell.theme-light {
+  --bg: #fff;
+  --panel: #fff;
+  --panel-soft: #f5f7fb;
+  --line: rgba(15, 23, 42, 0.16);
+  --muted: #334155;
+  --text: #000;
+  background: #fff;
+  color: #000;
+}
+
+.workspace-shell.theme-light .workspace-topbar,
+.workspace-shell.theme-light .match-board,
+.workspace-shell.theme-light .right-rail,
+.workspace-shell.theme-light .calendar-panel,
+.workspace-shell.theme-light .bank-panel,
+.workspace-shell.theme-light .quick-coupon-card,
+.workspace-shell.theme-light .match-card,
+.workspace-shell.theme-light .profile-pill,
+.workspace-shell.theme-light .settings-modal,
+.workspace-shell.theme-light .settings-modal-head button,
+.workspace-shell.theme-light .source-dropdown-menu,
+.workspace-shell.theme-light .settings-timezone-list {
+  background: #fff;
+  color: #000;
+}
+
+.workspace-shell.theme-light .settings-modal-backdrop {
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.workspace-shell.theme-light .sport-tabs button,
+.workspace-shell.theme-light .match-filters,
+.workspace-shell.theme-light .source-dropdown-trigger,
+.workspace-shell.theme-light .settings-currency-select,
+.workspace-shell.theme-light .settings-inline-login input,
+.workspace-shell.theme-light .settings-password-grid input,
+.workspace-shell.theme-light .settings-flat-row input,
+.workspace-shell.theme-light .settings-source-stake-row input,
+.workspace-shell.theme-light input,
+.workspace-shell.theme-light select,
+.workspace-shell.theme-light textarea {
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.18);
+  color: #000;
+}
+
+.workspace-shell.theme-light .muted,
+.workspace-shell.theme-light small,
+.workspace-shell.theme-light .settings-flat-hint,
+.workspace-shell.theme-light .settings-profile-email {
+  color: #334155;
+}
+
 .workspace-topbar {
   align-items: center;
   border-bottom: 1px solid var(--line);
@@ -1004,6 +1069,40 @@ h1 {
   min-height: 38px;
   padding: 0 12px;
   width: min(420px, 100%);
+}
+
+.settings-theme-toggle {
+  display: inline-grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
+  width: min(360px, 100%);
+}
+
+.settings-theme-toggle button {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.settings-theme-toggle button.active {
+  background: rgba(0, 229, 255, 0.14);
+  border-color: rgba(0, 229, 255, 0.55);
+  color: var(--cyan);
+}
+
+.workspace-shell.theme-light .settings-theme-toggle button {
+  background: #f8fafc;
+  color: #000;
+}
+
+.workspace-shell.theme-light .settings-theme-toggle button.active {
+  background: #dffaff;
+  color: #000;
 }
 
 .settings-inline-login input,

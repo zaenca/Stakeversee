@@ -1446,6 +1446,7 @@ function confidenceTierLabel(tier: "hot" | "good" | "neutral", t: (text: string)
 
 type CurrencyCode = "RUB" | "BYN" | "KZT" | "USD" | "EUR";
 type StakeKind = "cash" | "freebet";
+type AppTheme = "dark" | "light";
 
 const CURRENCY_OPTIONS: readonly { code: CurrencyCode; label: string }[] = [
   { code: "RUB", label: "Российский рубль" },
@@ -1458,6 +1459,15 @@ const CURRENCY_OPTIONS: readonly { code: CurrencyCode; label: string }[] = [
 function getUserCurrency(user: User | null): CurrencyCode {
   const currency = user?.user_metadata?.currency;
   return CURRENCY_OPTIONS.some(option => option.code === currency) ? currency as CurrencyCode : "RUB";
+}
+
+const THEME_OPTIONS: readonly { key: AppTheme; label: string }[] = [
+  { key: "dark", label: "Темная" },
+  { key: "light", label: "Светлая" }
+];
+
+function getUserTheme(user: User | null): AppTheme {
+  return user?.user_metadata?.theme === "light" ? "light" : "dark";
 }
 
 function currencySymbol(currency: CurrencyCode): string {
@@ -4358,6 +4368,17 @@ export default function Home() {
     }
   }
 
+  async function saveTheme(theme: AppTheme) {
+    if (!user) return;
+    const { data, error } = await supabase.auth.updateUser({ data: { theme } });
+    if (error) {
+      setDataMessage(error.message);
+    } else if (data.user) {
+      setUser(data.user);
+      setDataMessage("");
+    }
+  }
+
   async function saveAvatar(file: File) {
     if (!user) return;
     // Уменьшаем и обрезаем до квадрата на клиенте, чтобы не хранить в
@@ -4562,6 +4583,7 @@ export default function Home() {
     const avatarUrl: string | null = user.user_metadata?.avatar_url || null;
     const timezoneOffsetMinutes = getUserTimezoneOffsetMinutes(user);
     const profileCurrency = getUserCurrency(user);
+    const profileTheme = getUserTheme(user);
     const flatStake = getUserFlatStake(user);
     const shownMatches = activeMatches;
     const displayedBalance = BASE_BANKROLL + bankrollStats.balance;
@@ -4570,7 +4592,7 @@ export default function Home() {
     const selectedTimezone = TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes) || TIMEZONE_OPTIONS[1];
 
     return (
-      <main className="workspace-shell">
+      <main className={`workspace-shell theme-${profileTheme}`}>
         <header className="workspace-topbar">
           <div className="workspace-brand">Stakeversee</div>
 
@@ -4692,6 +4714,24 @@ export default function Home() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="settings-divider" />
+
+              <div className="settings-section">
+                <div className="settings-section-title">Тема</div>
+                <div className="settings-theme-toggle" role="group" aria-label="Тема">
+                  {THEME_OPTIONS.map(option => (
+                    <button
+                      className={profileTheme === option.key ? "active" : ""}
+                      key={option.key}
+                      onClick={() => saveTheme(option.key)}
+                      type="button"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="settings-divider" />
@@ -4905,23 +4945,31 @@ export default function Home() {
                   <span>{t("Дисциплина:")}</span>
                   <MatchFilterDropdown
                     onChange={value => { setDisciplineFilter(value); setLeagueFilter("all"); }}
-                    options={Array.from(disciplineCounts.values())
-                      .sort((a, b) => {
-                        const orderA = ESPORTS_DISCIPLINES.findIndex(item => item.key === a.key);
-                        const orderB = ESPORTS_DISCIPLINES.findIndex(item => item.key === b.key);
-                        if (orderA !== orderB) {
-                          if (orderA === -1) return 1;
-                          if (orderB === -1) return -1;
-                          return orderA - orderB;
-                        }
-                        return a.label.localeCompare(b.label, lang === "en" ? "en" : "ru");
-                      })
-                      .map(discipline => ({
-                        count: discipline.count,
-                        flag: discipline.icon,
-                        label: discipline.label,
-                        value: discipline.key
-                      }))}
+                    options={[
+                      {
+                        count: Array.from(disciplineCounts.values()).reduce((sum, discipline) => sum + discipline.count, 0),
+                        flag: "🎮",
+                        label: "Все дисциплины",
+                        value: "all"
+                      },
+                      ...Array.from(disciplineCounts.values())
+                        .sort((a, b) => {
+                          const orderA = ESPORTS_DISCIPLINES.findIndex(item => item.key === a.key);
+                          const orderB = ESPORTS_DISCIPLINES.findIndex(item => item.key === b.key);
+                          if (orderA !== orderB) {
+                            if (orderA === -1) return 1;
+                            if (orderB === -1) return -1;
+                            return orderA - orderB;
+                          }
+                          return a.label.localeCompare(b.label, lang === "en" ? "en" : "ru");
+                        })
+                        .map(discipline => ({
+                          count: discipline.count,
+                          flag: discipline.icon,
+                          label: discipline.label,
+                          value: discipline.key
+                        }))
+                    ]}
                     placeholderIcon="🎮"
                     placeholderLabel={t("Все дисциплины")}
                     value={disciplineFilter}
@@ -4935,15 +4983,23 @@ export default function Home() {
                       setTennisTourFilter(value === "ATP" || value === "WTA" ? value : "all");
                       setLeagueFilter("all");
                     }}
-                    options={([
-                      { tour: "ATP" as TennisTour, label: "ATP · Мужчины" },
-                      { tour: "WTA" as TennisTour, label: "WTA · Женщины" }
-                    ]).map(item => ({
-                      count: tennisTourCounts.get(item.tour) || 0,
-                      flag: "🎾",
-                      label: t(item.label),
-                      value: item.tour
-                    }))}
+                    options={[
+                      {
+                        count: (tennisTourCounts.get("ATP") || 0) + (tennisTourCounts.get("WTA") || 0),
+                        flag: "🎾",
+                        label: "ATP / WTA",
+                        value: "all"
+                      },
+                      ...([
+                        { tour: "ATP" as TennisTour, label: "ATP · Мужчины" },
+                        { tour: "WTA" as TennisTour, label: "WTA · Женщины" }
+                      ]).map(item => ({
+                        count: tennisTourCounts.get(item.tour) || 0,
+                        flag: "🎾",
+                        label: t(item.label),
+                        value: item.tour
+                      }))
+                    ]}
                     placeholderIcon="🎾"
                     placeholderLabel="ATP / WTA"
                     value={tennisTourFilter}
@@ -4954,14 +5010,22 @@ export default function Home() {
                   <span>{t("Страна:")}</span>
                   <MatchFilterDropdown
                     onChange={value => { setCountryFilter(value); setLeagueFilter("all"); }}
-                    options={Array.from(countryCounts.entries())
-                      .map(([country, count]) => ({
-                        count,
-                        flag: <FlagIcon country={country} />,
-                        label: getCountryLabel(country, lang),
-                        value: country
-                      }))
-                      .sort((a, b) => a.label.localeCompare(b.label, lang === "en" ? "en" : "ru"))}
+                    options={[
+                      {
+                        count: Array.from(countryCounts.values()).reduce((sum, count) => sum + count, 0),
+                        flag: "🌍",
+                        label: "Все страны",
+                        value: "all"
+                      },
+                      ...Array.from(countryCounts.entries())
+                        .map(([country, count]) => ({
+                          count,
+                          flag: <FlagIcon country={country} />,
+                          label: getCountryLabel(country, lang),
+                          value: country
+                        }))
+                        .sort((a, b) => a.label.localeCompare(b.label, lang === "en" ? "en" : "ru"))
+                    ]}
                     placeholderIcon="🌍"
                     placeholderLabel={t("Все страны")}
                     value={countryFilter}
@@ -4972,20 +5036,28 @@ export default function Home() {
                 <span>{t("Лига:")}</span>
                 <MatchFilterDropdown
                   onChange={setLeagueFilter}
-                  options={Array.from(leagueCounts.values())
-                    .sort((infoA, infoB) => {
-                      const sportCmp = sportTabs.findIndex(tab => tab.key === infoA.sport) - sportTabs.findIndex(tab => tab.key === infoB.sport);
-                      if (sportCmp !== 0) return sportCmp;
-                      const countryCmp = getCountryLabel(infoA.country, lang).localeCompare(getCountryLabel(infoB.country, lang), lang === "en" ? "en" : "ru");
-                      if (countryCmp !== 0) return countryCmp;
-                      return infoA.league.localeCompare(infoB.league, lang === "en" ? "en" : "ru");
-                    })
-                    .map(info => ({
-                      count: info.count,
-                      flag: <FlagIcon country={info.country} />,
-                      label: `${getSportIcon(info.sport)} ${getCountryLabel(info.country, lang)} \u2014 ${t(info.league)}`,
-                      value: info.league
-                    }))}
+                  options={[
+                    {
+                      count: Array.from(leagueCounts.values()).reduce((sum, info) => sum + info.count, 0),
+                      flag: "🏆",
+                      label: "Все лиги",
+                      value: "all"
+                    },
+                    ...Array.from(leagueCounts.values())
+                      .sort((infoA, infoB) => {
+                        const sportCmp = sportTabs.findIndex(tab => tab.key === infoA.sport) - sportTabs.findIndex(tab => tab.key === infoB.sport);
+                        if (sportCmp !== 0) return sportCmp;
+                        const countryCmp = getCountryLabel(infoA.country, lang).localeCompare(getCountryLabel(infoB.country, lang), lang === "en" ? "en" : "ru");
+                        if (countryCmp !== 0) return countryCmp;
+                        return infoA.league.localeCompare(infoB.league, lang === "en" ? "en" : "ru");
+                      })
+                      .map(info => ({
+                        count: info.count,
+                        flag: <FlagIcon country={info.country} />,
+                        label: `${getSportIcon(info.sport)} ${getCountryLabel(info.country, lang)} \u2014 ${t(info.league)}`,
+                        value: info.league
+                      }))
+                  ]}
                   placeholderIcon="🏆"
                   placeholderLabel={t("Все лиги")}
                   value={leagueFilter}
