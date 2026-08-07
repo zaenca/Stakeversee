@@ -24,6 +24,12 @@ import {
   type NpbTeamProfile
 } from "@/lib/npbTeams";
 import {
+  czechBaseballTeamId,
+  isCzechBaseballMatchContext,
+  resolveCzechBaseballTeam,
+  type CzechBaseballTeamProfile
+} from "@/lib/czechBaseballTeams";
+import {
   isWnbaMatchContext,
   resolveWnbaTeam,
   wnbaTeamId,
@@ -162,7 +168,7 @@ type EsportsTeamProfile = {
   kind: "esports";
 };
 
-type BaseballTeamCard = KboTeamProfile | MlbTeamProfile | NpbTeamProfile;
+type BaseballTeamCard = KboTeamProfile | MlbTeamProfile | NpbTeamProfile | CzechBaseballTeamProfile;
 type LeagueTeamCard = BaseballTeamCard | WnbaTeamProfile;
 type TennisPlayerProfile = {
   id: string;
@@ -319,13 +325,14 @@ function clientBaseballTeamKey(value: string, teamId?: string): string {
 }
 
 function clientBaseballTeamCard(value: string, teamId?: string): BaseballTeamCard | null {
-  return resolveKboTeam(value, teamId) || resolveMlbTeam(value, teamId) || resolveNpbTeam(value, teamId);
+  return resolveKboTeam(value, teamId) || resolveMlbTeam(value, teamId) || resolveNpbTeam(value, teamId) || resolveCzechBaseballTeam(value, teamId);
 }
 
 function clientBaseballTeamId(card: BaseballTeamCard): string {
   if (card.league === "KBO") return kboTeamId(card);
   if (card.league === "MLB") return mlbTeamId(card);
-  return npbTeamId(card);
+  if (card.league === "NPB") return npbTeamId(card);
+  return czechBaseballTeamId(card);
 }
 
 function clientLeagueTeamCard(value: string, teamId?: string): LeagueTeamCard | null {
@@ -420,6 +427,20 @@ function normalizeClientMatch(match: MatchRow): MatchRow {
     };
   }
 
+  const czechHomeCard = resolveCzechBaseballTeam(match.home, match.homeTeamId);
+  const czechAwayCard = resolveCzechBaseballTeam(match.away, match.awayTeamId);
+  if (isCzechBaseballMatchContext(match.country, match.league, match.home, match.away)) {
+    return {
+      ...match,
+      country: "Czech Republic",
+      league: "Экстралига",
+      home: czechHomeCard?.name || match.home,
+      away: czechAwayCard?.name || match.away,
+      homeTeamId: czechHomeCard ? czechBaseballTeamId(czechHomeCard) : match.homeTeamId,
+      awayTeamId: czechAwayCard ? czechBaseballTeamId(czechAwayCard) : match.awayTeamId
+    };
+  }
+
   const homeKey = clientBaseballTeamKey(match.home, match.homeTeamId);
   const awayKey = clientBaseballTeamKey(match.away, match.awayTeamId);
   const full = compactMatchName(`${match.country} ${match.league}`);
@@ -473,6 +494,11 @@ function baseballMatchPairKey(match: MatchRow): string | null {
     const home = resolveNpbTeam(match.home, match.homeTeamId);
     const away = resolveNpbTeam(match.away, match.awayTeamId);
     return home && away ? `NPB|${[home.id, away.id].sort().join("~")}` : null;
+  }
+  if (isCzechBaseballMatchContext(match.country, match.league, match.home, match.away)) {
+    const home = resolveCzechBaseballTeam(match.home, match.homeTeamId);
+    const away = resolveCzechBaseballTeam(match.away, match.awayTeamId);
+    return home && away ? `CZECH|${[home.id, away.id].sort().join("~")}` : null;
   }
   return null;
 }
@@ -631,6 +657,28 @@ function normalizeStandingRows(rows: unknown[]): StandingRow[] {
       tour: (row.tour === "WTA" ? "WTA" : row.tour === "ATP" ? "ATP" : undefined) as TennisTour | undefined
     };
   }).filter(row => row.team);
+}
+
+function formatStandingForm(value?: string): string {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "-") return "-";
+  const streak = raw.toUpperCase().match(/^([WLDВПН])\s*(\d+)$/);
+  if (streak) {
+    const [, mark, countValue] = streak;
+    const count = Math.min(5, Math.max(1, Number(countValue) || 1));
+    return Array.from({ length: count }, () => {
+      if (mark === "W" || mark === "В") return "🟢";
+      if (mark === "D" || mark === "Н") return "🟡";
+      return "🔴";
+    }).join("");
+  }
+  const marks = Array.from(raw.toUpperCase().replace(/[^WLDВПН]/g, "")).slice(0, 5);
+  if (!marks.length) return raw;
+  return marks.map(mark => {
+    if (mark === "W" || mark === "В") return "🟢";
+    if (mark === "D" || mark === "Н") return "🟡";
+    return "🔴";
+  }).join("");
 }
 
 function esportsMatchPairKey(match: MatchRow): string | null {
@@ -6187,7 +6235,7 @@ export default function Home() {
                                   <span>{row.losses}</span>
                                   <span>{row.pct}</span>
                                   <span>{row.gamesBack}</span>
-                                  <span>{row.form || "-"}</span>
+                                  <span className="standings-form" title={row.form || "-"}>{formatStandingForm(row.form)}</span>
                                 </>
                               )}
                             </div>

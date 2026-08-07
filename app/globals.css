@@ -1982,8 +1982,32 @@ h1 {
   display: grid;
   flex: 1 1 auto;
   gap: 12px;
-  max-height: none;
+  max-height: min(58vh, 560px);
   min-height: 0;
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-color: var(--cyan) rgba(255, 255, 255, 0.08);
+  scrollbar-width: thin;
+}
+
+.standings-groups::-webkit-scrollbar {
+  width: 8px;
+}
+
+.standings-groups::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+
+.standings-groups::-webkit-scrollbar-thumb {
+  background: var(--cyan);
+  border-radius: 999px;
+}
+
+.standings-form {
+  font-size: 0.86rem;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
 }
 
 .standings-selected-teams {

@@ -449,8 +449,14 @@ export async function GET(request: Request) {
   if (sport === "baseball" && /extraliga|экстралига|czech|чех/i.test(league)) {
     try {
       const standings = await loadCzechExtraligaStandings();
+      const hasFullTable = standings.length >= CZECH_EXTRALIGA_REFERENCE_STANDINGS.length;
       return NextResponse.json(
-        { sport: "baseball", league: "Экстралига", source: "Baseball Czech", standings },
+        {
+          sport: "baseball",
+          league: "Экстралига",
+          source: hasFullTable ? "Baseball Czech" : "Baseball Czech (резерв)",
+          standings: hasFullTable ? standings : CZECH_EXTRALIGA_REFERENCE_STANDINGS
+        },
         { headers: NO_STORE_HEADERS }
       );
     } catch (error) {
@@ -465,8 +471,14 @@ export async function GET(request: Request) {
   if (sport === "baseball" && /\bnpb\b|japan|япон|чемпионат японии/i.test(league) && !/reserve|резерв/i.test(league)) {
     try {
       const standings = await loadNpbStandings();
+      const hasFullTable = standings.length >= NPB_REFERENCE_STANDINGS.length;
       return NextResponse.json(
-        { sport: "baseball", league: "NPB", source: "NPB.jp", standings },
+        {
+          sport: "baseball",
+          league: "NPB",
+          source: hasFullTable ? "NPB.jp" : "Справочник",
+          standings: hasFullTable ? standings : NPB_REFERENCE_STANDINGS
+        },
         { headers: NO_STORE_HEADERS }
       );
     } catch (error) {
@@ -486,10 +498,10 @@ export async function GET(request: Request) {
 
   try {
     const standings = await loadBaseballStandings(standingLeague.slug, standingLeague.label);
-    if (standingLeague.label === "KBO" && standings.length === 0) {
+    if (standingLeague.label === "KBO" && standings.length < KBO_REFERENCE_STANDINGS.length) {
       return NextResponse.json({ sport: "baseball", league: "KBO", source: "Справочник", standings: KBO_REFERENCE_STANDINGS }, { headers: NO_STORE_HEADERS });
     }
-    if (standingLeague.label === "MLB" && standings.length === 0) {
+    if (standingLeague.label === "MLB" && standings.length < MLB_REFERENCE_STANDINGS.length) {
       return NextResponse.json({ sport: "baseball", league: "MLB", source: "Справочник", standings: MLB_REFERENCE_STANDINGS }, { headers: NO_STORE_HEADERS });
     }
     return NextResponse.json({ sport: "baseball", league: standingLeague.label, source: "ESPN", standings }, { headers: NO_STORE_HEADERS });
