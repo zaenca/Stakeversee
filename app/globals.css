@@ -1500,16 +1500,16 @@ h1 {
 .match-meta {
   align-items: center;
   color: var(--muted);
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   font-size: 0.7rem;
   gap: 8px;
-  grid-template-columns: auto auto 1fr auto;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .match-meta-esports {
-  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  align-items: center;
 }
 
 .match-meta-sport {
@@ -1576,6 +1576,11 @@ h1 {
   padding: 2px 6px;
 }
 
+.match-meta > strong {
+  flex: 1 1 170px;
+  min-width: 0;
+}
+
 .match-meta time {
   background: rgba(255, 255, 255, 0.06);
   border-radius: 5px;
@@ -1591,6 +1596,7 @@ h1 {
   font-size: 0.66rem;
   font-weight: 900;
   letter-spacing: 0.08em;
+  margin-left: auto;
   min-height: 24px;
   padding: 2px 8px;
   text-transform: uppercase;

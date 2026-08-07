@@ -5005,6 +5005,7 @@ export default function Home() {
                   return (
                   <article className={`match-card ${couponItems.some(item => item.matchId === match.id) ? "in-coupon" : ""}`} key={match.id}>
                     <div className={`match-meta ${esportsLeague ? "match-meta-esports" : ""}`}>
+                      <time>{formatMatchDateTime(match, lang)}</time>
                       {match.sport !== "tennis" ? <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country, lang)}</span> : null}
                       <span className="match-meta-sport" title={getSportLabel(match.sport, lang)}>{getSportIcon(match.sport)} {getSportLabel(match.sport, lang)}</span>
                       {esportsLeague ? <span className="match-meta-discipline">{t(esportsLeague.discipline)}</span> : null}
@@ -5012,7 +5013,6 @@ export default function Home() {
                       {match.sport === "baseball" || match.sport === "tennis" || isCounterStrikeMatch(match) || wnbaMatchPairKey(match) ? (
                         <button className="match-standings-button" onClick={() => openStandings(match)} type="button">{t("Таблица")}</button>
                       ) : null}
-                      <time>{formatMatchDateTime(match, lang)}</time>
                     </div>
 
                     <div className="match-odds-row">

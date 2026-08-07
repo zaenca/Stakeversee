@@ -106,6 +106,30 @@ const NPB_REFERENCE_STANDINGS: StandingRow[] = NPB_TEAMS.map(team => ({
   form: "-"
 }));
 
+const CZECH_EXTRALIGA_TEAMS = [
+  { id: "hrosi-brno", name: "Хроси Брно", aliases: ["cardion hrosi brno", "cardion hroši brno", "hrosi brno", "hroši brno", "хроси брно"], wins: 16, losses: 7, pct: ".696", gamesBack: "-" },
+  { id: "kotlarka-praha", name: "Котларка Прага", aliases: ["kotlarka praha", "kotlářka praha", "котларка прага"], wins: 13, losses: 10, pct: ".565", gamesBack: "3" },
+  { id: "draci-brno", name: "Драци Брно", aliases: ["draci brno", "draci brno", "драци брно"], wins: 13, losses: 10, pct: ".565", gamesBack: "3" },
+  { id: "sokol-hluboka", name: "Сокол Глубока", aliases: ["sokol hluboka", "sokol hluboká", "сокол глубока"], wins: 12, losses: 11, pct: ".522", gamesBack: "4" },
+  { id: "trebic-nuclears", name: "Тршебич Нуклеарс", aliases: ["trebic nuclears", "třebíč nuclears", "тршебич нуклеарс"], wins: 12, losses: 11, pct: ".522", gamesBack: "4" },
+  { id: "eagles-praha", name: "Иглз Прага", aliases: ["eagles praha", "eagles prague", "eagles", "иглз прага"], wins: 10, losses: 13, pct: ".435", gamesBack: "6" },
+  { id: "arrows-ostrava", name: "Эрроуз Острава", aliases: ["arrows ostrava", "арроуз острава", "эрроуз острава"], wins: 9, losses: 14, pct: ".391", gamesBack: "7" },
+  { id: "sabat-praha", name: "СаБаТ Прага", aliases: ["sabat praha", "sabat prague", "сабат прага"], wins: 7, losses: 16, pct: ".304", gamesBack: "9" }
+];
+
+const CZECH_EXTRALIGA_REFERENCE_STANDINGS: StandingRow[] = CZECH_EXTRALIGA_TEAMS.map((team, index) => ({
+  id: `baseball:czech:extraliga:${team.id}`,
+  rank: index + 1,
+  league: "Экстралига",
+  division: "Экстралига",
+  team: team.name,
+  wins: team.wins,
+  losses: team.losses,
+  pct: team.pct,
+  gamesBack: team.gamesBack,
+  form: "-"
+}));
+
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   Pragma: "no-cache",
@@ -185,6 +209,76 @@ function decodeNpbHtml(value: string): string {
 
 function npbCellText(value: string): string {
   return decodeNpbHtml(value.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+}
+
+function normalizeStandingLookup(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]+/gi, " ")
+    .trim();
+}
+
+function resolveCzechExtraligaTeam(value: string) {
+  const normalized = normalizeStandingLookup(value);
+  if (!normalized) return null;
+  return CZECH_EXTRALIGA_TEAMS.find(team => team.aliases.some(alias => {
+    const normalizedAlias = normalizeStandingLookup(alias);
+    return normalized === normalizedAlias || normalized.includes(normalizedAlias) || normalizedAlias.includes(normalized);
+  })) || null;
+}
+
+function parseCzechExtraligaStandingsHtml(html: string): StandingRow[] {
+  const found = new Map<string, StandingRow>();
+  const rows = html.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || [];
+
+  rows.forEach(row => {
+    const cells = (row.match(/<t[dh]\b[^>]*>[\s\S]*?<\/t[dh]>/gi) || []).map(npbCellText);
+    const teamIndex = cells.findIndex(cell => Boolean(resolveCzechExtraligaTeam(cell)));
+    if (teamIndex < 0) return;
+
+    const team = resolveCzechExtraligaTeam(cells[teamIndex]);
+    if (!team || found.has(team.id)) return;
+
+    const values = cells.slice(teamIndex + 1);
+    const wholeNumbers = values.map(value => value.trim()).filter(Boolean).map(value => Number(value)).filter(value => Number.isFinite(value));
+    const wins = wholeNumbers[0];
+    const losses = wholeNumbers[1];
+    if (!Number.isFinite(wins) || !Number.isFinite(losses)) return;
+
+    const pctIndex = values.findIndex(value => /^(?:\.\d{3}|[01]\.\d{3})$/.test(value));
+    const pct = pctIndex >= 0 ? values[pctIndex] : (wins + losses > 0 ? (wins / (wins + losses)).toFixed(3).replace(/^0/, "") : "-");
+    const gamesBack = pctIndex >= 0 ? values[pctIndex + 1] || "-" : "-";
+
+    found.set(team.id, {
+      id: `baseball:czech:extraliga:${team.id}`,
+      rank: found.size + 1,
+      league: "Экстралига",
+      division: "Экстралига",
+      team: team.name,
+      wins,
+      losses,
+      pct,
+      gamesBack,
+      form: "-"
+    });
+  });
+
+  return Array.from(found.values()).map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
+async function loadCzechExtraligaStandings(): Promise<StandingRow[]> {
+  const response = await fetch("https://m.baseball.cz/soutez-892/extraliga/zakladni-cast/tabulka", {
+    cache: "no-store",
+    headers: { "user-agent": "Mozilla/5.0 Stakeversee/1.0" }
+  });
+  if (!response.ok) throw new Error(`Baseball Czech standings HTTP ${response.status}`);
+
+  const standings = parseCzechExtraligaStandingsHtml(await response.text());
+  if (standings.length < 6) throw new Error(`Baseball Czech standings returned ${standings.length} teams`);
+  return standings;
 }
 
 function parseNpbStandingsHtml(html: string, division: string): StandingRow[] {
@@ -347,6 +441,22 @@ export async function GET(request: Request) {
       console.error("WNBA standings route failed", error);
       return NextResponse.json(
         { sport: "basketball", league: "WNBA", source: "Справочник", standings: WNBA_REFERENCE_STANDINGS },
+        { headers: NO_STORE_HEADERS }
+      );
+    }
+  }
+
+  if (sport === "baseball" && /extraliga|экстралига|czech|чех/i.test(league)) {
+    try {
+      const standings = await loadCzechExtraligaStandings();
+      return NextResponse.json(
+        { sport: "baseball", league: "Экстралига", source: "Baseball Czech", standings },
+        { headers: NO_STORE_HEADERS }
+      );
+    } catch (error) {
+      console.error("Czech Extraliga standings route failed", error);
+      return NextResponse.json(
+        { sport: "baseball", league: "Экстралига", source: "Baseball Czech (резерв)", standings: CZECH_EXTRALIGA_REFERENCE_STANDINGS },
         { headers: NO_STORE_HEADERS }
       );
     }
