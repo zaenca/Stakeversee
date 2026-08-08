@@ -4589,7 +4589,9 @@ export default function Home() {
     return (
       <main className={`workspace-shell theme-${profileTheme}`}>
         <header className="workspace-topbar">
-          <div className="workspace-brand">Stakeversee</div>
+          <div className="workspace-brand">
+            <img alt="Stakeversee" className="workspace-logo" src="/logo.png" />
+          </div>
 
           <div className="profile-pill" onClick={() => setSettingsPanelOpen(true)}>
             {avatarUrl ? (
