@@ -2883,6 +2883,21 @@ h1 {
   color: var(--text);
 }
 
+.matches-loading-indicator {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 220px;
+  width: 100%;
+}
+
+.matches-loading-indicator img {
+  display: block;
+  height: auto;
+  object-fit: contain;
+  width: min(180px, 34vw);
+}
+
 .empty-board span {
   font-size: 0.78rem;
 }

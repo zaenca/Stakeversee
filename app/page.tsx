@@ -5240,7 +5240,9 @@ export default function Home() {
               ) : (
                 <div className="empty-board">
                   {matchesLoading ? (
-                    <strong>{t("Идёт загрузка матчей")}</strong>
+                    <div className="matches-loading-indicator" role="status" aria-label={t("Идёт загрузка матчей")}>
+                      <img src="/loading-matches.gif" alt="" />
+                    </div>
                   ) : searchQuery.trim() ? (
                     <>
                       <strong>{t("По этому запросу матчи не найдены")}</strong>
