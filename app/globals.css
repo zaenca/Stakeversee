@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --bg: #060a10;
   --panel: #0d1420;
   --panel-soft: #111b2a;
@@ -5372,3 +5372,104 @@ h1 {
     width: auto;
   }
 }
+/* Force one typography system across the whole interface.
+   The sport tabs use a compact, heavy, tracked uppercase-like UI style; keep
+   that same font stack for every text control without touching SVG icons. */
+:root {
+  --stakeversee-ui-font: "Arial Narrow", "Bahnschrift Condensed", "Bahnschrift", "Roboto Condensed", "Segoe UI", Arial, sans-serif;
+  --stakeversee-ui-letter-spacing: 0.055em;
+  --stakeversee-ui-weight: 800;
+}
+
+html,
+body,
+body *,
+button,
+input,
+select,
+textarea,
+option,
+label,
+summary,
+[role="button"] {
+  font-family: var(--stakeversee-ui-font) !important;
+  font-weight: var(--stakeversee-ui-weight) !important;
+  letter-spacing: var(--stakeversee-ui-letter-spacing) !important;
+}
+
+::placeholder {
+  font-family: var(--stakeversee-ui-font) !important;
+  font-weight: var(--stakeversee-ui-weight) !important;
+  letter-spacing: var(--stakeversee-ui-letter-spacing) !important;
+}
+
+svg,
+svg *,
+.lucide,
+.lucide *,
+[data-icon],
+[data-icon] * {
+  font-family: initial !important;
+  font-weight: initial !important;
+  letter-spacing: normal !important;
+}
+
+/* Stakeversee global typography override: sport-tab font everywhere */
+:root {
+  --stakeversee-sport-tab-font: "Arial Narrow", "Bahnschrift Condensed", "Bahnschrift", "Roboto Condensed", "Segoe UI", Arial, sans-serif;
+  --stakeversee-sport-tab-letter-spacing: 0.055em;
+  --stakeversee-sport-tab-font-weight: 800;
+}
+
+html,
+body,
+body *,
+button,
+input,
+select,
+textarea,
+option,
+label,
+summary,
+a,
+p,
+span,
+div,
+small,
+strong,
+em,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+table,
+thead,
+tbody,
+tr,
+th,
+td,
+[role="button"] {
+  font-family: var(--stakeversee-sport-tab-font) !important;
+  font-weight: var(--stakeversee-sport-tab-font-weight) !important;
+  letter-spacing: var(--stakeversee-sport-tab-letter-spacing) !important;
+}
+
+::placeholder {
+  font-family: var(--stakeversee-sport-tab-font) !important;
+  font-weight: var(--stakeversee-sport-tab-font-weight) !important;
+  letter-spacing: var(--stakeversee-sport-tab-letter-spacing) !important;
+}
+
+svg,
+svg *,
+.lucide,
+.lucide *,
+[data-icon],
+[data-icon] * {
+  font-family: initial !important;
+  font-weight: initial !important;
+  letter-spacing: normal !important;
+}
+/* End Stakeversee global typography override */
