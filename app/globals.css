@@ -748,6 +748,7 @@ h1 {
 
 .workspace-shell.theme-dark {
   --bg: #000;
+  --cyan: #fff;
   --panel: #050505;
   --panel-soft: #101010;
   --line: rgba(255, 255, 255, 0.16);
@@ -759,6 +760,7 @@ h1 {
 
 .workspace-shell.theme-light {
   --bg: #fff;
+  --cyan: #000;
   --panel: #fff;
   --panel-soft: #f5f7fb;
   --line: rgba(15, 23, 42, 0.16);
@@ -769,8 +771,11 @@ h1 {
 }
 
 .workspace-shell.theme-light .workspace-topbar,
+.workspace-shell.theme-light .workspace-grid,
 .workspace-shell.theme-light .match-board,
+.workspace-shell.theme-light .matches-area,
 .workspace-shell.theme-light .right-rail,
+.workspace-shell.theme-light .rail-panel,
 .workspace-shell.theme-light .calendar-panel,
 .workspace-shell.theme-light .bank-panel,
 .workspace-shell.theme-light .quick-coupon-card,
@@ -782,6 +787,39 @@ h1 {
 .workspace-shell.theme-light .settings-timezone-list {
   background: #fff;
   color: #000;
+}
+
+.workspace-shell.theme-light .match-card {
+  border: 2px solid #000;
+  box-shadow: none;
+}
+
+.workspace-shell.theme-light .sport-tabs button.active,
+.workspace-shell.theme-light .match-standings-button {
+  background: #fff;
+  border-color: #000;
+}
+
+.workspace-shell.theme-dark .sport-tabs button.active,
+.workspace-shell.theme-dark .match-standings-button {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.65);
+}
+
+.workspace-shell.theme-light .match-meta-discipline,
+.workspace-shell.theme-light .match-standings-button,
+.workspace-shell.theme-light .sport-tabs button.active,
+.workspace-shell.theme-light .rail-title,
+.workspace-shell.theme-light .workspace-brand {
+  color: #000;
+}
+
+.workspace-shell.theme-dark .match-meta-discipline,
+.workspace-shell.theme-dark .match-standings-button,
+.workspace-shell.theme-dark .sport-tabs button.active,
+.workspace-shell.theme-dark .rail-title,
+.workspace-shell.theme-dark .workspace-brand {
+  color: #fff;
 }
 
 .workspace-shell.theme-light .settings-modal-backdrop {
@@ -809,6 +847,34 @@ h1 {
 .workspace-shell.theme-light .settings-flat-hint,
 .workspace-shell.theme-light .settings-profile-email {
   color: #334155;
+}
+
+.workspace-shell.theme-light .weekdays,
+.workspace-shell.theme-light .calendar-head strong,
+.workspace-shell.theme-light .calendar-grid button {
+  color: #000;
+}
+
+.workspace-shell.theme-light .calendar-grid button.current {
+  background: #fff;
+  border-color: #000;
+  color: #000;
+}
+
+.workspace-shell.theme-light .calendar-grid button.has-profit.positive,
+.workspace-shell.theme-light .calendar-grid button.has-profit.negative,
+.workspace-shell.theme-light .calendar-grid button.has-bets {
+  color: #000;
+}
+
+.workspace-shell.theme-light .calendar-grid button.muted {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.workspace-shell.theme-light .matches-area::-webkit-scrollbar-track,
+.workspace-shell.theme-light .right-rail::-webkit-scrollbar-track,
+.workspace-shell.theme-light::-webkit-scrollbar-track {
+  background: #fff;
 }
 
 .workspace-topbar {
@@ -1072,37 +1138,68 @@ h1 {
 }
 
 .settings-theme-toggle {
-  display: inline-grid;
-  gap: 8px;
-  grid-template-columns: repeat(2, minmax(110px, 1fr));
-  width: min(360px, 100%);
-}
-
-.settings-theme-toggle button {
+  align-items: center;
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--muted);
+  border-radius: 999px;
   cursor: pointer;
+  display: inline-flex;
+  height: 34px;
+  padding: 3px;
+  position: relative;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  width: 132px;
+}
+
+.settings-theme-toggle:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.settings-theme-option {
+  color: var(--muted);
+  flex: 1 1 50%;
+  font-size: 11px;
   font-weight: 800;
-  min-height: 38px;
-  padding: 0 14px;
+  letter-spacing: 0.04em;
+  position: relative;
+  text-align: center;
+  transition: color 0.25s ease;
+  z-index: 1;
 }
 
-.settings-theme-toggle button.active {
-  background: rgba(0, 229, 255, 0.14);
-  border-color: rgba(0, 229, 255, 0.55);
-  color: var(--cyan);
+.settings-theme-toggle.dark .settings-theme-option:first-child,
+.settings-theme-toggle.light .settings-theme-option:nth-child(2) {
+  color: #04141a;
 }
 
-.workspace-shell.theme-light .settings-theme-toggle button {
+.settings-theme-thumb {
+  background: #fff;
+  border-radius: 999px;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.22);
+  height: 28px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  width: calc(50% - 3px);
+}
+
+.settings-theme-toggle.light .settings-theme-thumb {
+  transform: translateX(calc(100% + 2px));
+}
+
+.workspace-shell.theme-light .settings-theme-toggle {
   background: #f8fafc;
-  color: #000;
 }
 
-.workspace-shell.theme-light .settings-theme-toggle button.active {
-  background: #dffaff;
-  color: #000;
+.workspace-shell.theme-light .settings-theme-thumb {
+  background: #000;
+  box-shadow: none;
+}
+
+.workspace-shell.theme-light .settings-theme-toggle.light .settings-theme-option:nth-child(2),
+.workspace-shell.theme-light .settings-theme-toggle.dark .settings-theme-option:first-child {
+  color: #fff;
 }
 
 .settings-inline-login input,

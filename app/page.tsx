@@ -1461,11 +1461,6 @@ function getUserCurrency(user: User | null): CurrencyCode {
   return CURRENCY_OPTIONS.some(option => option.code === currency) ? currency as CurrencyCode : "RUB";
 }
 
-const THEME_OPTIONS: readonly { key: AppTheme; label: string }[] = [
-  { key: "dark", label: "Темная" },
-  { key: "light", label: "Светлая" }
-];
-
 function getUserTheme(user: User | null): AppTheme {
   return user?.user_metadata?.theme === "light" ? "light" : "dark";
 }
@@ -4720,18 +4715,18 @@ export default function Home() {
 
               <div className="settings-section">
                 <div className="settings-section-title">Тема</div>
-                <div className="settings-theme-toggle" role="group" aria-label="Тема">
-                  {THEME_OPTIONS.map(option => (
-                    <button
-                      className={profileTheme === option.key ? "active" : ""}
-                      key={option.key}
-                      onClick={() => saveTheme(option.key)}
-                      type="button"
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+                <button
+                  aria-checked={profileTheme === "light"}
+                  aria-label="Тема"
+                  className={`settings-theme-toggle ${profileTheme}`}
+                  onClick={() => saveTheme(profileTheme === "light" ? "dark" : "light")}
+                  role="switch"
+                  type="button"
+                >
+                  <span className="settings-theme-option">Темная</span>
+                  <span className="settings-theme-option">Светлая</span>
+                  <span aria-hidden="true" className="settings-theme-thumb" />
+                </button>
               </div>
 
               <div className="settings-divider" />
