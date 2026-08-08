@@ -871,6 +871,11 @@ h1 {
   color: rgba(0, 0, 0, 0.35);
 }
 
+.workspace-shell.theme-light .rail-bet-meta span,
+.workspace-shell.theme-light .rail-bet-meta em {
+  color: #000;
+}
+
 .workspace-shell.theme-light .matches-area::-webkit-scrollbar-track,
 .workspace-shell.theme-light .right-rail::-webkit-scrollbar-track,
 .workspace-shell.theme-light::-webkit-scrollbar-track {
@@ -1532,8 +1537,8 @@ h1 {
 .sport-tabs {
   display: grid;
   gap: 1px;
-  grid-template-columns: repeat(9, minmax(132px, 1fr));
-  overflow-x: auto;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  overflow: hidden;
 }
 
 .sport-tabs button {
@@ -1545,7 +1550,8 @@ h1 {
   gap: 4px;
   grid-template-columns: minmax(0, 1fr) auto;
   min-height: 74px;
-  padding: 14px 9px;
+  min-width: 0;
+  padding: 14px 7px;
   text-align: left;
 }
 
@@ -1574,9 +1580,9 @@ h1 {
 }
 
 .sport-tabs strong {
-  font-size: 0.74rem;
+  font-size: 0.64rem;
   grid-column: 1;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.055em;
   min-width: 0;
   overflow: visible;
   text-overflow: clip;
@@ -1591,9 +1597,9 @@ h1 {
   grid-row: 1 / span 2;
   justify-self: end;
   align-self: center;
-  font-size: 0.7rem;
+  font-size: 0.64rem;
   font-style: normal;
-  padding: 2px 6px;
+  padding: 2px 5px;
 }
 
 .match-filters {
@@ -4783,7 +4789,7 @@ h1 {
   }
 
   .sport-tabs {
-    grid-template-columns: repeat(3, minmax(132px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .match-filters,
