@@ -107,7 +107,7 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
     league: "NPB",
     division: "Тихоокеанская лига",
     country: "Япония",
-    logo: "SL",
+    logo: "/teams/saitama-seibu-lions.png",
     rank: 2,
     form: "-",
     aliases: ["saitama seibu lions", "saitama lions", "seibu lions", "сайтама сэйбу лайонс", "сайтама сейбу лайонс", "сайтама лайонс", "сэйбу лайонс", "сейбу лайонс", "сайтама"]
