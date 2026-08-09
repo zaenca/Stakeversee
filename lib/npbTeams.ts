@@ -155,7 +155,7 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
     league: "NPB",
     division: "Тихоокеанская лига",
     country: "Япония",
-    logo: "RE",
+    logo: "/teams/tohoku-rakuten-golden-eagles.png",
     rank: 6,
     form: "-",
     aliases: ["tohoku rakuten golden eagles", "rakuten golden eagles", "tohoku rakuten", "тохоку раку-тен голден иглс", "тохоку ракутен голден иглс", "ракутен голден иглс", "ракутен"]
