@@ -71,7 +71,7 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
     league: "NPB",
     division: "Центральная лига",
     country: "Япония",
-    logo: "HC",
+    logo: "/teams/hiroshima-toyo-carp.png",
     rank: 5,
     form: "-",
     aliases: ["hiroshima toyo carp", "hiroshima carp", "hiroshima", "хиросима тойо карп", "хиросима карп", "хиросима"]
