@@ -113,7 +113,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v33-npb-tennisi-team-ids";
+const API_VERSION = "bookmakers-v34-tennisi-npb-children";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -795,7 +795,7 @@ async function fetchPariLike(urls: string[], source: "pari" | "fonbet" | "tennis
   }
 }
 
-async function fetchTennisiCategory(category: { categoryId: number; path: string; sport: string }): Promise<RawMatch[]> {
+async function fetchTennisiCategory(category: { categoryId: number; path: string; sport: string }, depth = 0): Promise<RawMatch[]> {
   const url = `https://tennisi.bet/rt/cgi/!rt_home.CategoryInfo?mcmd=cat&mcmdparam=${category.path}&gameid=5&categoryid=${category.categoryId}&lang=rus`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), BOOKMAKER_REQUEST_TIMEOUT_MS);
@@ -808,10 +808,33 @@ async function fetchTennisiCategory(category: { categoryId: number; path: string
     if (!response.ok) throw new Error(`Tennisi ${category.path}: HTTP ${response.status}`);
 
     const html = new TextDecoder("windows-1251").decode(await response.arrayBuffer());
-    return parseTennisiHtml(html, category.sport);
+    const rootMatches = parseTennisiHtml(html, category.sport);
+    if (category.sport !== "baseball" || depth >= 1) return rootMatches;
+
+    const childCategories = tennisiChildCategories(html, category);
+    if (!childCategories.length) return rootMatches;
+
+    const childResults = await Promise.allSettled(childCategories.map(child => fetchTennisiCategory(child, depth + 1)));
+    const childMatches = childResults.flatMap(result => result.status === "fulfilled" ? result.value : []);
+    return [...rootMatches, ...childMatches];
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function tennisiChildCategories(html: string, parent: { categoryId: number; path: string; sport: string }): { categoryId: number; path: string; sport: string }[] {
+  const found = new Map<number, { categoryId: number; path: string; sport: string }>();
+  const anchors = html.match(/<a\b[\s\S]*?<\/a>/gi) || [];
+  for (const anchor of anchors) {
+    const text = stripTags(anchor);
+    const context = normalizedName(`${anchor} ${text}`);
+    if (!/\bnpb\b|japan|япон/.test(context)) continue;
+    const categoryId = Number(anchor.match(/categoryid=(\d+)/i)?.[1] || anchor.match(/categoryid['"]?\s*[:=]\s*['"]?(\d+)/i)?.[1] || 0);
+    if (!categoryId || categoryId === parent.categoryId || found.has(categoryId)) continue;
+    const path = decodeHtml(anchor.match(/mcmdparam=([^"'&\s>]+)/i)?.[1] || parent.path);
+    found.set(categoryId, { categoryId, path, sport: parent.sport });
+  }
+  return Array.from(found.values()).slice(0, 6);
 }
 
 function parseTennisiHtml(html: string, sport: string): RawMatch[] {
@@ -1194,6 +1217,27 @@ function findMergeKey(byKey: Map<string, RawMatch>, match: RawMatch): string | n
   return null;
 }
 
+function participantsAreReversed(left: RawMatch, right: RawMatch): boolean {
+  return Boolean(left.homeTeamId && left.awayTeamId && right.homeTeamId && right.awayTeamId
+    && left.homeTeamId === right.awayTeamId
+    && left.awayTeamId === right.homeTeamId);
+}
+
+function flipBookmakerOdds(odds: BookmakerOdds): BookmakerOdds {
+  return {
+    ...odds,
+    home: odds.away,
+    away: odds.home
+  };
+}
+
+function alignBookmakerOdds(current: RawMatch, match: RawMatch): Partial<Record<BookmakerKey, BookmakerOdds>> {
+  if (!participantsAreReversed(current, match)) return match.bookmakerOdds;
+  return Object.fromEntries(
+    Object.entries(match.bookmakerOdds).map(([bookmaker, odds]) => [bookmaker, flipBookmakerOdds(odds)])
+  ) as Partial<Record<BookmakerKey, BookmakerOdds>>;
+}
+
 function shouldDropMatch(match: RawMatch): boolean {
   const full = `${match.country} ${match.league} ${match.home} ${match.away}`.toLowerCase();
   if (match.sport !== "esports" && /(fc\s*\d{2}|fifa|efootball|h2h|cyber|virtual|simulation|simulator|synthetic|синтет|2x4|2\s*x\s*4|mins?|liga-?\d|division-?\d|nhl\s*\d|nba\s*\d)/i.test(full)) return true;
@@ -1262,7 +1306,7 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
         byKey.set(key, match);
         continue;
       }
-      const bookmakerOdds = { ...current.bookmakerOdds, ...match.bookmakerOdds };
+      const bookmakerOdds = { ...current.bookmakerOdds, ...alignBookmakerOdds(current, match) };
       const odds = bestOddsFromBookmakers(bookmakerOdds);
       byKey.set(key, {
         ...current,
