@@ -113,8 +113,20 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v34-tennisi-npb-children";
+const API_VERSION = "bookmakers-v36-tennisi-kz-active";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
+const TENNISI_ENDPOINTS = [
+  {
+    baseUrl: "https://tennisi.kz",
+    buildUrl: (category: { categoryId: number }) => `https://tennisi.kz/mtg2/cgi/!free.CategoryInfo?categoryid=${category.categoryId}&gameid=18&more=today&lang=rus`,
+    gameId: 18
+  },
+  {
+    baseUrl: "https://tennisi.bet",
+    buildUrl: (category: { categoryId: number; path: string }) => `https://tennisi.bet/rt/cgi/!rt_home.CategoryInfo?mcmd=cat&mcmdparam=${category.path}&gameid=5&categoryid=${category.categoryId}&lang=rus`,
+    gameId: 5
+  }
+] as const;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
   ["oaxaca", ["oaxaca", "оахака", "геррерос де оаксака", "guerreros de oaxaca", "guerreros oaxaca"]],
@@ -796,30 +808,36 @@ async function fetchPariLike(urls: string[], source: "pari" | "fonbet" | "tennis
 }
 
 async function fetchTennisiCategory(category: { categoryId: number; path: string; sport: string }, depth = 0): Promise<RawMatch[]> {
-  const url = `https://tennisi.bet/rt/cgi/!rt_home.CategoryInfo?mcmd=cat&mcmdparam=${category.path}&gameid=5&categoryid=${category.categoryId}&lang=rus`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), BOOKMAKER_REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, {
-      headers: { ...REQUEST_HEADERS, referer: `https://tennisi.bet/sport/${category.path}` },
-      cache: "no-store",
-      signal: controller.signal
-    });
-    if (!response.ok) throw new Error(`Tennisi ${category.path}: HTTP ${response.status}`);
+  const errors: string[] = [];
+  for (const endpoint of TENNISI_ENDPOINTS) {
+    const url = endpoint.buildUrl(category);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BOOKMAKER_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        headers: { ...REQUEST_HEADERS, referer: `${endpoint.baseUrl}/sport/${category.path}` },
+        cache: "no-store",
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    const html = new TextDecoder("windows-1251").decode(await response.arrayBuffer());
-    const rootMatches = parseTennisiHtml(html, category.sport);
-    if (category.sport !== "baseball" || depth >= 1) return rootMatches;
+      const html = new TextDecoder("windows-1251").decode(await response.arrayBuffer());
+      const rootMatches = parseTennisiHtml(html, category.sport);
+      if (category.sport !== "baseball" || depth >= 1 || endpoint.gameId !== 5) return rootMatches;
 
-    const childCategories = tennisiChildCategories(html, category);
-    if (!childCategories.length) return rootMatches;
+      const childCategories = tennisiChildCategories(html, category);
+      if (!childCategories.length) return rootMatches;
 
-    const childResults = await Promise.allSettled(childCategories.map(child => fetchTennisiCategory(child, depth + 1)));
-    const childMatches = childResults.flatMap(result => result.status === "fulfilled" ? result.value : []);
-    return [...rootMatches, ...childMatches];
-  } finally {
-    clearTimeout(timeout);
+      const childResults = await Promise.allSettled(childCategories.map(child => fetchTennisiCategory(child, depth + 1)));
+      const childMatches = childResults.flatMap(result => result.status === "fulfilled" ? result.value : []);
+      return [...rootMatches, ...childMatches];
+    } catch (error) {
+      errors.push(`${endpoint.baseUrl}: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+  throw new Error(`Tennisi ${category.path}: ${errors.join("; ")}`);
 }
 
 function tennisiChildCategories(html: string, parent: { categoryId: number; path: string; sport: string }): { categoryId: number; path: string; sport: string }[] {
