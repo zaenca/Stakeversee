@@ -35,7 +35,7 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
     league: "NPB",
     division: "Центральная лига",
     country: "Япония",
-    logo: "YG",
+    logo: "/teams/yomiuri-giants.png",
     rank: 2,
     form: "-",
     aliases: ["yomiuri giants", "yomiuri", "ёмиури джайентс", "ёмиури", "йомиури джайентс", "йомиури"]
