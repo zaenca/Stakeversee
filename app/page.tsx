@@ -5079,8 +5079,6 @@ export default function Home() {
               <div className="filter-buttons">
                 {[
                   ["all", "Все"],
-                  ["hot", "🔥 Горячие"],
-                  ["good", "✅ Хорошие"],
                   ["fav", "⭐ Избранные"]
                 ].map(([key, label]) => (
                   <button
