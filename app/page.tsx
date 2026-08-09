@@ -1022,7 +1022,7 @@ function formatBetTime(createdAt: string, offsetMinutes: number): string {
 
 function sourceDisplayName(value?: string | null): string {
   const name = (value || "Источник —")
-    .replace(/\s*(?:\.{2,}|…|â€¦)\s*$/g, "")
+    .replace(/\s*(?:\.{2,}|…)\s*$/g, "")
     .trim();
   return name || "Источник —";
 }
@@ -6498,7 +6498,7 @@ export default function Home() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">Stakeversee</div>
-        <div className="brand-caption">control · optimize · profit</div>
+        <div className="brand-caption">bankroll · line · sources</div>
         <nav className="nav" aria-label={t("Основная навигация")}>
           <button className="active">{t("Панель")}</button>
           <button>{t("Ставки")}</button>
@@ -6514,26 +6514,46 @@ export default function Home() {
             <span className="status-dot" />
             {t("Supabase подключён:")} {supabaseHost}
           </div>
+          <div className="topbar-note">{t("Единый кабинет для дисциплины ставок")}</div>
         </header>
 
         <div className="content">
           <section className="hero">
             <div className="panel hero-copy">
               <div className="eyebrow">{t("Betting command center")}</div>
-              <h1>{t("Stakeversee держит ставки, банк и аналитику под контролем.")}</h1>
+              <h1>{t("Stakeversee держит банк, линию и источники в одном рабочем окне.")}</h1>
               <p className="lead">
-                {t("Веб-версия заменит локальное расширение: аккаунты, история ставок, источники, чёрный список, банк и статистика будут храниться онлайн.")}
+                {t("Сохраняй прогнозы, отслеживай ROI по источникам, собирай купон из линии и не теряй историю при смене устройства.")}
               </p>
               <div className="actions">
                 <a className="primary link-button" href="https://stakeversee.vercel.app">
-                  {t("Production")}
+                  {t("Открыть production")}
                 </a>
-                <button className="secondary">{t("Схема базы готова")}</button>
+                <button className="secondary" type="button">{t("Схема базы готова")}</button>
+              </div>
+              <div className="hero-metrics" aria-label={t("Ключевые возможности")}>
+                <div>
+                  <span>{t("ROI")}</span>
+                  <strong>+12.4%</strong>
+                </div>
+                <div>
+                  <span>{t("Источники")}</span>
+                  <strong>8</strong>
+                </div>
+                <div>
+                  <span>{t("Матчи")}</span>
+                  <strong>72h</strong>
+                </div>
               </div>
             </div>
 
             <section className="panel auth-panel" aria-label={t("Авторизация")}>
-              <>
+              <div className="auth-card-head">
+                <div>
+                  <span>{t("Личный кабинет")}</span>
+                  <strong>{mode === "login" ? t("Вход в Stakeversee") : t("Новый аккаунт")}</strong>
+                </div>
+              </div>
                   <div className="auth-tabs">
                     <button
                       className={mode === "login" ? "active" : ""}
@@ -6608,9 +6628,57 @@ export default function Home() {
 
                     {message ? <p className={`auth-message ${status}`}>{message}</p> : null}
                   </form>
-              </>
             </section>
           </section>
+
+          <section className="panel product-preview" aria-label={t("Превью кабинета")}>
+            <div className="preview-column preview-main">
+              <div className="preview-head">
+                <span>{t("Линия сегодня")}</span>
+                <strong>{t("Контроль до ставки")}</strong>
+              </div>
+              <div className="preview-match">
+                <div>
+                  <span>18:30 · Tennis</span>
+                  <strong>ATP Challenger</strong>
+                </div>
+                <div className="preview-odds">
+                  <button type="button">1.82</button>
+                  <button type="button">2.05</button>
+                </div>
+              </div>
+              <div className="preview-match">
+                <div>
+                  <span>21:00 · CS2</span>
+                  <strong>Counter Strike 2</strong>
+                </div>
+                <div className="preview-odds">
+                  <button type="button">1.67</button>
+                  <button type="button">2.28</button>
+                </div>
+              </div>
+            </div>
+            <div className="preview-column">
+              <div className="preview-head">
+                <span>{t("Банкролл")}</span>
+                <strong>10 000 ₽</strong>
+              </div>
+              <div className="preview-bars">
+                <span style={{ width: "72%" }} />
+                <span style={{ width: "48%" }} />
+                <span style={{ width: "84%" }} />
+              </div>
+            </div>
+            <div className="preview-column">
+              <div className="preview-head">
+                <span>{t("Источники")}</span>
+                <strong>{t("ROI по каждому")}</strong>
+              </div>
+              <div className="preview-source-row"><span>Semik</span><strong>+18.1%</strong></div>
+              <div className="preview-source-row negative"><span>Test line</span><strong>-4.2%</strong></div>
+            </div>
+          </section>
+
           <section className="section-grid">
             {features.map(feature => (
               <article className="panel feature" key={feature.title}>

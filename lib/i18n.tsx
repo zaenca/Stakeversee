@@ -241,6 +241,21 @@ export const translations: Record<string, string> = {
   "Веб-версия заменит локальное расширение: аккаунты, история ставок, источники, чёрный список, банк и статистика будут храниться онлайн.":
     "The web version will replace the local extension: accounts, bet history, sources, blacklist, bankroll, and statistics will be stored online.",
   "Supabase подключён:": "Supabase connected:",
+  "Единый кабинет для дисциплины ставок": "A unified workspace for betting discipline",
+  "Stakeversee держит банк, линию и источники в одном рабочем окне.":
+    "Stakeversee keeps bankroll, line, and sources in one focused workspace.",
+  "Сохраняй прогнозы, отслеживай ROI по источникам, собирай купон из линии и не теряй историю при смене устройства.":
+    "Save predictions, track ROI by source, build coupons from the line, and keep your history across devices.",
+  "Открыть production": "Open production",
+  "Ключевые возможности": "Key capabilities",
+  "Матчи": "Matches",
+  "Личный кабинет": "Personal workspace",
+  "Вход в Stakeversee": "Sign in to Stakeversee",
+  "Новый аккаунт": "New account",
+  "Превью кабинета": "Workspace preview",
+  "Линия сегодня": "Today's line",
+  "Контроль до ставки": "Control before the bet",
+  "ROI по каждому": "ROI for each source",
 
   // ── Feature cards ──────────────────────────────────────────
   "Контроль банка": "Bankroll control",
