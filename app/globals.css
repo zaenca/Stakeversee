@@ -2101,7 +2101,13 @@ h1 {
 
 .team-card-panel {
   max-width: 560px;
+  position: relative;
   width: min(560px, 96vw);
+}
+
+.team-card-panel .team-card-close {
+  right: 12px;
+  top: 12px;
 }
 
 .team-card-hero {
@@ -2166,14 +2172,28 @@ h1 {
   padding: 16px 0;
 }
 
-.team-card-stats div {
+.team-card-stats div,
+.team-card-stat-button {
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--line);
   border-radius: 8px;
+  color: inherit;
+  font: inherit;
   padding: 12px;
+  text-align: left;
 }
 
-.team-card-stats span {
+.team-card-stat-button {
+  cursor: pointer;
+}
+
+.team-card-stat-button:hover {
+  border-color: rgba(0, 229, 255, 0.58);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.12);
+}
+
+.team-card-stats span,
+.team-card-stat-button span {
   color: var(--muted);
   display: block;
   font-size: 0.68rem;
@@ -2182,7 +2202,8 @@ h1 {
   text-transform: uppercase;
 }
 
-.team-card-stats strong {
+.team-card-stats strong,
+.team-card-stat-button strong {
   color: #eaf6ff;
   display: block;
   font-size: 1.2rem;

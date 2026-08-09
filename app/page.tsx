@@ -99,6 +99,7 @@ type MatchRow = {
   tennisTour?: TennisTour;
   homePlayers?: TennisParticipant[];
   awayPlayers?: TennisParticipant[];
+  standingsOnly?: boolean;
 };
 
 type TennisTour = "ATP" | "WTA";
@@ -230,7 +231,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v26";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v27";
 const FAVORITE_TEAMS_KEY = "stakeversee:favorite-teams:v1";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
@@ -3164,7 +3165,7 @@ export default function Home() {
       side,
       requestedName: side === "home" ? standingsMatch.home : standingsMatch.away,
       row: standingsRows.find(row => standingsRowMatchesTeam(row, standingsMatch, side)) || null
-    }));
+    })).filter(item => item.requestedName);
   }, [standingsMatch, standingsRows]);
   const selectedCounterStrikeTeams = useMemo(() => {
     if (!counterStrikeStandingsOpen || !standingsMatch) return [];
@@ -3289,6 +3290,7 @@ export default function Home() {
   // сохраняет прогнозы в базу, чтобы позже сверить их с результатами
   // (обучение на ошибках — этап 2).
   async function openStandings(match: MatchRow) {
+    const matchTitle = match.away ? `${match.home} — ${match.away}` : match.home;
     const defaultTennisTour = match.tennisTour
       || ([...(match.homePlayers || []), ...(match.awayPlayers || [])].find(player => player.tour)?.tour)
       || "ATP";
@@ -3296,7 +3298,7 @@ export default function Home() {
     setStandingsMatch(match);
     setStandingsPage(1);
     setStandingsSource("");
-    setStandingsTitle(`${match.league} · ${match.home} — ${match.away}`);
+    setStandingsTitle(`${match.league} · ${matchTitle}`);
     setStandingsLoading(true);
     setStandingsMessage("");
     setHeadToHeadRows([]);
@@ -3313,7 +3315,7 @@ export default function Home() {
       if (!response.ok) throw new Error("standings unavailable");
       const payload = await response.json();
       setStandingsSource(String(payload?.source || ""));
-      setStandingsTitle(`${String(payload?.league || match.league)} · ${match.home} — ${match.away}`);
+      setStandingsTitle(`${String(payload?.league || match.league)} · ${matchTitle}`);
       const rows = Array.isArray(payload?.standings) ? payload.standings : [];
       const normalizedRows = normalizeStandingRows(rows);
       setStandingsRows(normalizedRows);
@@ -3335,7 +3337,7 @@ export default function Home() {
       setStandingsLoading(false);
     }
 
-    if (match.sport !== "baseball") return;
+    if (match.sport !== "baseball" || match.standingsOnly) return;
 
     try {
       const params = new URLSearchParams({
@@ -3424,6 +3426,26 @@ export default function Home() {
     const teamId = side === "home" ? match.homeTeamId : match.awayTeamId;
     const card = clientLeagueTeamCard(name, teamId);
     void openTeamProfile(card || genericTeamCard(match, side));
+  }
+
+  function openTeamCardStandings(card: TeamCard) {
+    if (isEsportsTeamCard(card) || isTennisPlayerCard(card) || ("kind" in card && card.kind === "generic")) return;
+    const sport = card.league === "WNBA" ? "basketball" : "baseball";
+    setTeamCardOpen(false);
+    void openStandings({
+      id: `team-standings-${card.id}`,
+      sport,
+      country: card.country,
+      league: card.league,
+      time: "",
+      home: card.name,
+      away: "",
+      odds: [],
+      confidence: 0,
+      recommendationSide: "home",
+      homeTeamId: clientLeagueTeamId(card),
+      standingsOnly: true
+    });
   }
 
   function openTennisPlayer(player: TennisParticipant) {
@@ -6237,7 +6259,7 @@ export default function Home() {
                 onMouseDown={event => event.stopPropagation()}
                 role="dialog"
               >
-                <button className="stats-modal-close" aria-label={t("Закрыть")} onClick={() => setTeamCardOpen(false)} type="button">×</button>
+                <button className="stats-modal-close team-card-close" aria-label={t("Закрыть")} onClick={() => setTeamCardOpen(false)} type="button">×</button>
                 <div className="team-card-hero">
                   <div className="team-card-logo">
                     {selectedTeamCard.logo.startsWith("http") || selectedTeamCard.logo.startsWith("/") ? <img alt="" src={selectedTeamCard.logo} /> : selectedTeamCard.logo}
@@ -6258,10 +6280,10 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="team-card-stats">
-                  <div>
+                  <button className="team-card-stat-button" onClick={() => openTeamCardStandings(selectedTeamCard)} type="button">
                     <span>{t("Место")}</span>
                     <strong>{selectedTeamCard.rank > 0 ? selectedTeamCard.rank : "-"}</strong>
-                  </div>
+                  </button>
                   <div>
                     <span>{t("Форма")}</span>
                     <strong className="team-form-lights">{formatStandingForm(selectedTeamCard.form)}</strong>
@@ -6332,7 +6354,7 @@ export default function Home() {
               >
                 <div className="rail-title">📊 {t("Турнирная таблица")} {standingsTitle}</div>
                 {standingsSource ? <div className="standings-source">{t("Источник")}: {standingsSource}</div> : null}
-                {standingsMatch?.sport === "baseball" ? (
+                {standingsMatch?.sport === "baseball" && !standingsMatch.standingsOnly ? (
                   <div className="standings-h2h">
                     <div className="standings-h2h-title">
                       <strong>{t("Очные встречи")}</strong>

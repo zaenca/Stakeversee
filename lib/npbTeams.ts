@@ -119,7 +119,7 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
     league: "NPB",
     division: "Тихоокеанская лига",
     country: "Япония",
-    logo: "NF",
+    logo: "/teams/hokkaido-nippon-ham-fighters.png",
     rank: 3,
     form: "-",
     aliases: ["hokkaido nippon ham fighters", "nippon ham fighters", "nippon-ham fighters", "хоккайдо ниппон хэм файтерс", "ниппон хэм файтерс", "ниппон-хэм файтерс"]
