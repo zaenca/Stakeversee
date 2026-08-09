@@ -143,7 +143,7 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
     league: "NPB",
     division: "Тихоокеанская лига",
     country: "Япония",
-    logo: "CM",
+    logo: "/teams/chiba-lotte-marines.png",
     rank: 5,
     form: "-",
     aliases: ["chiba lotte marines", "chiba marines", "lotte marines", "chiba lotte", "чиба лотте маринс", "тиба лотте маринс", "чиба маринс", "тиба маринс", "чиба мэринс", "тиба мэринс", "лотте маринс", "лотте мэринс"]
