@@ -2134,6 +2134,18 @@ h1 {
   width: 72px;
 }
 
+.workspace-shell.theme-dark .team-card-logo {
+  border-color: rgba(255, 255, 255, 0.95);
+}
+
+.workspace-shell.theme-light .team-card-logo {
+  border-color: rgba(0, 0, 0, 0.9);
+}
+
+.team-card-logo:has(img[src*="tampa-bay-rays"]) {
+  background: #fff;
+}
+
 .team-card-logo img {
   border-radius: 50%;
   box-sizing: border-box;
@@ -2236,10 +2248,10 @@ h1 {
   display: grid;
   flex: 1 1 auto;
   gap: 12px;
-  max-height: none;
+  max-height: min(560px, calc(90vh - 178px));
   min-height: 0;
   overscroll-behavior: contain;
-  overflow-y: auto;
+  overflow-y: scroll;
   padding-right: 8px;
   scrollbar-color: #000 rgba(255, 255, 255, 0.08);
   scrollbar-width: thin;

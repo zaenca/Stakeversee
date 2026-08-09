@@ -432,6 +432,11 @@ function standingsRowMatchesTeam(row: StandingRow, match: MatchRow, side: "home"
   ) || rowSearch.includes(targetSearch) || targetSearch.includes(rowSearch);
 }
 
+function standingsRowTeamId(row: StandingRow): string {
+  const card = clientLeagueTeamCard(row.team, row.id);
+  return card ? clientLeagueTeamId(card) : compactMatchName(row.id || row.team);
+}
+
 function normalizeClientMatch(match: MatchRow): MatchRow {
   if (match.sport === "basketball" && isWnbaMatchContext(match.country, match.league, match.home, match.away)) {
     const home = resolveWnbaTeam(match.home, match.homeTeamId);
@@ -3158,6 +3163,17 @@ export default function Home() {
       )) || null
     }));
   }, [standingsMatch, standingsRows, tennisStandingsOpen]);
+  const selectedStandingsTeamIds = useMemo(() => {
+    if (!standingsMatch || tennisStandingsOpen || counterStrikeStandingsOpen) return new Set<string>();
+    const ids = ["home", "away"].flatMap((side) => {
+      const targetName = side === "home" ? standingsMatch.home : standingsMatch.away;
+      const targetId = side === "home" ? standingsMatch.homeTeamId : standingsMatch.awayTeamId;
+      if (!targetName && !targetId) return [];
+      const card = clientLeagueTeamCard(targetName, targetId);
+      return [card ? clientLeagueTeamId(card) : compactMatchName(targetId || targetName)];
+    });
+    return new Set(ids);
+  }, [counterStrikeStandingsOpen, standingsMatch, tennisStandingsOpen]);
 
   useEffect(() => {
     setStandingsPage(current => Math.min(Math.max(1, current), standingsPageCount));
@@ -6367,7 +6383,7 @@ export default function Home() {
                               ? selectedPlayerIds.has(row.id) || selectedTennisPlayers.some(item => tennisPlayerNamesMatch(row.team, item.player.name))
                               : counterStrikeRow
                               ? esportsTeamNamesMatch(row.team, standingsMatch!.home) || esportsTeamNamesMatch(row.team, standingsMatch!.away)
-                              : standingsRowMatchesTeam(row, standingsMatch!, "home") || standingsRowMatchesTeam(row, standingsMatch!, "away"));
+                              : selectedStandingsTeamIds.has(standingsRowTeamId(row)) || standingsRowMatchesTeam(row, standingsMatch!, "home") || standingsRowMatchesTeam(row, standingsMatch!, "away"));
                             const rowEsportsCard = counterStrikeRow ? esportsTeamCard(row.team, row) : null;
                             const rowTennisCard = tennisRow ? tennisPlayerCard(row) : null;
 
