@@ -2091,12 +2091,12 @@ h1 {
   flex-direction: column;
   gap: 10px;
   height: min(680px, calc(100dvh - 34px));
-  max-width: 860px;
+  max-width: 1180px;
   min-height: 0;
   padding: 18px;
   position: relative;
   overflow: hidden;
-  width: min(860px, 96vw);
+  width: min(1180px, 96vw);
 }
 
 .team-card-panel {
@@ -2142,7 +2142,8 @@ h1 {
   border-color: rgba(0, 0, 0, 0.9);
 }
 
-.team-card-logo:has(img[src*="tampa-bay-rays"]) {
+.team-card-logo:has(img[src*="tampa-bay-rays"]),
+.team-card-logo:has(img[src*="boston-red-sox"]) {
   background: #fff;
 }
 
@@ -2248,6 +2249,7 @@ h1 {
   display: grid;
   flex: 1 1 auto;
   gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
   max-height: none;
   min-height: 0;
   overscroll-behavior: contain;
@@ -2377,7 +2379,7 @@ h1 {
   font-size: 0.76rem;
   letter-spacing: 0.1em;
   margin: 0;
-  padding: 9px 11px;
+  padding: 8px 10px;
   text-transform: uppercase;
 }
 
@@ -2490,11 +2492,11 @@ h1 {
   border-top: 1px solid rgba(255, 255, 255, 0.07);
   color: var(--muted);
   display: grid;
-  font-size: 0.78rem;
-  gap: 8px;
-  grid-template-columns: 34px minmax(150px, 1fr) 42px 42px 58px 54px;
-  min-height: 34px;
-  padding: 0 10px;
+  font-size: 0.72rem;
+  gap: 6px;
+  grid-template-columns: 30px minmax(126px, 1fr) 34px 34px 48px 42px;
+  min-height: 27px;
+  padding: 0 8px;
 }
 
 .standings-row-esports {
