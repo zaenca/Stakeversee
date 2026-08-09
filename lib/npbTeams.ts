@@ -131,7 +131,7 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
     league: "NPB",
     division: "Тихоокеанская лига",
     country: "Япония",
-    logo: "OB",
+    logo: "/teams/orix-buffaloes.png",
     rank: 4,
     form: "-",
     aliases: ["orix buffaloes", "orix buffalos", "orix", "орикс баффалос", "орикс буффалос", "орикс"]
