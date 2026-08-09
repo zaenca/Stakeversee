@@ -140,15 +140,6 @@ type StandingRow = {
   tour?: TennisTour;
 };
 
-type HeadToHeadRow = {
-  id: string;
-  date: string;
-  home: string;
-  away: string;
-  score: string;
-  winner: string;
-};
-
 type EsportsTeamProfile = {
   id: string;
   name: string;
@@ -231,7 +222,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v29";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v30";
 const FAVORITE_TEAMS_KEY = "stakeversee:favorite-teams:v1";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
@@ -1813,12 +1804,6 @@ function formatMatchDateTime(match: MatchRow, lang: Lang) {
   return `${day} · ${time}`;
 }
 
-function formatHeadToHeadDate(value: string, lang: Lang) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(localeFor(lang), { day: "2-digit", month: "2-digit", year: "2-digit" });
-}
-
 function readCachedMatches() {
   if (typeof window === "undefined") return [];
 
@@ -2568,9 +2553,6 @@ export default function Home() {
   const [standingsMatch, setStandingsMatch] = useState<MatchRow | null>(null);
   const [standingsSource, setStandingsSource] = useState("");
   const [standingsTitle, setStandingsTitle] = useState("");
-  const [headToHeadRows, setHeadToHeadRows] = useState<HeadToHeadRow[]>([]);
-  const [headToHeadLoading, setHeadToHeadLoading] = useState(false);
-  const [headToHeadSource, setHeadToHeadSource] = useState("");
   const [teamCardOpen, setTeamCardOpen] = useState(false);
   const [selectedTeamCard, setSelectedTeamCard] = useState<TeamCard | null>(null);
   const [matchesLoading, setMatchesLoading] = useState(false);
@@ -3159,14 +3141,6 @@ export default function Home() {
     const start = (standingsPage - 1) * 10;
     return standingsGroups.map(group => ({ ...group, rows: group.rows.slice(start, start + 10) })).filter(group => group.rows.length);
   }, [pagedStandingsOpen, standingsGroups, standingsPage]);
-  const selectedStandingRows = useMemo(() => {
-    if (!standingsMatch) return [];
-    return (["home", "away"] as const).map(side => ({
-      side,
-      requestedName: side === "home" ? standingsMatch.home : standingsMatch.away,
-      row: standingsRows.find(row => standingsRowMatchesTeam(row, standingsMatch, side)) || null
-    })).filter(item => item.requestedName);
-  }, [standingsMatch, standingsRows]);
   const selectedCounterStrikeTeams = useMemo(() => {
     if (!counterStrikeStandingsOpen || !standingsMatch) return [];
     return [standingsMatch.home, standingsMatch.away].map(team => ({
@@ -3301,9 +3275,6 @@ export default function Home() {
     setStandingsTitle(`${match.league} · ${matchTitle}`);
     setStandingsLoading(true);
     setStandingsMessage("");
-    setHeadToHeadRows([]);
-    setHeadToHeadSource("");
-    setHeadToHeadLoading(match.sport === "baseball");
 
     try {
       const params = new URLSearchParams({
@@ -3337,35 +3308,6 @@ export default function Home() {
       setStandingsLoading(false);
     }
 
-    if (match.sport !== "baseball" || match.standingsOnly) return;
-
-    try {
-      const params = new URLSearchParams({
-        sport: match.sport,
-        league: match.league,
-        home: match.home,
-        away: match.away,
-        homeTeamId: match.homeTeamId || "",
-        awayTeamId: match.awayTeamId || ""
-      });
-      const response = await fetch(`/api/head-to-head?${params.toString()}`, { cache: "no-store" });
-      if (!response.ok) throw new Error("head-to-head unavailable");
-      const payload = await response.json();
-      setHeadToHeadSource(String(payload?.source || ""));
-      const rows = Array.isArray(payload?.matches) ? payload.matches : [];
-      setHeadToHeadRows(rows.map((row: Partial<HeadToHeadRow> & Record<string, unknown>, index: number) => ({
-        id: String(row.id || `${row.home || "home"}-${row.away || "away"}-${index}`),
-        date: String(row.date || ""),
-        home: String(row.home || ""),
-        away: String(row.away || ""),
-        score: String(row.score || "-"),
-        winner: String(row.winner || "")
-      })).filter((row: HeadToHeadRow) => row.home && row.away));
-    } catch {
-      setHeadToHeadRows([]);
-    } finally {
-      setHeadToHeadLoading(false);
-    }
   }
 
   async function openTeamProfile(card: TeamCard, standing?: StandingRow) {
@@ -6354,30 +6296,6 @@ export default function Home() {
               >
                 <div className="rail-title">📊 {t("Турнирная таблица")} {standingsTitle}</div>
                 {standingsSource ? <div className="standings-source">{t("Источник")}: {standingsSource}</div> : null}
-                {standingsMatch?.sport === "baseball" && !standingsMatch.standingsOnly ? (
-                  <div className="standings-h2h">
-                    <div className="standings-h2h-title">
-                      <strong>{t("Очные встречи")}</strong>
-                      {headToHeadSource ? <span>{t("Источник")}: {headToHeadSource}</span> : null}
-                    </div>
-                    {headToHeadLoading ? (
-                      <span>{t("Загружаю личные встречи...")}</span>
-                    ) : headToHeadRows.length ? (
-                      <div className="standings-h2h-list">
-                        {headToHeadRows.map(row => (
-                          <div className="standings-h2h-row" key={row.id}>
-                            <span>{formatHeadToHeadDate(row.date, lang)}</span>
-                            <strong>{row.home} — {row.away}</strong>
-                            <span>{row.score}</span>
-                            {row.winner ? <em>{t("Победитель")}: {row.winner}</em> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <span>{t("Прошлые личные встречи в подключенном источнике пока не найдены.")}</span>
-                    )}
-                  </div>
-                ) : null}
                 <button className="stats-modal-close" aria-label={t("Закрыть таблицу")} onClick={() => setStandingsOpen(false)} type="button">×</button>
                 {standingsLoading ? (
                   <div className="assistant-empty-hint">{t("Загружаю таблицу...")}</div>
@@ -6406,28 +6324,6 @@ export default function Home() {
                               <span>{standing ? `#${standing.rank}` : "—"}</span>
                               <strong>{standing?.team || player.name}</strong>
                               <small>{standing ? `${standing.points ?? "-"} ${t("очков")}` : t("Нет в этом рейтинге")}</small>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-                    {standingsMatch && !counterStrikeStandingsOpen && !tennisStandingsOpen ? (
-                      <div className="standings-selected-teams">
-                        {selectedStandingRows.map(({ requestedName, row, side }) => {
-                          const card = row ? clientLeagueTeamCard(row.team, row.id) : null;
-                          return (
-                            <button
-                              className={row ? "highlighted" : "missing"}
-                              key={`${side}-${requestedName}`}
-                              onClick={() => {
-                                if (card && row) void openTeamProfile(card, row);
-                                else void openTeamProfile(genericTeamCard(standingsMatch, side));
-                              }}
-                              type="button"
-                            >
-                              <span>{row ? `#${row.rank}` : "—"}</span>
-                              <strong>{row?.team || requestedName}</strong>
-                              <small>{row ? `${row.league}${row.division && row.division !== row.league ? ` · ${row.division}` : ""}` : t("Нет в текущей таблице")}</small>
                             </button>
                           );
                         })}

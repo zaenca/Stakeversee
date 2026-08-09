@@ -78,15 +78,15 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
   },
   {
     id: "chunichi dragons",
-    name: "Тюничи Дрэгонс",
-    shortName: "Тюничи",
+    name: "Тюнити Дрэгонс",
+    shortName: "Тюнити",
     league: "NPB",
     division: "Центральная лига",
     country: "Япония",
-    logo: "CD",
+    logo: "/teams/chunichi-dragons.png",
     rank: 6,
     form: "-",
-    aliases: ["chunichi dragons", "chunichi", "тюничи дрэгонс", "тюничи", "чуничи драгонс", "чуничи"]
+    aliases: ["chunichi dragons", "chunichi", "тюнити дрэгонс", "тюнити", "тюничи дрэгонс", "тюничи", "чуничи драгонс", "чуничи"]
   },
   {
     id: "fukuoka softbank hawks",
