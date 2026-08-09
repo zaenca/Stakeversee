@@ -2143,7 +2143,8 @@ h1 {
 }
 
 .team-card-logo:has(img[src*="tampa-bay-rays"]),
-.team-card-logo:has(img[src*="boston-red-sox"]) {
+.team-card-logo:has(img[src*="boston-red-sox"]),
+.team-card-logo:has(img[src*="cleveland-guardians"]) {
   background: #fff;
 }
 
@@ -2157,6 +2158,11 @@ h1 {
 }
 
 .team-card-logo img[src*="hanshin-tigers"] {
+  object-fit: cover;
+}
+
+.team-card-logo img[src*="new-york-yankees"],
+.team-card-logo img[src*="texas-rangers"] {
   object-fit: cover;
 }
 
