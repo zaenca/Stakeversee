@@ -42,15 +42,15 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
   },
   {
     id: "tokyo yakult swallows",
-    name: "Токио Якульт Суоллоуз",
+    name: "Токио Якульт Сваллоуз",
     shortName: "Якульт",
     league: "NPB",
     division: "Центральная лига",
     country: "Япония",
-    logo: "YS",
+    logo: "/teams/tokyo-yakult-swallows.png",
     rank: 3,
     form: "-",
-    aliases: ["tokyo yakult swallows", "yakult swallows", "tokyo yakult", "токио якульт суоллоуз", "якульт суоллоуз", "якульт"]
+    aliases: ["tokyo yakult swallows", "yakult swallows", "tokyo yakult", "токио якульт сваллоуз", "якульт сваллоуз", "токио якульт суоллоуз", "якульт суоллоуз", "якульт"]
   },
   {
     id: "yokohama dena baystars",
