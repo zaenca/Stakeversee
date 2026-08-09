@@ -2169,6 +2169,20 @@ h1 {
   object-fit: cover;
 }
 
+.team-card-logo img[src*="seattle-mariners"] {
+  object-fit: cover;
+  transform: scale(1.08);
+}
+
+.team-card-logo img[src*="kansas-city-royals"] {
+  transform: translateY(4px) scale(1.04);
+}
+
+.team-card-logo img[src*="athletics"],
+.team-card-logo img[src*="los-angeles-angels"] {
+  transform: scale(0.84);
+}
+
 .team-card-hero span,
 .team-card-hero small,
 .team-card-aliases > span {
