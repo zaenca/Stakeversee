@@ -2267,6 +2267,20 @@ h1 {
   background: rgba(0, 229, 255, 0.16);
 }
 
+.standings-selected-teams button.highlighted {
+  background: rgba(0, 229, 255, 0.12);
+  border-color: rgba(0, 229, 255, 0.42);
+}
+
+.standings-selected-teams button.missing {
+  background: rgba(246, 201, 69, 0.08);
+  border-color: rgba(246, 201, 69, 0.35);
+}
+
+.standings-selected-teams button.missing span {
+  color: var(--amber);
+}
+
 .standings-selected-teams span,
 .standings-selected-teams small {
   color: var(--cyan);
@@ -2487,6 +2501,7 @@ h1 {
   background: rgba(0, 229, 255, 0.1);
   border-color: rgba(0, 229, 255, 0.36);
   color: #eaf6ff;
+  box-shadow: inset 3px 0 0 var(--cyan);
 }
 
 .standings-row.highlighted strong {

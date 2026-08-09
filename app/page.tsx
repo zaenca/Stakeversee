@@ -409,6 +409,27 @@ function genericTeamCard(match: MatchRow, side: "home" | "away"): GenericTeamPro
   };
 }
 
+function standingsRowMatchesTeam(row: StandingRow, match: MatchRow, side: "home" | "away"): boolean {
+  const targetName = side === "home" ? match.home : match.away;
+  const targetId = side === "home" ? match.homeTeamId : match.awayTeamId;
+  if (targetId && row.id === targetId) return true;
+
+  const rowLeagueCard = clientLeagueTeamCard(row.team, row.id);
+  const targetLeagueCard = clientLeagueTeamCard(targetName, targetId);
+  if (rowLeagueCard && targetLeagueCard && clientLeagueTeamId(rowLeagueCard) === clientLeagueTeamId(targetLeagueCard)) return true;
+
+  if (match.sport === "esports") return esportsTeamNamesMatch(row.team, targetName);
+  if (match.sport === "tennis") return tennisPlayerNamesMatch(row.team, targetName);
+
+  const rowCompact = compactMatchName(row.team);
+  const targetCompact = compactMatchName(targetName);
+  const rowSearch = searchHaystack(row.team, row.id, row.originalName || "");
+  const targetSearch = searchHaystack(targetName, targetId || "");
+  return Boolean(
+    rowCompact && targetCompact && (rowCompact === targetCompact || rowCompact.includes(targetCompact) || targetCompact.includes(rowCompact))
+  ) || rowSearch.includes(targetSearch) || targetSearch.includes(rowSearch);
+}
+
 function normalizeClientMatch(match: MatchRow): MatchRow {
   if (match.sport === "basketball" && isWnbaMatchContext(match.country, match.league, match.home, match.away)) {
     const home = resolveWnbaTeam(match.home, match.homeTeamId);
@@ -3127,6 +3148,14 @@ export default function Home() {
     const start = (standingsPage - 1) * 10;
     return standingsGroups.map(group => ({ ...group, rows: group.rows.slice(start, start + 10) })).filter(group => group.rows.length);
   }, [pagedStandingsOpen, standingsGroups, standingsPage]);
+  const selectedStandingRows = useMemo(() => {
+    if (!standingsMatch) return [];
+    return (["home", "away"] as const).map(side => ({
+      side,
+      requestedName: side === "home" ? standingsMatch.home : standingsMatch.away,
+      row: standingsRows.find(row => standingsRowMatchesTeam(row, standingsMatch, side)) || null
+    }));
+  }, [standingsMatch, standingsRows]);
   const selectedCounterStrikeTeams = useMemo(() => {
     if (!counterStrikeStandingsOpen || !standingsMatch) return [];
     return [standingsMatch.home, standingsMatch.away].map(team => ({
@@ -6350,6 +6379,28 @@ export default function Home() {
                         })}
                       </div>
                     ) : null}
+                    {standingsMatch && !counterStrikeStandingsOpen && !tennisStandingsOpen ? (
+                      <div className="standings-selected-teams">
+                        {selectedStandingRows.map(({ requestedName, row, side }) => {
+                          const card = row ? clientLeagueTeamCard(row.team, row.id) : null;
+                          return (
+                            <button
+                              className={row ? "highlighted" : "missing"}
+                              key={`${side}-${requestedName}`}
+                              onClick={() => {
+                                if (card && row) void openTeamProfile(card, row);
+                                else void openTeamProfile(genericTeamCard(standingsMatch, side));
+                              }}
+                              type="button"
+                            >
+                              <span>{row ? `#${row.rank}` : "—"}</span>
+                              <strong>{row?.team || requestedName}</strong>
+                              <small>{row ? `${row.league}${row.division && row.division !== row.league ? ` · ${row.division}` : ""}` : t("Нет в текущей таблице")}</small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                     <div className="standings-groups">
                     {visibleStandingsGroups.map(group => (
                       <section className="standings-group" key={group.title}>
@@ -6380,11 +6431,6 @@ export default function Home() {
                             </div>
                           )}
                           {group.rows.map(row => {
-                            const rowName = searchHaystack(row.team, row.id);
-                            const homeName = standingsMatch ? searchHaystack(standingsMatch.home) : "";
-                            const awayName = standingsMatch ? searchHaystack(standingsMatch.away) : "";
-                            const homeTeamId = standingsMatch?.homeTeamId || "";
-                            const awayTeamId = standingsMatch?.awayTeamId || "";
                             const rowTeamCard = clientLeagueTeamCard(row.team, row.id);
                             const counterStrikeRow = Boolean(standingsMatch && isCounterStrikeMatch(standingsMatch));
                             const tennisRow = Boolean(standingsMatch?.sport === "tennis");
@@ -6393,11 +6439,7 @@ export default function Home() {
                               ? selectedPlayerIds.has(row.id) || selectedTennisPlayers.some(item => tennisPlayerNamesMatch(row.team, item.player.name))
                               : counterStrikeRow
                               ? esportsTeamNamesMatch(row.team, standingsMatch!.home) || esportsTeamNamesMatch(row.team, standingsMatch!.away)
-                              : (
-                                row.id === homeTeamId || row.id === awayTeamId
-                                || rowName.includes(homeName) || homeName.includes(rowName)
-                                || rowName.includes(awayName) || awayName.includes(rowName)
-                              ));
+                              : standingsRowMatchesTeam(row, standingsMatch!, "home") || standingsRowMatchesTeam(row, standingsMatch!, "away"));
                             const rowEsportsCard = counterStrikeRow ? esportsTeamCard(row.team, row) : null;
                             const rowTennisCard = tennisRow ? tennisPlayerCard(row) : null;
 

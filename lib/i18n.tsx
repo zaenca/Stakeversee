@@ -209,6 +209,7 @@ export const translations: Record<string, string> = {
     "Deposits and withdrawals will appear here after the first balance change.",
   "Все прогнозы источника": "All predictions from source",
   "У этого источника пока нет прогнозов.": "This source has no predictions yet.",
+  "Нет в текущей таблице": "Not in the current table",
 
   // ── Quick bet / sources panel ──────────────────────────────
   "Быстрая ставка": "Quick bet",
