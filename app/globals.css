@@ -2114,7 +2114,7 @@ h1 {
 
 .team-card-logo {
   align-items: center;
-  background: linear-gradient(135deg, rgba(0, 229, 255, 0.24), rgba(11, 229, 161, 0.12));
+  background: #ffffff;
   border: 1px solid rgba(0, 229, 255, 0.4);
   border-radius: 50%;
   color: var(--cyan);
@@ -2130,10 +2130,19 @@ h1 {
 
 .team-card-logo img {
   border-radius: 50%;
+  box-sizing: border-box;
   display: block;
-  height: 58px;
+  height: 100%;
   object-fit: contain;
-  width: 58px;
+  width: 100%;
+}
+
+.team-card-logo img[src*="hanshin-tigers"] {
+  object-fit: cover;
+}
+
+.team-card-logo img[src*="softbank-hawks"] {
+  padding: 5px;
 }
 
 .team-card-hero span,

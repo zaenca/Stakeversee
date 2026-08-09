@@ -90,15 +90,15 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
   },
   {
     id: "fukuoka softbank hawks",
-    name: "Фукуока Софтбанк Хокс",
+    name: "Фукуока Софтбанк Хоукс",
     shortName: "Софтбанк",
     league: "NPB",
     division: "Тихоокеанская лига",
     country: "Япония",
-    logo: "SH",
+    logo: "/teams/softbank-hawks.png",
     rank: 1,
     form: "-",
-    aliases: ["fukuoka softbank hawks", "softbank hawks", "fukuoka hawks", "фукуока софтбанк хокс", "софтбанк хокс", "фукуока хокс"]
+    aliases: ["fukuoka softbank hawks", "softbank hawks", "fukuoka hawks", "фукуока софтбанк хоукс", "софтбанк хоукс", "фукуока хоукс", "фукуока софтбанк хокс", "софтбанк хокс", "фукуока хокс"]
   },
   {
     id: "saitama seibu lions",

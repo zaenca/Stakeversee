@@ -230,7 +230,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v24";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v25";
 const FAVORITE_TEAMS_KEY = "stakeversee:favorite-teams:v1";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
@@ -6254,7 +6254,7 @@ export default function Home() {
                   <div>
                     <span>{selectedTeamCard.country} · {selectedTeamCard.league}</span>
                     <h2>{selectedTeamCard.name}</h2>
-                    <small>{isTennisPlayerCard(selectedTeamCard) ? t("ID игрока") : t("ID команды")}: {selectedTeamCard.id}</small>
+                    <small>ID: {selectedTeamCard.id}</small>
                   </div>
                 </div>
                 <div className="team-card-stats">
