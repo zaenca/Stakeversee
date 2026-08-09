@@ -23,10 +23,10 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
     league: "NPB",
     division: "Центральная лига",
     country: "Япония",
-    logo: "HT",
+    logo: "/teams/hanshin-tigers.png",
     rank: 1,
     form: "-",
-    aliases: ["hanshin tigers", "hanshin", "хансин тайгерс", "хансин", "ханшин тайгерс", "ханшин"]
+    aliases: ["hanshin tigers", "hanshin", "tigers", "хансин тайгерс", "хансин", "ханшин тайгерс", "ханшин", "тайгерс"]
   },
   {
     id: "yomiuri giants",

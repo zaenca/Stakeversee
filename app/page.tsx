@@ -230,7 +230,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v23";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v24";
 const FAVORITE_TEAMS_KEY = "stakeversee:favorite-teams:v1";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
@@ -343,7 +343,17 @@ function clientBaseballTeamKey(value: string, teamId?: string): string {
 }
 
 function clientBaseballTeamCard(value: string, teamId?: string): BaseballTeamCard | null {
-  return resolveKboTeam(value, teamId) || resolveMlbTeam(value, teamId) || resolveNpbTeam(value, teamId) || resolveCzechBaseballTeam(value, teamId);
+  const normalizedTeamId = String(teamId || "").toLowerCase();
+  if (normalizedTeamId.includes(":japan:") || normalizedTeamId.includes(":npb:")) {
+    return resolveNpbTeam(value, teamId) || resolveKboTeam(value, teamId) || resolveMlbTeam(value, teamId) || resolveCzechBaseballTeam(value, teamId);
+  }
+  if (normalizedTeamId.includes(":usa:") || normalizedTeamId.includes(":mlb:")) {
+    return resolveMlbTeam(value, teamId) || resolveKboTeam(value, teamId) || resolveNpbTeam(value, teamId) || resolveCzechBaseballTeam(value, teamId);
+  }
+  if (normalizedTeamId.includes(":korea:") || normalizedTeamId.includes(":kbo:")) {
+    return resolveKboTeam(value, teamId) || resolveMlbTeam(value, teamId) || resolveNpbTeam(value, teamId) || resolveCzechBaseballTeam(value, teamId);
+  }
+  return resolveKboTeam(value, teamId) || resolveNpbTeam(value, teamId) || resolveMlbTeam(value, teamId) || resolveCzechBaseballTeam(value, teamId);
 }
 
 function clientBaseballTeamId(card: BaseballTeamCard): string {
@@ -467,20 +477,6 @@ function normalizeClientMatch(match: MatchRow): MatchRow {
     };
   }
 
-  const mlbHomeCard = resolveMlbTeam(match.home, match.homeTeamId);
-  const mlbAwayCard = resolveMlbTeam(match.away, match.awayTeamId);
-  if (isMlbMatchContext(match.country, match.league, match.home, match.away)) {
-    return {
-      ...match,
-      country: "USA",
-      league: "MLB",
-      home: mlbHomeCard?.name || match.home,
-      away: mlbAwayCard?.name || match.away,
-      homeTeamId: mlbHomeCard ? mlbTeamId(mlbHomeCard) : match.homeTeamId,
-      awayTeamId: mlbAwayCard ? mlbTeamId(mlbAwayCard) : match.awayTeamId
-    };
-  }
-
   const baseballContext = compactMatchName(`${match.country} ${match.league}`);
   const isNpbReserve = /reserve|резерв|farm|minor/.test(baseballContext)
     && /\bnpb\b|japan|япон|чемпионат японии/.test(baseballContext);
@@ -505,6 +501,20 @@ function normalizeClientMatch(match: MatchRow): MatchRow {
       away: npbAwayCard?.name || match.away,
       homeTeamId: npbHomeCard ? npbTeamId(npbHomeCard) : match.homeTeamId,
       awayTeamId: npbAwayCard ? npbTeamId(npbAwayCard) : match.awayTeamId
+    };
+  }
+
+  const mlbHomeCard = resolveMlbTeam(match.home, match.homeTeamId);
+  const mlbAwayCard = resolveMlbTeam(match.away, match.awayTeamId);
+  if (isMlbMatchContext(match.country, match.league, match.home, match.away)) {
+    return {
+      ...match,
+      country: "USA",
+      league: "MLB",
+      home: mlbHomeCard?.name || match.home,
+      away: mlbAwayCard?.name || match.away,
+      homeTeamId: mlbHomeCard ? mlbTeamId(mlbHomeCard) : match.homeTeamId,
+      awayTeamId: mlbAwayCard ? mlbTeamId(mlbAwayCard) : match.awayTeamId
     };
   }
 
@@ -6230,7 +6240,7 @@ export default function Home() {
                 <button className="stats-modal-close" aria-label={t("Закрыть")} onClick={() => setTeamCardOpen(false)} type="button">×</button>
                 <div className="team-card-hero">
                   <div className="team-card-logo">
-                    {selectedTeamCard.logo.startsWith("http") ? <img alt="" src={selectedTeamCard.logo} /> : selectedTeamCard.logo}
+                    {selectedTeamCard.logo.startsWith("http") || selectedTeamCard.logo.startsWith("/") ? <img alt="" src={selectedTeamCard.logo} /> : selectedTeamCard.logo}
                     <button
                       aria-label={selectedTeamFavorite ? t("Убрать из избранного") : t("Добавить в избранное")}
                       className={`favorite-team-button team-card-favorite ${selectedTeamFavorite ? "active" : ""}`}
