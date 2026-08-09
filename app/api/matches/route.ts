@@ -113,7 +113,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v36-tennisi-kz-active";
+const API_VERSION = "bookmakers-v37-tennisi-kz-timezone";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 const TENNISI_ENDPOINTS = [
   {
@@ -209,7 +209,7 @@ const TENNISI_MONTH_NAMES: Record<string, number> = {
   "ДЕКАБРЯ": 11
 };
 
-function parseTennisiStartMs(dateText: string, baseYear: number, baseMonth: number, baseDay: number, dayOffset: number): number | null {
+function parseTennisiStartMs(dateText: string, baseYear: number, baseMonth: number, baseDay: number, dayOffset: number, utcOffsetHours = 3): number | null {
   const timeMatch = dateText.match(/(\d{1,2}):(\d{2})/);
   if (!timeMatch) return null;
 
@@ -238,7 +238,7 @@ function parseTennisiStartMs(dateText: string, baseYear: number, baseMonth: numb
     }
   }
 
-  const startMs = Date.UTC(year, month, day, hour - 3, minute);
+  const startMs = Date.UTC(year, month, day, hour - utcOffsetHours, minute);
   const baseMs = Date.UTC(baseYear, baseMonth, baseDay, 0, 0);
   const monthMs = 30 * 24 * 60 * 60 * 1000;
 
@@ -822,7 +822,7 @@ async function fetchTennisiCategory(category: { categoryId: number; path: string
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const html = new TextDecoder("windows-1251").decode(await response.arrayBuffer());
-      const rootMatches = parseTennisiHtml(html, category.sport);
+      const rootMatches = parseTennisiHtml(html, category.sport, endpoint.gameId === 18 ? 5 : 3);
       if (category.sport !== "baseball" || depth >= 1 || endpoint.gameId !== 5) return rootMatches;
 
       const childCategories = tennisiChildCategories(html, category);
@@ -855,7 +855,7 @@ function tennisiChildCategories(html: string, parent: { categoryId: number; path
   return Array.from(found.values()).slice(0, 6);
 }
 
-function parseTennisiHtml(html: string, sport: string): RawMatch[] {
+function parseTennisiHtml(html: string, sport: string, utcOffsetHours = 3): RawMatch[] {
   const serverDate = html.match(/server_time">(\d{1,2})\s+([А-ЯЁ]+)\s+(\d{4})(?:,\s*(\d{1,2}):(\d{2}))?/i);
   const baseDay = serverDate ? Number(serverDate[1]) : new Date().getUTCDate();
   const baseMonth = serverDate ? TENNISI_MONTH_NAMES[serverDate[2].toUpperCase()] ?? new Date().getUTCMonth() : new Date().getUTCMonth();
@@ -930,7 +930,7 @@ function parseTennisiHtml(html: string, sport: string): RawMatch[] {
     const [eventHour, eventMinute] = time.split(":").map(Number);
     const eventMinutes = eventHour * 60 + eventMinute;
     const overnightOffset = !dateHeader && dayOffset === 0 && serverMinutes !== null && eventMinutes < serverMinutes ? 1 : 0;
-    const startMs = parseTennisiStartMs(dateText, baseYear, baseMonth, baseDay, dayOffset + overnightOffset);
+    const startMs = parseTennisiStartMs(dateText, baseYear, baseMonth, baseDay, dayOffset + overnightOffset, utcOffsetHours);
     if (!startMs) continue;
     const odds: BookmakerOdds = {
       bookmaker: "Tennisi",
