@@ -113,7 +113,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v32-standings-form-mlb-tennisi";
+const API_VERSION = "bookmakers-v33-npb-tennisi-team-ids";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 
 const BASEBALL_TEAM_ALIASES: [string, string[]][] = [
@@ -506,7 +506,7 @@ function normalizeBaseballLeague(match: RawMatch): RawMatch {
   }
   const npbHome = resolveNpbTeam(match.home, match.homeTeamId);
   const npbAway = resolveNpbTeam(match.away, match.awayTeamId);
-  if (isNpbMatchContext(match.country, match.league, match.home, match.away)) {
+  if (isNpbMatchContext(match.country, match.league, match.home, match.away) || (npbHome && npbAway)) {
     return {
       ...match,
       country: "Japan",
