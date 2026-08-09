@@ -6234,3 +6234,73 @@ h1 {
     grid-column: auto;
   }
 }
+
+/* Favorite teams and compact match metadata */
+.workspace-shell .match-meta {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.workspace-shell .match-meta > strong {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.workspace-shell .match-standings-button {
+  align-self: center;
+  margin-left: 0;
+}
+
+.match-team-title {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  justify-content: center;
+  max-width: 100%;
+  position: relative;
+}
+
+.favorite-team-button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(167, 183, 204, 0.2);
+  border-radius: 999px;
+  color: #6e7b8d;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+  height: 24px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+  width: 24px;
+}
+
+.favorite-team-button:hover,
+.favorite-team-button.active {
+  background: rgba(242, 184, 75, 0.14);
+  border-color: rgba(242, 184, 75, 0.52);
+  color: #f2b84b;
+}
+
+.favorite-team-button:active {
+  transform: scale(0.94);
+}
+
+.team-card-logo {
+  position: relative;
+}
+
+.team-card-favorite {
+  bottom: -3px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+  position: absolute;
+  right: -3px;
+}
+
+.team-form-lights {
+  letter-spacing: 0.04em !important;
+}

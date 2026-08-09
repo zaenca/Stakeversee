@@ -187,7 +187,24 @@ type TennisPlayerProfile = {
   kind: "tennis";
 };
 
-type TeamCard = LeagueTeamCard | EsportsTeamProfile | TennisPlayerProfile;
+type GenericTeamProfile = {
+  id: string;
+  name: string;
+  shortName: string;
+  league: string;
+  country: string;
+  logo: string;
+  rank: number;
+  form: string;
+  aliases: string[];
+  wins?: number;
+  losses?: number;
+  pct?: string;
+  gamesBack?: string;
+  kind: "generic";
+};
+
+type TeamCard = LeagueTeamCard | EsportsTeamProfile | TennisPlayerProfile | GenericTeamProfile;
 
 type MatchBookmakerKey = "best" | "pari" | "fonbet" | "tennisi";
 
@@ -214,6 +231,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
 }
 
 const MATCH_CACHE_KEY = "stakeversee:line-matches:v23";
+const FAVORITE_TEAMS_KEY = "stakeversee:favorite-teams:v1";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
   "stakeversee:line-matches:v13",
@@ -347,6 +365,48 @@ function clientLeagueTeamCard(value: string, teamId?: string): LeagueTeamCard | 
 
 function clientLeagueTeamId(card: LeagueTeamCard): string {
   return card.league === "WNBA" ? wnbaTeamId(card) : clientBaseballTeamId(card);
+}
+
+function favoriteTeamKeyFromParts(sport: string, league: string, name: string, teamId?: string): string {
+  return [sport || "sport", league || "league", teamId || compactMatchName(name)]
+    .map(part => compactMatchName(String(part)))
+    .join(":");
+}
+
+function favoriteTeamKeyFromCard(card: TeamCard): string {
+  const cardKind = "kind" in card ? card.kind : "";
+  if (cardKind === "generic") return card.id;
+  const sport = card.league === "WNBA"
+    ? "basketball"
+    : ["KBO", "MLB", "NPB"].includes(String(card.league)) || String(card.id).startsWith("baseball:")
+      ? "baseball"
+      : cardKind || String(card.league).toLowerCase();
+  return favoriteTeamKeyFromParts(sport, String(card.league), card.name, card.id);
+}
+
+function genericTeamCard(match: MatchRow, side: "home" | "away"): GenericTeamProfile {
+  const name = side === "home" ? match.home : match.away;
+  const teamId = side === "home" ? match.homeTeamId : match.awayTeamId;
+  const shortName = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part[0] || "")
+    .join("")
+    .slice(0, 3)
+    .toUpperCase() || "TM";
+
+  return {
+    id: favoriteTeamKeyFromParts(match.sport, match.league, name, teamId),
+    name,
+    shortName,
+    league: match.league || match.sport,
+    country: match.country || "Мир",
+    logo: shortName,
+    rank: 0,
+    form: "WWWLL",
+    aliases: [name],
+    kind: "generic"
+  };
 }
 
 function normalizeClientMatch(match: MatchRow): MatchRow {
@@ -2366,6 +2426,7 @@ export default function Home() {
   });
   const [activeSport, setActiveSport] = useState("all");
   const [matchFilter, setMatchFilter] = useState("all");
+  const [favoriteTeams, setFavoriteTeams] = useState<string[]>([]);
   const [matchTimeWindow, setMatchTimeWindow] = useState<MatchTimeWindow>(24);
   const [searchQuery, setSearchQuery] = useState("");
   const [bankEditorOpen, setBankEditorOpen] = useState(false);
@@ -2492,6 +2553,28 @@ export default function Home() {
   const [assistantStakeInput, setAssistantStakeInput] = useState("");
   const [assistantStakeSaving, setAssistantStakeSaving] = useState(false);
   const [assistantSettingsMessage, setAssistantSettingsMessage] = useState("");
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(FAVORITE_TEAMS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      setFavoriteTeams(Array.isArray(parsed) ? parsed.filter(value => typeof value === "string") : []);
+    } catch {
+      setFavoriteTeams([]);
+    }
+  }, []);
+
+  function toggleFavoriteTeam(key: string) {
+    setFavoriteTeams(current => {
+      const next = current.includes(key) ? current.filter(value => value !== key) : [...current, key];
+      try {
+        window.localStorage.setItem(FAVORITE_TEAMS_KEY, JSON.stringify(next));
+      } catch {
+        // Favorite filtering still works for the current session.
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (assistantOpen) {
@@ -2940,8 +3023,10 @@ export default function Home() {
       const leagueOk = leagueFilter === "all" || match.league === leagueFilter;
       const tierOk =
         matchFilter === "all" ||
-        (matchFilter === "hot" && confidenceTier(match.confidence) === "hot") ||
-        (matchFilter === "good" && confidenceTier(match.confidence) !== "neutral");
+        (matchFilter === "fav" && (
+          favoriteTeams.includes(favoriteTeamKeyFromParts(match.sport, match.league, match.home, match.homeTeamId)) ||
+          favoriteTeams.includes(favoriteTeamKeyFromParts(match.sport, match.league, match.away, match.awayTeamId))
+        ));
       const haystack = searchHaystack(match.home, match.away, match.league, match.country);
       const searchOk =
         !queryGroups.length ||
@@ -2949,7 +3034,7 @@ export default function Home() {
 
       return sportOk && countryOk && tennisTourOk && disciplineOk && leagueOk && tierOk && searchOk;
     });
-  }, [activeSport, countryFilter, disciplineFilter, leagueFilter, matchFilter, lineMatches, matchTimeWindow, searchQuery, tennisTourFilter]);
+  }, [activeSport, countryFilter, disciplineFilter, favoriteTeams, leagueFilter, matchFilter, lineMatches, matchTimeWindow, searchQuery, tennisTourFilter]);
 
   const matchCounts = useMemo(() => {
     const upcomingMatches = getMatchesInTimeWindow(lineMatches, matchTimeWindow);
@@ -3262,7 +3347,7 @@ export default function Home() {
     setStandingsOpen(false);
     setTeamCardOpen(true);
 
-    if (standing || isEsportsTeamCard(card) || isTennisPlayerCard(card)) return;
+    if (standing || isEsportsTeamCard(card) || isTennisPlayerCard(card) || ("kind" in card && card.kind === "generic")) return;
 
     try {
       const profileSport = card.league === "WNBA" ? "basketball" : "baseball";
@@ -3299,8 +3384,7 @@ export default function Home() {
 
     const teamId = side === "home" ? match.homeTeamId : match.awayTeamId;
     const card = clientLeagueTeamCard(name, teamId);
-    if (!card) return;
-    void openTeamProfile(card);
+    void openTeamProfile(card || genericTeamCard(match, side));
   }
 
   function openTennisPlayer(player: TennisParticipant) {
@@ -4585,6 +4669,8 @@ export default function Home() {
     const pendingRailBets = allPendingBetsOpen ? pendingBets : pendingBets.slice(0, 5);
     const loginRequired = profileResolved && !profileLogin;
     const selectedTimezone = TIMEZONE_OPTIONS.find(tz => tz.offset === timezoneOffsetMinutes) || TIMEZONE_OPTIONS[1];
+    const selectedTeamFavoriteKey = selectedTeamCard ? favoriteTeamKeyFromCard(selectedTeamCard) : "";
+    const selectedTeamFavorite = selectedTeamFavoriteKey ? favoriteTeams.includes(selectedTeamFavoriteKey) : false;
 
     return (
       <main className={`workspace-shell theme-${profileTheme}`}>
@@ -5114,8 +5200,14 @@ export default function Home() {
                   const counterStrikeMatch = isCounterStrikeMatch(match);
                   const homeEsportsStanding = counterStrikeMatch ? esportsStandingForTeam(match.home, counterStrikeRankings) : null;
                   const awayEsportsStanding = counterStrikeMatch ? esportsStandingForTeam(match.away, counterStrikeRankings) : null;
-                  const homeTeamClickable = Boolean(clientLeagueTeamCard(match.home, match.homeTeamId) || counterStrikeMatch);
-                  const awayTeamClickable = Boolean(clientLeagueTeamCard(match.away, match.awayTeamId) || counterStrikeMatch);
+                  const homeLeagueCard = clientLeagueTeamCard(match.home, match.homeTeamId);
+                  const awayLeagueCard = clientLeagueTeamCard(match.away, match.awayTeamId);
+                  const homeTeamClickable = Boolean(homeLeagueCard || counterStrikeMatch || match.home);
+                  const awayTeamClickable = Boolean(awayLeagueCard || counterStrikeMatch || match.away);
+                  const homeFavoriteKey = favoriteTeamKeyFromParts(match.sport, match.league, match.home, match.homeTeamId);
+                  const awayFavoriteKey = favoriteTeamKeyFromParts(match.sport, match.league, match.away, match.awayTeamId);
+                  const homeFavorite = favoriteTeams.includes(homeFavoriteKey);
+                  const awayFavorite = favoriteTeams.includes(awayFavoriteKey);
                   const esportsLeague = match.sport === "esports" ? esportsLeaguePresentation(match.league) : null;
                   const homeTennisPlayers = match.sport === "tennis" ? match.homePlayers || [] : [];
                   const awayTennisPlayers = match.sport === "tennis" ? match.awayPlayers || [] : [];
@@ -5177,17 +5269,31 @@ export default function Home() {
                               </button>
                             ))}
                           </div>
-                        ) : homeTeamClickable ? (
-                          <button className="match-team-button" onClick={() => openTeamCard(match, "home")} title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined} type="button">
-                            <strong>{match.home}</strong>
-                            {homeEsportsStanding ? <em className="match-team-ranking">HLTV #{homeEsportsStanding.rank}</em> : null}
-                          </button>
                         ) : (
-                          <strong title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined}>{match.home}</strong>
+                          <div className="match-team-title">
+                            {homeTeamClickable ? (
+                              <button className="match-team-button" onClick={() => openTeamCard(match, "home")} title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined} type="button">
+                                <strong>{match.home}</strong>
+                                {homeEsportsStanding ? <em className="match-team-ranking">HLTV #{homeEsportsStanding.rank}</em> : null}
+                              </button>
+                            ) : (
+                              <strong title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined}>{match.home}</strong>
+                            )}
+                            <button
+                              aria-label={homeFavorite ? t("Убрать из избранного") : t("Добавить в избранное")}
+                              className={`favorite-team-button ${homeFavorite ? "active" : ""}`}
+                              onClick={() => toggleFavoriteTeam(homeFavoriteKey)}
+                              title={homeFavorite ? t("Убрать из избранного") : t("Добавить в избранное")}
+                              type="button"
+                            >
+                              ★
+                            </button>
+                          </div>
                         )}
                         <span>{homeTennisPlayers.length
                           ? homeTennisPlayers.filter(player => player.rank).map(player => `${player.tour} #${player.rank}`).join(" · ")
-                          : homeEsportsStanding ? `Очки HLTV: ${homeEsportsStanding.points ?? "-"}` : t("форма 5к · вес 3")}</span>
+                          : homeEsportsStanding ? `Очки HLTV: ${homeEsportsStanding.points ?? "-"} · ${formatStandingForm(homeEsportsStanding.form)}`
+                            : formatStandingForm(homeLeagueCard?.form)}</span>
                       </div>
                       <b>-</b>
                       <div>
@@ -5200,17 +5306,31 @@ export default function Home() {
                               </button>
                             ))}
                           </div>
-                        ) : awayTeamClickable ? (
-                          <button className="match-team-button" onClick={() => openTeamCard(match, "away")} title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined} type="button">
-                            <strong>{match.away}</strong>
-                            {awayEsportsStanding ? <em className="match-team-ranking">HLTV #{awayEsportsStanding.rank}</em> : null}
-                          </button>
                         ) : (
-                          <strong title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined}>{match.away}</strong>
+                          <div className="match-team-title">
+                            {awayTeamClickable ? (
+                              <button className="match-team-button" onClick={() => openTeamCard(match, "away")} title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined} type="button">
+                                <strong>{match.away}</strong>
+                                {awayEsportsStanding ? <em className="match-team-ranking">HLTV #{awayEsportsStanding.rank}</em> : null}
+                              </button>
+                            ) : (
+                              <strong title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined}>{match.away}</strong>
+                            )}
+                            <button
+                              aria-label={awayFavorite ? t("Убрать из избранного") : t("Добавить в избранное")}
+                              className={`favorite-team-button ${awayFavorite ? "active" : ""}`}
+                              onClick={() => toggleFavoriteTeam(awayFavoriteKey)}
+                              title={awayFavorite ? t("Убрать из избранного") : t("Добавить в избранное")}
+                              type="button"
+                            >
+                              ★
+                            </button>
+                          </div>
                         )}
                         <span>{awayTennisPlayers.length
                           ? awayTennisPlayers.filter(player => player.rank).map(player => `${player.tour} #${player.rank}`).join(" · ")
-                          : awayEsportsStanding ? `Очки HLTV: ${awayEsportsStanding.points ?? "-"}` : t("форма 5к · вес 3")}</span>
+                          : awayEsportsStanding ? `Очки HLTV: ${awayEsportsStanding.points ?? "-"} · ${formatStandingForm(awayEsportsStanding.form)}`
+                            : formatStandingForm(awayLeagueCard?.form)}</span>
                       </div>
                     </div>
 
@@ -6082,6 +6202,15 @@ export default function Home() {
                 <div className="team-card-hero">
                   <div className="team-card-logo">
                     {selectedTeamCard.logo.startsWith("http") ? <img alt="" src={selectedTeamCard.logo} /> : selectedTeamCard.logo}
+                    <button
+                      aria-label={selectedTeamFavorite ? t("Убрать из избранного") : t("Добавить в избранное")}
+                      className={`favorite-team-button team-card-favorite ${selectedTeamFavorite ? "active" : ""}`}
+                      onClick={() => toggleFavoriteTeam(selectedTeamFavoriteKey)}
+                      title={selectedTeamFavorite ? t("Убрать из избранного") : t("Добавить в избранное")}
+                      type="button"
+                    >
+                      ★
+                    </button>
                   </div>
                   <div>
                     <span>{selectedTeamCard.country} · {selectedTeamCard.league}</span>
@@ -6096,7 +6225,7 @@ export default function Home() {
                   </div>
                   <div>
                     <span>{t("Форма")}</span>
-                    <strong>{selectedTeamCard.form}</strong>
+                    <strong className="team-form-lights">{formatStandingForm(selectedTeamCard.form)}</strong>
                   </div>
                   <div>
                     <span>{t("Лига")}</span>

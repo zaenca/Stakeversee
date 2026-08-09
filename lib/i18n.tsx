@@ -97,6 +97,8 @@ export const translations: Record<string, string> = {
   "✓ В купоне": "✓ In coupon",
   "+ Добавить в купон": "+ Add to coupon",
   "Нажми на карточку матча, чтобы добавить его в купон.": "Click a match card to add it to the coupon.",
+  "Добавить в избранное": "Add to favorites",
+  "Убрать из избранного": "Remove from favorites",
 
   // ── Coupon ─────────────────────────────────────────────────
   "🎫 Купон": "🎫 Coupon",
