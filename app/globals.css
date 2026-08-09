@@ -2144,7 +2144,10 @@ h1 {
 
 .team-card-logo:has(img[src*="tampa-bay-rays"]),
 .team-card-logo:has(img[src*="boston-red-sox"]),
-.team-card-logo:has(img[src*="cleveland-guardians"]) {
+.team-card-logo:has(img[src*="cleveland-guardians"]),
+.team-card-logo:has(img[src*="kansas-city-royals"]),
+.team-card-logo:has(img[src*="athletics"]),
+.team-card-logo:has(img[src*="los-angeles-angels"]) {
   background: #fff;
 }
 
