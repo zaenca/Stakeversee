@@ -59,7 +59,7 @@ export const NPB_TEAMS: NpbTeamProfile[] = [
     league: "NPB",
     division: "Центральная лига",
     country: "Япония",
-    logo: "DB",
+    logo: "/teams/yokohama-dena-baystars.png",
     rank: 4,
     form: "-",
     aliases: ["yokohama dena baystars", "dena baystars", "yokohama baystars", "йокогама дена бэйстарс", "йокогама бейстарс", "дена бэйстарс"]
