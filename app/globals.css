@@ -6146,3 +6146,91 @@ h1 {
     flex-wrap: wrap;
   }
 }
+
+/* Match filter row hard alignment */
+.workspace-shell .match-filters {
+  grid-template-columns: 224px minmax(220px, 1fr) 96px 210px minmax(190px, 0.9fr) !important;
+  gap: 10px !important;
+}
+
+.workspace-shell .match-filters > label {
+  min-width: 0;
+}
+
+.workspace-shell .match-filters > label:first-child {
+  width: 224px;
+}
+
+.workspace-shell .match-filters > label:first-child .source-dropdown-menu {
+  max-width: 224px;
+  min-width: 224px;
+  width: 224px;
+}
+
+.workspace-shell .match-filters > label:nth-of-type(3) {
+  max-width: 96px !important;
+  width: 96px;
+}
+
+.workspace-shell .match-filters > label:nth-of-type(3) select {
+  min-width: 0;
+  padding-left: 8px;
+  padding-right: 22px;
+  width: 96px;
+}
+
+.workspace-shell .filter-buttons {
+  align-items: end;
+  display: grid !important;
+  gap: 8px !important;
+  grid-template-columns: 56px 146px;
+  min-width: 210px;
+  width: 210px;
+}
+
+.workspace-shell .filter-buttons button {
+  min-width: 0;
+  padding-left: 10px;
+  padding-right: 10px;
+  width: 100%;
+}
+
+.workspace-shell .match-search-input {
+  justify-self: stretch;
+  max-width: none !important;
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 1320px) {
+  .workspace-shell .match-filters {
+    grid-template-columns: 224px minmax(190px, 1fr) 96px 210px !important;
+  }
+
+  .workspace-shell .match-search-input {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1180px) {
+  .workspace-shell .match-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .workspace-shell .match-filters > label:first-child,
+  .workspace-shell .match-filters > label:nth-of-type(3),
+  .workspace-shell .match-filters > label:nth-of-type(3) select,
+  .workspace-shell .filter-buttons {
+    width: auto;
+  }
+
+  .workspace-shell .match-filters > label:first-child .source-dropdown-menu {
+    max-width: 100%;
+    min-width: 100%;
+    width: 100%;
+  }
+
+  .workspace-shell .match-search-input {
+    grid-column: auto;
+  }
+}
