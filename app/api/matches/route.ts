@@ -5,7 +5,7 @@ import { KBO_TEAMS, isKboMatchContext, kboTeamId, resolveKboTeam } from "@/lib/k
 import { MLB_TEAMS, isMlbMatchContext, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 import { NPB_TEAMS, isNpbMatchContext, npbTeamId, resolveNpbTeam } from "@/lib/npbTeams";
 import { isWnbaMatchContext, resolveWnbaTeam, wnbaTeamId } from "@/lib/wnbaTeams";
-import { areHltvTeamNamesSimilar, loadHltvUpcomingMatches, type HltvUpcomingMatch } from "@/lib/hltv";
+import { areHltvTeamNamesSimilar, counterStrikeTeamId, loadHltvUpcomingMatches, type HltvUpcomingMatch } from "@/lib/hltv";
 import {
   hasTop100Participant,
   loadTennisRankings,
@@ -136,7 +136,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v38-hltv-cs-context";
+const API_VERSION = "bookmakers-v39-esports-team-ids";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 const TENNISI_ENDPOINTS = [
   {
@@ -1038,6 +1038,20 @@ function normalizeEsportsParticipantAlias(value: string): string {
   return cleaned;
 }
 
+function esportsDisciplineId(match: Pick<RawMatch, "league">): string {
+  if (/\b(league\s+of\s+legends|lol)\b/i.test(match.league)) return "lol";
+  if (/\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/i.test(match.league)) return "cs";
+  if (/\b(dota\s*2?|дота)\b/i.test(match.league)) return "dota";
+  if (/\bvalorant\b/i.test(match.league)) return "valorant";
+  return "esports";
+}
+
+function esportsTeamId(match: Pick<RawMatch, "league">, value: string): string {
+  if (esportsDisciplineId(match) === "cs") return counterStrikeTeamId(value);
+  const slug = normalizeEsportsParticipantAlias(value).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
+  return `${esportsDisciplineId(match)}.${slug}`;
+}
+
 function participantAcronym(value: string): string {
   const tokens = value
     .split(" ")
@@ -1090,6 +1104,7 @@ function canonicalTeamId(match: RawMatch, value: string): string {
   if (mlbTeam && isMlbMatchContext(match.country, match.league, match.home, match.away)) return mlbTeamId(mlbTeam);
   const npbTeam = match.sport === "baseball" ? resolveNpbTeam(value) : null;
   if (npbTeam && isNpbMatchContext(match.country, match.league, match.home, match.away)) return npbTeamId(npbTeam);
+  if (match.sport === "esports") return esportsTeamId(match, value);
   const participant = normalizedMatchParticipant(match, value);
   return [match.sport, match.country, match.league, participant]
     .map(part => normalizedName(part))
@@ -1191,6 +1206,7 @@ function sameParticipants(left: RawMatch, right: RawMatch): boolean {
   if (left.homeTeamId && left.awayTeamId && right.homeTeamId && right.awayTeamId) {
     const exactTeams = (left.homeTeamId === right.homeTeamId && left.awayTeamId === right.awayTeamId)
       || (left.homeTeamId === right.awayTeamId && left.awayTeamId === right.homeTeamId);
+    if (left.sport === "esports" || right.sport === "esports") return exactTeams;
     const supportsNameFallback = ["baseball", "basketball", "football", "esports", "ice-hockey"].includes(left.sport)
       && ["baseball", "basketball", "football", "esports", "ice-hockey"].includes(right.sport);
     if (exactTeams || !supportsNameFallback) return exactTeams;
@@ -1229,13 +1245,17 @@ function withHltvContext(match: RawMatch, hltvMatches: HltvUpcomingMatch[]): Raw
   const venue = hltv.venue;
   const event = hltv.event || "";
   const league = ["COUNTER STRIKE 2", event, format, venue].filter(Boolean).join(" ");
+  const home = reversed ? hltv.away : hltv.home;
+  const away = reversed ? hltv.home : hltv.away;
 
   return {
     ...match,
-    country: venue || match.country,
+    country: "World",
     league,
-    home: reversed ? hltv.away : hltv.home,
-    away: reversed ? hltv.home : hltv.away,
+    home,
+    away,
+    homeTeamId: counterStrikeTeamId(home),
+    awayTeamId: counterStrikeTeamId(away),
     hltvMatchId: hltv.id,
     hltvMatchUrl: hltv.detailUrl,
     hltvEvent: event || undefined,
@@ -1253,6 +1273,7 @@ function withHltvContext(match: RawMatch, hltvMatches: HltvUpcomingMatch[]): Raw
 function dedupeKey(match: RawMatch): string {
   const bucket = Math.round(match.startMs / (15 * 60 * 1000));
   const teams = participantIdPair(match);
+  if (match.sport === "esports") return `${match.sport}|${bucket}|${esportsDisciplineId(match)}|${teams}`;
   return `${match.sport}|${bucket}|${normalizedName(match.country)}|${normalizedName(match.league)}|${teams}`;
 }
 
@@ -1295,6 +1316,7 @@ function findMergeKey(byKey: Map<string, RawMatch>, match: RawMatch): string | n
   for (const [key, current] of byKey) {
     if (current.sport !== match.sport) continue;
     if (Math.abs(current.startMs - match.startMs) > mergeTimeToleranceMs(match.sport)) continue;
+    if (match.sport === "esports" && participantIdPair(current) === participantIdPair(match)) return key;
     if (match.sport === "baseball" && participantIdPair(current) === participantIdPair(match)) return key;
     if (sameParticipants(current, match)) return key;
   }

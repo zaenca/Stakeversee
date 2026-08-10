@@ -237,7 +237,7 @@ function matchesStatusLabel(status: MatchesStatusState, t: (text: string) => str
   return t("Автообновление каждые 5 минут");
 }
 
-const MATCH_CACHE_KEY = "stakeversee:line-matches:v41";
+const MATCH_CACHE_KEY = "stakeversee:line-matches:v42";
 const FAVORITE_TEAMS_KEY = "stakeversee:favorite-teams:v1";
 const MATCH_CACHE_FALLBACK_KEYS = [
   MATCH_CACHE_KEY,
@@ -651,13 +651,31 @@ function compactEsportsTeamName(value: string): string {
   return aliases[compact] || compact;
 }
 
+function esportsTeamSlug(value: string): string {
+  return compactEsportsTeamName(value)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "team";
+}
+
+function esportsDisciplineId(value: string): string {
+  if (/\b(league\s+of\s+legends|lol)\b/i.test(value)) return "lol";
+  if (/\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|ÐºÑ[\s.:-]*(?:2|Ð³Ð¾)?)\b/i.test(value)) return "cs";
+  if (/\b(dota\s*2?|Ð´Ð¾Ñ‚Ð°)\b/i.test(value)) return "dota";
+  if (/\bvalorant\b/i.test(value)) return "valorant";
+  return "esports";
+}
+
+function esportsUnifiedTeamId(league: string, team: string): string {
+  return `${esportsDisciplineId(league)}.${esportsTeamSlug(team)}`;
+}
+
 function esportsTeamNamesMatch(left: string, right: string): boolean {
   const leftKey = compactEsportsTeamName(left);
   const rightKey = compactEsportsTeamName(right);
   if (!leftKey || !rightKey) return false;
   if (leftKey === rightKey) return true;
-  if (Math.min(leftKey.length, rightKey.length) < 4) return false;
-  return leftKey.includes(rightKey) || rightKey.includes(leftKey);
+  return false;
 }
 
 function esportsStandingForTeam(team: string, rows: StandingRow[]): StandingRow | null {
@@ -667,7 +685,7 @@ function esportsStandingForTeam(team: string, rows: StandingRow[]): StandingRow 
 function esportsTeamCard(team: string, standing?: StandingRow | null): EsportsTeamProfile {
   const canonicalName = standing?.team || team;
   return {
-    id: standing?.id || `cs:${compactEsportsTeamName(team)}`,
+    id: standing?.id || esportsUnifiedTeamId("COUNTER STRIKE 2", team),
     name: canonicalName,
     shortName: canonicalName,
     league: "COUNTER STRIKE 2",
@@ -815,7 +833,7 @@ function esportsDisciplineName(value: string): string {
   return "Киберспорт";
 }
 
-function esportsLeaguePresentation(value: string): { discipline: string; league: string } {
+function esportsLeaguePresentation(value: string): { discipline: string; league: string; format?: string; venue?: string } {
   const discipline = esportsDisciplineName(value);
   const bo = esportsBoFormat(value);
   let league = value;
@@ -839,11 +857,12 @@ function esportsLeaguePresentation(value: string): { discipline: string; league:
 
   return {
     discipline,
-    league: [tournament, bo].filter(Boolean).join(". ")
+    league: tournament || discipline,
+    format: bo || undefined
   };
 }
 
-function esportsMatchPresentation(match: MatchRow): { discipline: string; league: string } | null {
+function esportsMatchPresentation(match: MatchRow): { discipline: string; league: string; format?: string; venue?: string } | null {
   if (match.sport !== "esports") return null;
   const base = esportsLeaguePresentation(match.league);
   if (!isCounterStrikeMatch(match)) return base;
@@ -856,7 +875,9 @@ function esportsMatchPresentation(match: MatchRow): { discipline: string; league
     .trim();
   return {
     discipline: "COUNTER STRIKE 2",
-    league: [tournament, bo, venue].filter(Boolean).join(" ")
+    league: tournament || "COUNTER STRIKE 2",
+    format: bo || undefined,
+    venue
   };
 }
 
@@ -5226,7 +5247,9 @@ export default function Home() {
                       .map(info => ({
                         count: info.count,
                         flag: <FlagIcon country={info.country} />,
-                        label: `${getSportIcon(info.sport)} ${getCountryLabel(info.country, lang)} \u2014 ${t(info.league)}`,
+                        label: info.sport === "esports"
+                          ? `${getSportIcon(info.sport)} ${t(esportsLeaguePresentation(info.league).discipline)} \u2014 ${t(esportsLeaguePresentation(info.league).league)}`
+                          : `${getSportIcon(info.sport)} ${getCountryLabel(info.country, lang)} \u2014 ${t(info.league)}`,
                         value: info.league
                       }))
                   ]}
@@ -5310,6 +5333,8 @@ export default function Home() {
                       {match.sport !== "tennis" && match.sport !== "esports" ? <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country, lang)}</span> : null}
                       <span className="match-meta-sport" title={getSportLabel(match.sport, lang)}>{getSportIcon(match.sport)} {getSportLabel(match.sport, lang)}</span>
                       {esportsLeague ? <span className="match-meta-discipline">{t(esportsLeague.discipline)}</span> : null}
+                      {esportsLeague?.format ? <span className="match-meta-format">{t(esportsLeague.format)}</span> : null}
+                      {esportsLeague?.venue ? <span className="match-meta-format">{t(esportsLeague.venue)}</span> : null}
                       <strong>{t(esportsLeague?.league || match.league)}</strong>
                       {match.sport === "baseball" || match.sport === "tennis" || isCounterStrikeMatch(match) || wnbaMatchPairKey(match) ? (
                         <button className="match-standings-button" onClick={() => openStandings(match)} type="button">{t("Таблица")}</button>
@@ -6304,7 +6329,7 @@ export default function Home() {
                     </button>
                   </div>
                   <div>
-                    <span>{selectedTeamCard.country} · {selectedTeamCard.league}</span>
+                    <span>{isEsportsTeamCard(selectedTeamCard) ? selectedTeamCard.league : `${selectedTeamCard.country} · ${selectedTeamCard.league}`}</span>
                     <h2>{selectedTeamCard.name}</h2>
                     <small>ID: {selectedTeamCard.id}</small>
                   </div>

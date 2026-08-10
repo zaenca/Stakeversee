@@ -129,6 +129,17 @@ export function normalizeHltvTeamName(value: string): string {
   return aliases[normalized] || normalized;
 }
 
+export function esportsTeamSlug(value: string): string {
+  return normalizeHltvTeamName(value)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "team";
+}
+
+export function counterStrikeTeamId(value: string): string {
+  return `cs.${esportsTeamSlug(value)}`;
+}
+
 function editDistance(left: string, right: string): number {
   const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
   const current = Array(right.length + 1).fill(0);
@@ -149,8 +160,6 @@ export function areHltvTeamNamesSimilar(left: string, right: string): boolean {
   const b = normalizeHltvTeamName(right);
   if (!a || !b) return false;
   if (a === b) return true;
-  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
-  if (shorter.length >= 4 && longer.split(" ").includes(shorter)) return true;
   return editDistance(a, b) <= Math.max(1, Math.floor(Math.max(a.length, b.length) * 0.25));
 }
 
@@ -167,9 +176,8 @@ export function parseHltvRankingHtml(html: string): HltvRankingRow[] {
       const profilePath = attributeFromTag(profileTag, "href");
       const logoTag = segment.match(/<img[^>]*class=["'][^"']*\bteam-logo\b[^"']*["'][^>]*>/i)?.[0] || "";
       const logo = attributeFromTag(logoTag, "src") || attributeFromTag(logoTag, "data-src");
-      const id = profilePath.match(/\/team\/(\d+)\//i)?.[1] || normalizeHltvTeamName(team);
       return {
-        id: `hltv:${id}`,
+        id: counterStrikeTeamId(team),
         rank,
         team,
         points: Number.isFinite(points) ? points : 0,
@@ -179,9 +187,8 @@ export function parseHltvRankingHtml(html: string): HltvRankingRow[] {
         worldRank: rank
       };
     })
-    .filter(row => row.rank > 0 && row.rank <= 100 && row.team)
+    .filter(row => row.rank > 0 && row.team)
     .sort((left, right) => left.rank - right.rank)
-    .slice(0, 100);
 }
 
 export function parseHltvMatchesHtml(html: string): HltvUpcomingMatch[] {
@@ -258,9 +265,8 @@ function parseFallbackRanking(payload: unknown): HltvRankingRow[] {
       const teamObject = row.team && typeof row.team === "object" ? row.team as Record<string, unknown> : {};
       const team = String(teamObject.name || row.team_name || row.name || row.team || "");
       const rank = Number(row.rank || row.position || row.place || index + 1);
-      const id = String(teamObject.id || row.team_id || row.id || normalizeHltvTeamName(team));
       return {
-        id: `cs-api:${id}`,
+        id: counterStrikeTeamId(team),
         rank,
         team,
         points: Number(row.points || row.rating || row.score || 0),
@@ -269,9 +275,8 @@ function parseFallbackRanking(payload: unknown): HltvRankingRow[] {
         profileUrl: undefined
       };
     })
-    .filter(row => row.rank > 0 && row.rank <= 100 && row.team)
-    .sort((left, right) => left.rank - right.rank)
-    .slice(0, 100);
+    .filter(row => row.rank > 0 && row.team)
+    .sort((left, right) => left.rank - right.rank);
 }
 
 async function fetchText(url: string): Promise<string> {
