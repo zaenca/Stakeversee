@@ -670,6 +670,11 @@ function esportsUnifiedTeamId(league: string, team: string): string {
   return `${esportsDisciplineId(league)}.${esportsTeamSlug(team)}`;
 }
 
+const CS_TEAM_LOGOS: Record<string, string> = {
+  "cs.abyssal": "/teams/cs-abyssal.png",
+  "cs.rooster": "/teams/cs-rooster.png"
+};
+
 function esportsTeamNamesMatch(left: string, right: string): boolean {
   const leftKey = compactEsportsTeamName(left);
   const rightKey = compactEsportsTeamName(right);
@@ -684,13 +689,14 @@ function esportsStandingForTeam(team: string, rows: StandingRow[]): StandingRow 
 
 function esportsTeamCard(team: string, standing?: StandingRow | null): EsportsTeamProfile {
   const canonicalName = standing?.team || team;
+  const id = standing?.id || esportsUnifiedTeamId("COUNTER STRIKE 2", team);
   return {
-    id: standing?.id || esportsUnifiedTeamId("COUNTER STRIKE 2", team),
+    id,
     name: canonicalName,
     shortName: canonicalName,
     league: "COUNTER STRIKE 2",
     country: "Мир",
-    logo: standing?.logo || canonicalName.slice(0, 3).toUpperCase(),
+    logo: CS_TEAM_LOGOS[id] || standing?.logo || canonicalName.slice(0, 3).toUpperCase(),
     rank: standing?.rank || 0,
     form: standing?.change || "-",
     aliases: Array.from(new Set([team, canonicalName])).filter(Boolean),
@@ -5408,7 +5414,7 @@ export default function Home() {
                         )}
                         <span>{homeTennisPlayers.length
                           ? homeTennisPlayers.filter(player => player.rank).map(player => `${player.tour} #${player.rank}`).join(" · ")
-                          : homeHltvWorldRank ? `HLTV world #${homeHltvWorldRank}`
+                          : counterStrikeMatch ? ""
                             : formatStandingForm(homeLeagueCard?.form)}</span>
                       </div>
                       <b>-</b>
@@ -5445,7 +5451,7 @@ export default function Home() {
                         )}
                         <span>{awayTennisPlayers.length
                           ? awayTennisPlayers.filter(player => player.rank).map(player => `${player.tour} #${player.rank}`).join(" · ")
-                          : awayHltvWorldRank ? `HLTV world #${awayHltvWorldRank}`
+                          : counterStrikeMatch ? ""
                             : formatStandingForm(awayLeagueCard?.form)}</span>
                       </div>
                     </div>

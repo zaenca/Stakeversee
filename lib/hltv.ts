@@ -246,8 +246,10 @@ function parseHltvMatchDetailHtml(html: string): Pick<HltvUpcomingMatch, "format
 
 function parseHltvTeamRatingsHtml(html: string): HltvTeamRatings {
   const text = stripTags(html);
-  const valve = text.match(/\bValve\s+ranking(?:\s+BETA)?\s*#(\d+)/i);
-  const world = text.match(/\bWorld\s+ranking\s*#(\d+)/i);
+  const valve = text.match(/\bValve\s+ranking(?:\s+BETA)?[^#]{0,120}#\s*(\d+)/i)
+    || html.match(/\bValve[\s\S]{0,40}ranking[\s\S]{0,160}#\s*(\d+)/i);
+  const world = text.match(/\bWorld\s+ranking[^#]{0,120}#\s*(\d+)/i)
+    || html.match(/\bWorld[\s\S]{0,40}ranking[\s\S]{0,160}#\s*(\d+)/i);
   return {
     valveRank: valve ? Number(valve[1]) : undefined,
     worldRank: world ? Number(world[1]) : undefined
