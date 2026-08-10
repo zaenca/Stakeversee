@@ -391,6 +391,8 @@ export async function GET(request: Request) {
   const hltvEventUrl = searchParams.get("hltvEventUrl") || "";
   const hltvMatchUrl = searchParams.get("hltvMatchUrl") || "";
   const hltvEvent = searchParams.get("hltvEvent") || "";
+  const home = searchParams.get("home") || "";
+  const away = searchParams.get("away") || "";
   const csEvent = searchParams.get("csEvent") === "1";
   const tour: TennisTour = searchParams.get("tour")?.toUpperCase() === "WTA" ? "WTA" : "ATP";
   const counterStrike = sport === "esports" && /\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/i.test(league);
@@ -439,8 +441,9 @@ export async function GET(request: Request) {
 
   if (counterStrike) {
     try {
-      const eventOverview = await loadHltvEventOverview(hltvEventUrl)
-        || await loadHltvEventOverviewFromMatch(hltvMatchUrl, hltvEvent || league);
+      const eventOverview = csEvent || hltvEventUrl || hltvMatchUrl || hltvEvent
+        ? await loadHltvEventOverviewFromMatch(hltvMatchUrl, hltvEvent || league, home, away, hltvEventUrl)
+        : await loadHltvEventOverview(hltvEventUrl);
       if (eventOverview?.standings.length) {
         return NextResponse.json(
           {

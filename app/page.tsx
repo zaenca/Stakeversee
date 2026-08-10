@@ -3399,6 +3399,10 @@ export default function Home() {
       if (match.sport === "tennis") params.set("tour", defaultTennisTour);
       if (match.sport === "esports") {
         if (isCounterStrikeMatch(match)) params.set("csEvent", "1");
+        if (isCounterStrikeMatch(match)) {
+          params.set("home", match.home);
+          params.set("away", match.away);
+        }
         if (match.hltvEventUrl) params.set("hltvEventUrl", match.hltvEventUrl);
         if (match.hltvMatchUrl) params.set("hltvMatchUrl", match.hltvMatchUrl);
         if (match.hltvEvent) params.set("hltvEvent", match.hltvEvent);

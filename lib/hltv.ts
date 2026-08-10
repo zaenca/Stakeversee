@@ -78,7 +78,7 @@ const REQUEST_HEADERS = {
 };
 
 const KNOWN_HLTV_EVENT_URLS = [
-  { pattern: /\bdfrag\s+open\s+series\s+6\b/i, url: "https://www.hltv.org/events/9311/dfrag-open-series-6" }
+  { pattern: /\bdfrag\s+open(?:\s+series\s+6)?\b/i, url: "https://www.hltv.org/events/9311/dfrag-open-series-6" }
 ];
 
 const KNOWN_DFRAG_OPEN_SERIES_6: HltvEventOverview = {
@@ -364,6 +364,31 @@ function parseHltvEventStandingsHtml(html: string, eventUrl: string): HltvEventO
     });
   }
 
+  const bracketSection = html.match(/(?:Playoffs|Group Stage|Upper Bracket|Lower Bracket)([\s\S]*?)(?:Prize distribution|Teams attending|Related events|$)/i)?.[1] || "";
+  const bracketTeams = Array.from(bracketSection.matchAll(teamPattern))
+    .map(match => stripTags(match[2]) || hltvTeamSlugFromProfileUrl(hltvUrl(match[1])))
+    .filter(name => name && !/^(match|team|lineup|show|tbd|\?)$/i.test(name));
+  const bracketRows: HltvEventStandingRow[] = [];
+  for (let index = 0; index < bracketTeams.length - 1; index += 2) {
+    const left = bracketTeams[index];
+    const right = bracketTeams[index + 1];
+    if (!left || !right || left === right) continue;
+    bracketRows.push({
+      id: `cs-bracket-${counterStrikeTeamId(eventName)}-${index}`,
+      rank: bracketRows.length + 1,
+      league: eventName,
+      division: "Сетка чемпионата",
+      team: `Матч ${bracketRows.length + 1}: ${left} — ${right}`,
+      wins: 0,
+      losses: 0,
+      pct: "-",
+      gamesBack: "-",
+      form: "-",
+      points: 0,
+      change: "bracket"
+    });
+  }
+
   const prizeSection = html.match(/Prize distribution([\s\S]*?)(?:Teams attending|Related events|$)/i)?.[1] || "";
   const prizeRows = Array.from(prizeSection.matchAll(/(?:<[^>]*class=["'][^"']*placement[^"']*["'][^>]*>|^)\s*([^<]{1,24})[\s\S]{0,260}?(?:\$|€|£)\s*([\d,]+)/gi))
     .slice(0, 12)
@@ -379,14 +404,99 @@ function parseHltvEventStandingsHtml(html: string, eventUrl: string): HltvEventO
       gamesBack: "-",
       form: "-",
       points: 0,
-      change: "приз"
+      change: "prize"
     }));
 
   return {
     source: "HLTV",
     updatedAt: new Date().toISOString(),
     league: eventName,
-    standings: [...teams.values(), ...prizeRows]
+    standings: [...bracketRows, ...prizeRows, ...teams.values()]
+  };
+}
+
+function cleanHltvEventName(value: string | undefined): string {
+  return (value || "")
+    .replace(/\bCOUNTER\s+STRIKE\s+2\b/gi, "")
+    .replace(/\bBO\d+\b/gi, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s:·-]+|[\s:·-]+$/g, "")
+    .trim();
+}
+
+function isPrizeStandingRow(row: HltvEventStandingRow): boolean {
+  const value = `${row.change || ""} ${row.division || ""} ${row.team || ""}`.toLowerCase();
+  return row.change === "prize" || /prize|distribution|\$|приз|распредел/i.test(value);
+}
+
+function fallbackHltvEventOverview(eventName: string | undefined, home?: string, away?: string): HltvEventOverview | null {
+  const league = cleanHltvEventName(eventName) || "COUNTER STRIKE 2";
+  const left = home?.trim() || "TBD";
+  const right = away?.trim() || "TBD";
+  const hasMatch = left !== "TBD" || right !== "TBD";
+  if (!hasMatch && !league) return null;
+
+  return {
+    source: "HLTV",
+    updatedAt: new Date().toISOString(),
+    league,
+    standings: [
+      {
+        id: `cs-event-current-${counterStrikeTeamId(left)}-${counterStrikeTeamId(right)}`,
+        rank: 1,
+        league,
+        division: "Сетка чемпионата",
+        team: `Текущий матч: ${left} — ${right}`,
+        wins: 0,
+        losses: 0,
+        pct: "-",
+        gamesBack: "-",
+        form: "-",
+        points: 0,
+        change: "bracket"
+      },
+      {
+        id: `cs-event-prizes-${counterStrikeTeamId(league)}`,
+        rank: 1,
+        league,
+        division: "Распределение призов",
+        team: "Призовые места",
+        wins: 0,
+        losses: 0,
+        pct: "-",
+        gamesBack: "-",
+        form: "-",
+        points: 0,
+        change: "prize"
+      }
+    ]
+  };
+}
+
+function withHltvEventFallback(
+  overview: HltvEventOverview | null,
+  eventName: string | undefined,
+  home?: string,
+  away?: string
+): HltvEventOverview | null {
+  const fallback = fallbackHltvEventOverview(overview?.league || eventName, home, away);
+  if (!overview) return fallback;
+
+  const eventRows = overview.standings
+    .filter(row => row.change === "bracket" || row.change === "prize" || isPrizeStandingRow(row))
+    .map(row => isPrizeStandingRow(row) ? { ...row, change: "prize" } : row);
+  const hasBracket = eventRows.some(row => row.change === "bracket");
+  const hasPrize = eventRows.some(row => row.change === "prize");
+  const fallbackRows = fallback?.standings || [];
+
+  return {
+    ...overview,
+    league: cleanHltvEventName(overview.league) || cleanHltvEventName(eventName) || overview.league,
+    standings: [
+      ...(hasBracket ? [] : fallbackRows.filter(row => row.change === "bracket")),
+      ...eventRows,
+      ...(hasPrize ? [] : fallbackRows.filter(row => row.change === "prize"))
+    ]
   };
 }
 
@@ -543,8 +653,14 @@ export async function loadHltvEventOverview(eventUrl: string | undefined): Promi
   }
 }
 
-export async function loadHltvEventOverviewFromMatch(matchUrl: string | undefined, eventName?: string): Promise<HltvEventOverview | null> {
-  let eventUrl = knownHltvEventUrl(eventName);
+export async function loadHltvEventOverviewFromMatch(
+  matchUrl: string | undefined,
+  eventName?: string,
+  home?: string,
+  away?: string,
+  explicitEventUrl?: string
+): Promise<HltvEventOverview | null> {
+  let eventUrl = explicitEventUrl || knownHltvEventUrl(eventName);
   if (!eventUrl && matchUrl && /^https:\/\/www\.hltv\.org\/matches\/\d+\//i.test(matchUrl)) {
     try {
       const detail = parseHltvMatchDetailHtml(await fetchText(matchUrl));
@@ -553,7 +669,8 @@ export async function loadHltvEventOverviewFromMatch(matchUrl: string | undefine
       console.error("HLTV match event lookup failed", matchUrl, error);
     }
   }
-  return loadHltvEventOverview(eventUrl);
+  const overview = await loadHltvEventOverview(eventUrl);
+  return withHltvEventFallback(overview, eventName, home, away);
 }
 
 export function findHltvRanking(team: string, rows: HltvRankingRow[]): HltvRankingRow | null {
