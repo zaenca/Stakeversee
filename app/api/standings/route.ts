@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { loadHltvRankings } from "@/lib/hltv";
+import { loadHltvEventOverview, loadHltvRankings } from "@/lib/hltv";
 import { KBO_TEAMS, kboTeamId } from "@/lib/kboTeams";
 import { MLB_TEAMS, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 import { NPB_TEAMS, npbTeamId, resolveNpbTeam } from "@/lib/npbTeams";
@@ -388,6 +388,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sport = searchParams.get("sport");
   const league = searchParams.get("league") || "";
+  const hltvEventUrl = searchParams.get("hltvEventUrl") || "";
   const tour: TennisTour = searchParams.get("tour")?.toUpperCase() === "WTA" ? "WTA" : "ATP";
   const counterStrike = sport === "esports" && /\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/i.test(league);
 
@@ -435,6 +436,20 @@ export async function GET(request: Request) {
 
   if (counterStrike) {
     try {
+      const eventOverview = await loadHltvEventOverview(hltvEventUrl);
+      if (eventOverview?.standings.length) {
+        return NextResponse.json(
+          {
+            sport: "esports",
+            league: eventOverview.league,
+            source: eventOverview.source,
+            updatedAt: eventOverview.updatedAt,
+            standings: eventOverview.standings
+          },
+          { headers: NO_STORE_HEADERS }
+        );
+      }
+
       const ranking = await loadHltvRankings();
       const standings: StandingRow[] = ranking.rows.map(row => ({
         id: row.id,

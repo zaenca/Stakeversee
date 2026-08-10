@@ -2175,7 +2175,8 @@ h1 {
 .team-card-logo:has(img[src*="cincinnati-reds"]),
 .team-card-logo:has(img[src*="new-york-mets"]),
 .team-card-logo:has(img[src*="san-francisco-giants"]),
-.team-card-logo:has(img[src*="colorado-rockies"]) {
+.team-card-logo:has(img[src*="colorado-rockies"]),
+.team-card-logo:has(img[src*="cs-vp-prodigy"]) {
   background: #fff;
 }
 

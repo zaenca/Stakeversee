@@ -16,6 +16,32 @@ export type HltvRankingData = {
   rows: HltvRankingRow[];
 };
 
+export type HltvEventStandingRow = {
+  id: string;
+  rank: number;
+  league: string;
+  division: string;
+  team: string;
+  wins: number;
+  losses: number;
+  pct: string;
+  gamesBack: string;
+  form?: string;
+  points?: number;
+  change?: string;
+  logo?: string;
+  profileUrl?: string;
+  valveRank?: number;
+  worldRank?: number;
+};
+
+export type HltvEventOverview = {
+  source: string;
+  updatedAt: string;
+  league: string;
+  standings: HltvEventStandingRow[];
+};
+
 export type HltvUpcomingMatch = {
   id: string;
   startsAt: number;
@@ -24,6 +50,7 @@ export type HltvUpcomingMatch = {
   format: string;
   venue?: "LAN" | "Online";
   event: string;
+  eventUrl?: string;
   detailUrl?: string;
   homeProfileUrl?: string;
   awayProfileUrl?: string;
@@ -31,6 +58,8 @@ export type HltvUpcomingMatch = {
   awayValveRank?: number;
   homeWorldRank?: number;
   awayWorldRank?: number;
+  homeForm?: string;
+  awayForm?: string;
 };
 
 const HLTV_RANKING_URL = "https://www.hltv.org/ranking/teams";
@@ -52,11 +81,13 @@ const hltvCache = globalThis as typeof globalThis & {
   __stakeverseeHltvRankings?: { ts: number; data: HltvRankingData };
   __stakeverseeHltvMatches?: { ts: number; rows: HltvUpcomingMatch[] };
   __stakeverseeHltvTeamRatings?: Map<string, { ts: number; data: HltvTeamRatings }>;
+  __stakeverseeHltvEvents?: Map<string, { ts: number; data: HltvEventOverview }>;
 };
 
 type HltvTeamRatings = {
   valveRank?: number;
   worldRank?: number;
+  form?: string;
 };
 
 function decodeHtml(value: string): string {
@@ -130,6 +161,7 @@ export function normalizeHltvTeamName(value: string): string {
 }
 
 export function esportsTeamSlug(value: string): string {
+  if (/\bvp[\s._-]*prodigy\b/i.test(value)) return "VP.Prodigy";
   return normalizeHltvTeamName(value)
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -225,9 +257,10 @@ function hltvMatchTeamProfilePath(html: string, className: string): string {
   return segment.match(/href=["'](\/team\/\d+\/[^"']+)["']/i)?.[1] || "";
 }
 
-function parseHltvMatchDetailHtml(html: string): Pick<HltvUpcomingMatch, "format" | "venue" | "homeProfileUrl" | "awayProfileUrl"> {
+function parseHltvMatchDetailHtml(html: string): Pick<HltvUpcomingMatch, "format" | "venue" | "eventUrl" | "homeProfileUrl" | "awayProfileUrl"> {
   const text = stripTags(html);
   const mapInfo = text.match(/\bBest\s+of\s+(\d+)\s*\((Online|LAN)\)/i);
+  const eventPath = html.match(/href=["'](\/events\/\d+\/[^"']+)["']/i)?.[1] || "";
   const homePath = hltvMatchTeamProfilePath(html, "team1-gradient") || hltvMatchTeamProfilePath(html, "team1");
   const awayPath = hltvMatchTeamProfilePath(html, "team2-gradient") || hltvMatchTeamProfilePath(html, "team2");
   const teamPaths = Array.from(html.matchAll(/href=["'](\/team\/\d+\/[^"']+)["']/gi))
@@ -239,6 +272,7 @@ function parseHltvMatchDetailHtml(html: string): Pick<HltvUpcomingMatch, "format
   return {
     format: mapInfo ? `BO${mapInfo[1]}` : "",
     venue: mapInfo ? (mapInfo[2].toLowerCase() === "lan" ? "LAN" : "Online") : undefined,
+    eventUrl: eventPath ? hltvUrl(eventPath) : undefined,
     homeProfileUrl: resolvedHomePath ? hltvUrl(resolvedHomePath) : undefined,
     awayProfileUrl: resolvedAwayPath ? hltvUrl(resolvedAwayPath) : undefined
   };
@@ -250,9 +284,84 @@ function parseHltvTeamRatingsHtml(html: string): HltvTeamRatings {
     || html.match(/\bValve[\s\S]{0,40}ranking[\s\S]{0,160}#\s*(\d+)/i);
   const world = text.match(/\bWorld\s+ranking[^#]{0,120}#\s*(\d+)/i)
     || html.match(/\bWorld[\s\S]{0,40}ranking[\s\S]{0,160}#\s*(\d+)/i);
+  const form = Array.from(text.matchAll(/\b(\d+)\s*:\s*(\d+)\b/g))
+    .slice(0, 5)
+    .map(match => Number(match[1]) > Number(match[2]) ? "W" : "L")
+    .join("");
   return {
     valveRank: valve ? Number(valve[1]) : undefined,
-    worldRank: world ? Number(world[1]) : undefined
+    worldRank: world ? Number(world[1]) : undefined,
+    form: form || undefined
+  };
+}
+
+function parseHltvEventName(html: string, fallback: string): string {
+  const title = classText(html, "event-hub-title")
+    || classText(html, "eventname")
+    || stripTags(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || "");
+  return title || fallback || "COUNTER STRIKE 2";
+}
+
+function hltvTeamSlugFromProfileUrl(profileUrl: string): string {
+  return decodeHtml(profileUrl.match(/\/team\/\d+\/([^/?#]+)/i)?.[1] || "")
+    .replace(/-/g, " ")
+    .trim();
+}
+
+function parseHltvEventStandingsHtml(html: string, eventUrl: string): HltvEventOverview {
+  const eventName = parseHltvEventName(html, hltvTeamSlugFromProfileUrl(eventUrl));
+  const teams = new Map<string, HltvEventStandingRow>();
+  const teamPattern = /<a[^>]+href=["'](\/team\/\d+\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  for (const match of html.matchAll(teamPattern)) {
+    const profileUrl = hltvUrl(match[1]);
+    const name = stripTags(match[2]) || hltvTeamSlugFromProfileUrl(profileUrl);
+    if (!name || /^(match|team|lineup|show)$/i.test(name)) continue;
+    const logoSegment = html.slice(Math.max(0, match.index || 0), Math.min(html.length, (match.index || 0) + 900));
+    const logoTag = logoSegment.match(/<img[^>]+>/i)?.[0] || "";
+    const logo = attributeFromTag(logoTag, "src") || attributeFromTag(logoTag, "data-src");
+    const id = counterStrikeTeamId(name);
+    if (teams.has(id)) continue;
+    teams.set(id, {
+      id,
+      rank: teams.size + 1,
+      league: eventName,
+      division: "Сетка чемпионата",
+      team: name,
+      wins: 0,
+      losses: 0,
+      pct: "-",
+      gamesBack: "-",
+      form: "-",
+      points: 0,
+      change: "участник",
+      logo: logo || undefined,
+      profileUrl
+    });
+  }
+
+  const prizeSection = html.match(/Prize distribution([\s\S]*?)(?:Teams attending|Related events|$)/i)?.[1] || "";
+  const prizeRows = Array.from(prizeSection.matchAll(/(?:<[^>]*class=["'][^"']*placement[^"']*["'][^>]*>|^)\s*([^<]{1,24})[\s\S]{0,260}?(?:\$|€|£)\s*([\d,]+)/gi))
+    .slice(0, 12)
+    .map((match, index): HltvEventStandingRow => ({
+      id: `cs-prize-${index + 1}`,
+      rank: index + 1,
+      league: eventName,
+      division: "Распределение призов",
+      team: `${stripTags(match[1]).replace(/\s+/g, " ").trim() || `${index + 1} место`} — $${match[2]}`,
+      wins: 0,
+      losses: 0,
+      pct: "-",
+      gamesBack: "-",
+      form: "-",
+      points: 0,
+      change: "приз"
+    }));
+
+  return {
+    source: "HLTV",
+    updatedAt: new Date().toISOString(),
+    league: eventName,
+    standings: [...teams.values(), ...prizeRows]
   };
 }
 
@@ -352,12 +461,15 @@ async function enrichHltvMatch(row: HltvUpcomingMatch): Promise<HltvUpcomingMatc
       ...row,
       format: detail.format || row.format,
       venue: detail.venue || row.venue,
+      eventUrl: detail.eventUrl,
       homeProfileUrl: detail.homeProfileUrl,
       awayProfileUrl: detail.awayProfileUrl,
       homeValveRank: homeRatings.valveRank,
       awayValveRank: awayRatings.valveRank,
       homeWorldRank: homeRatings.worldRank,
-      awayWorldRank: awayRatings.worldRank
+      awayWorldRank: awayRatings.worldRank,
+      homeForm: homeRatings.form,
+      awayForm: awayRatings.form
     };
   } catch (error) {
     console.error("HLTV match detail request failed", row.detailUrl, error);
@@ -380,6 +492,23 @@ export async function loadHltvUpcomingMatches(): Promise<HltvUpcomingMatch[]> {
   } catch (error) {
     console.error("HLTV matches request failed", error);
     return cached?.rows || [];
+  }
+}
+
+export async function loadHltvEventOverview(eventUrl: string | undefined): Promise<HltvEventOverview | null> {
+  if (!eventUrl || !/^https:\/\/www\.hltv\.org\/events\/\d+\//i.test(eventUrl)) return null;
+  const cache = hltvCache.__stakeverseeHltvEvents ?? new Map();
+  hltvCache.__stakeverseeHltvEvents = cache;
+  const cached = cache.get(eventUrl);
+  if (cached && Date.now() - cached.ts < MATCHES_TTL) return cached.data;
+  try {
+    const data = parseHltvEventStandingsHtml(await fetchText(eventUrl), eventUrl);
+    if (!data.standings.length) throw new Error("HLTV event teams were not found");
+    cache.set(eventUrl, { ts: Date.now(), data });
+    return data;
+  } catch (error) {
+    console.error("HLTV event request failed", eventUrl, error);
+    return cached?.data || null;
   }
 }
 

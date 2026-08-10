@@ -102,6 +102,7 @@ type MatchRow = {
   standingsOnly?: boolean;
   hltvMatchId?: string;
   hltvMatchUrl?: string;
+  hltvEventUrl?: string;
   esportsMatchFormat?: string;
   esportsMatchVenue?: "LAN" | "Online";
   hltvEvent?: string;
@@ -109,6 +110,8 @@ type MatchRow = {
   awayHltvWorldRank?: number;
   homeValveRank?: number;
   awayValveRank?: number;
+  homeHltvForm?: string;
+  awayHltvForm?: string;
   homeHltvProfileUrl?: string;
   awayHltvProfileUrl?: string;
 };
@@ -652,6 +655,7 @@ function compactEsportsTeamName(value: string): string {
 }
 
 function esportsTeamSlug(value: string): string {
+  if (/\bvp[\s._-]*prodigy\b/i.test(value)) return "VP.Prodigy";
   return compactEsportsTeamName(value)
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -672,7 +676,8 @@ function esportsUnifiedTeamId(league: string, team: string): string {
 
 const CS_TEAM_LOGOS: Record<string, string> = {
   "cs.abyssal": "/teams/cs-abyssal.png",
-  "cs.rooster": "/teams/cs-rooster.png"
+  "cs.rooster": "/teams/cs-rooster.png",
+  "cs.VP.Prodigy": "/teams/cs-vp-prodigy.png"
 };
 
 function esportsTeamNamesMatch(left: string, right: string): boolean {
@@ -792,7 +797,7 @@ function normalizeStandingRows(rows: unknown[]): StandingRow[] {
 
 function formatStandingForm(value?: string): string {
   const raw = String(value || "").trim();
-  if (!raw || raw === "-") return "⚪⚪⚪⚪⚪";
+  if (!raw || raw === "-" || raw === "0") return "⚪⚪⚪⚪⚪";
   const upper = raw.toUpperCase();
   const win = "🟢";
   const loss = "🔴";
@@ -1010,6 +1015,7 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
       awayTeamId: canonicalAway ? clientLeagueTeamId(canonicalAway) : current.awayTeamId,
       hltvMatchId: current.hltvMatchId || match.hltvMatchId,
       hltvMatchUrl: current.hltvMatchUrl || match.hltvMatchUrl,
+      hltvEventUrl: current.hltvEventUrl || match.hltvEventUrl,
       esportsMatchFormat: current.esportsMatchFormat || match.esportsMatchFormat,
       esportsMatchVenue: current.esportsMatchVenue || match.esportsMatchVenue,
       hltvEvent: current.hltvEvent || match.hltvEvent,
@@ -1017,6 +1023,8 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
       awayHltvWorldRank: current.awayHltvWorldRank || match.awayHltvWorldRank,
       homeValveRank: current.homeValveRank || match.homeValveRank,
       awayValveRank: current.awayValveRank || match.awayValveRank,
+      homeHltvForm: current.homeHltvForm || match.homeHltvForm,
+      awayHltvForm: current.awayHltvForm || match.awayHltvForm,
       homeHltvProfileUrl: current.homeHltvProfileUrl || match.homeHltvProfileUrl,
       awayHltvProfileUrl: current.awayHltvProfileUrl || match.awayHltvProfileUrl,
       bookmakerOdds,
@@ -3329,6 +3337,7 @@ export default function Home() {
               : undefined,
             hltvMatchId: match.hltvMatchId ? String(match.hltvMatchId) : undefined,
             hltvMatchUrl: match.hltvMatchUrl ? String(match.hltvMatchUrl) : undefined,
+            hltvEventUrl: match.hltvEventUrl ? String(match.hltvEventUrl) : undefined,
             esportsMatchFormat: match.esportsMatchFormat ? String(match.esportsMatchFormat) : undefined,
             esportsMatchVenue: match.esportsMatchVenue === "LAN" || match.esportsMatchVenue === "Online" ? match.esportsMatchVenue : undefined,
             hltvEvent: match.hltvEvent ? String(match.hltvEvent) : undefined,
@@ -3336,6 +3345,8 @@ export default function Home() {
             awayHltvWorldRank: match.awayHltvWorldRank === undefined ? undefined : Number(match.awayHltvWorldRank),
             homeValveRank: match.homeValveRank === undefined ? undefined : Number(match.homeValveRank),
             awayValveRank: match.awayValveRank === undefined ? undefined : Number(match.awayValveRank),
+            homeHltvForm: match.homeHltvForm ? String(match.homeHltvForm) : undefined,
+            awayHltvForm: match.awayHltvForm ? String(match.awayHltvForm) : undefined,
             homeHltvProfileUrl: match.homeHltvProfileUrl ? String(match.homeHltvProfileUrl) : undefined,
             awayHltvProfileUrl: match.awayHltvProfileUrl ? String(match.awayHltvProfileUrl) : undefined
           };
@@ -3383,6 +3394,7 @@ export default function Home() {
         league: match.league
       });
       if (match.sport === "tennis") params.set("tour", defaultTennisTour);
+      if (match.sport === "esports" && match.hltvEventUrl) params.set("hltvEventUrl", match.hltvEventUrl);
       const response = await fetch(`/api/standings?${params.toString()}`, { cache: "no-store" });
       if (!response.ok) throw new Error("standings unavailable");
       const payload = await response.json();
@@ -3415,11 +3427,12 @@ export default function Home() {
     const cardProfileUrl = isEsportsTeamCard(card) || isTennisPlayerCard(card) ? card.profileUrl : undefined;
     const cardValveRank = isEsportsTeamCard(card) ? card.valveRank : undefined;
     const cardWorldRank = isEsportsTeamCard(card) ? card.worldRank : undefined;
+    const useCardPriority = isEsportsTeamCard(card);
     const initialCard = standing
       ? {
           ...card,
-          rank: standing.rank,
-          form: standing.form || "-",
+          rank: useCardPriority ? (card.rank || standing.rank) : standing.rank,
+          form: standing.form && standing.form !== "0" ? standing.form : card.form || "-",
           wins: standing.wins,
           losses: standing.losses,
           pct: standing.pct,
@@ -3429,7 +3442,7 @@ export default function Home() {
           logo: standing.logo || card.logo,
           profileUrl: standing.profileUrl || cardProfileUrl,
           valveRank: cardValveRank || standing.valveRank,
-          worldRank: cardWorldRank || standing.worldRank || standing.rank
+          worldRank: cardWorldRank || standing.worldRank || (useCardPriority ? undefined : standing.rank)
         }
       : card;
     setSelectedTeamCard(initialCard);
@@ -3468,12 +3481,17 @@ export default function Home() {
     if (isCounterStrikeMatch(match)) {
       const standing = esportsStandingForTeam(name, counterStrikeRankings);
       const card = esportsTeamCard(name, standing);
+      const sideProfileUrl = side === "home" ? match.homeHltvProfileUrl : match.awayHltvProfileUrl;
+      const sideWorldRank = side === "home" ? match.homeHltvWorldRank : match.awayHltvWorldRank;
+      const sideValveRank = side === "home" ? match.homeValveRank : match.awayValveRank;
+      const sideForm = side === "home" ? match.homeHltvForm : match.awayHltvForm;
       void openTeamProfile({
         ...card,
-        profileUrl: (side === "home" ? match.homeHltvProfileUrl : match.awayHltvProfileUrl) || card.profileUrl,
-        rank: (side === "home" ? match.homeHltvWorldRank : match.awayHltvWorldRank) || card.rank,
-        worldRank: (side === "home" ? match.homeHltvWorldRank : match.awayHltvWorldRank) || card.worldRank,
-        valveRank: (side === "home" ? match.homeValveRank : match.awayValveRank) || card.valveRank
+        profileUrl: sideProfileUrl || card.profileUrl,
+        rank: sideWorldRank || sideValveRank || (sideProfileUrl ? 0 : card.rank),
+        form: sideForm || card.form,
+        worldRank: sideWorldRank || (sideProfileUrl ? undefined : card.worldRank),
+        valveRank: sideValveRank || card.valveRank
       }, standing || undefined);
       return;
     }
@@ -5232,7 +5250,7 @@ export default function Home() {
                 </label>
               )}
               <label>
-                <span>{t("Лига:")}</span>
+                <span>{t("Чемпионат:")}</span>
                 <MatchFilterDropdown
                   onChange={setLeagueFilter}
                   options={[
@@ -6348,7 +6366,7 @@ export default function Home() {
                     <strong className="team-form-lights">{formatStandingForm(selectedTeamCard.form)}</strong>
                   </div>
                   <div>
-                    <span>{t("Лига")}</span>
+                    <span>{t("Чемпионат")}</span>
                     <strong>{selectedTeamCard.league}</strong>
                   </div>
                   {isTennisPlayerCard(selectedTeamCard) ? (

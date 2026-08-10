@@ -44,6 +44,7 @@ type RawMatch = {
   awayPlayers?: TennisParticipant[];
   hltvMatchId?: string;
   hltvMatchUrl?: string;
+  hltvEventUrl?: string;
   esportsMatchFormat?: string;
   esportsMatchVenue?: "LAN" | "Online";
   hltvEvent?: string;
@@ -51,6 +52,8 @@ type RawMatch = {
   awayHltvWorldRank?: number;
   homeValveRank?: number;
   awayValveRank?: number;
+  homeHltvForm?: string;
+  awayHltvForm?: string;
   homeHltvProfileUrl?: string;
   awayHltvProfileUrl?: string;
 };
@@ -75,6 +78,7 @@ type ApiMatch = {
   awayPlayers?: TennisParticipant[];
   hltvMatchId?: string;
   hltvMatchUrl?: string;
+  hltvEventUrl?: string;
   esportsMatchFormat?: string;
   esportsMatchVenue?: "LAN" | "Online";
   hltvEvent?: string;
@@ -82,6 +86,8 @@ type ApiMatch = {
   awayHltvWorldRank?: number;
   homeValveRank?: number;
   awayValveRank?: number;
+  homeHltvForm?: string;
+  awayHltvForm?: string;
   homeHltvProfileUrl?: string;
   awayHltvProfileUrl?: string;
 };
@@ -1258,6 +1264,7 @@ function withHltvContext(match: RawMatch, hltvMatches: HltvUpcomingMatch[]): Raw
     awayTeamId: counterStrikeTeamId(away),
     hltvMatchId: hltv.id,
     hltvMatchUrl: hltv.detailUrl,
+    hltvEventUrl: hltv.eventUrl,
     hltvEvent: event || undefined,
     esportsMatchFormat: format,
     esportsMatchVenue: venue,
@@ -1265,6 +1272,8 @@ function withHltvContext(match: RawMatch, hltvMatches: HltvUpcomingMatch[]): Raw
     awayHltvWorldRank: reversed ? hltv.homeWorldRank : hltv.awayWorldRank,
     homeValveRank: reversed ? hltv.awayValveRank : hltv.homeValveRank,
     awayValveRank: reversed ? hltv.homeValveRank : hltv.awayValveRank,
+    homeHltvForm: reversed ? hltv.awayForm : hltv.homeForm,
+    awayHltvForm: reversed ? hltv.homeForm : hltv.awayForm,
     homeHltvProfileUrl: reversed ? hltv.awayProfileUrl : hltv.homeProfileUrl,
     awayHltvProfileUrl: reversed ? hltv.homeProfileUrl : hltv.awayProfileUrl
   };
@@ -1424,6 +1433,7 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
         away: displayTeamName(current, /[а-яё]/i.test(current.away) ? current.away : match.away),
         hltvMatchId: current.hltvMatchId || match.hltvMatchId,
         hltvMatchUrl: current.hltvMatchUrl || match.hltvMatchUrl,
+        hltvEventUrl: current.hltvEventUrl || match.hltvEventUrl,
         hltvEvent: current.hltvEvent || match.hltvEvent,
         esportsMatchFormat: current.esportsMatchFormat || match.esportsMatchFormat,
         esportsMatchVenue: current.esportsMatchVenue || match.esportsMatchVenue,
@@ -1431,6 +1441,8 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
         awayHltvWorldRank: current.awayHltvWorldRank || match.awayHltvWorldRank,
         homeValveRank: current.homeValveRank || match.homeValveRank,
         awayValveRank: current.awayValveRank || match.awayValveRank,
+        homeHltvForm: current.homeHltvForm || match.homeHltvForm,
+        awayHltvForm: current.awayHltvForm || match.awayHltvForm,
         homeHltvProfileUrl: current.homeHltvProfileUrl || match.homeHltvProfileUrl,
         awayHltvProfileUrl: current.awayHltvProfileUrl || match.awayHltvProfileUrl,
         bookmakerOdds,
@@ -1475,6 +1487,7 @@ function toApiMatch(match: RawMatch): ApiMatch {
     awayPlayers: match.awayPlayers,
     hltvMatchId: match.hltvMatchId,
     hltvMatchUrl: match.hltvMatchUrl,
+    hltvEventUrl: match.hltvEventUrl,
     esportsMatchFormat: match.esportsMatchFormat,
     esportsMatchVenue: match.esportsMatchVenue,
     hltvEvent: match.hltvEvent,
@@ -1482,6 +1495,8 @@ function toApiMatch(match: RawMatch): ApiMatch {
     awayHltvWorldRank: match.awayHltvWorldRank,
     homeValveRank: match.homeValveRank,
     awayValveRank: match.awayValveRank,
+    homeHltvForm: match.homeHltvForm,
+    awayHltvForm: match.awayHltvForm,
     homeHltvProfileUrl: match.homeHltvProfileUrl,
     awayHltvProfileUrl: match.awayHltvProfileUrl
   };
