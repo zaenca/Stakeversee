@@ -2150,7 +2150,12 @@ h1 {
 .team-card-logo:has(img[src*="los-angeles-angels"]),
 .team-card-logo:has(img[src*="los-angeles-dodgers"]),
 .team-card-logo:has(img[src*="chicago-cubs"]),
-.team-card-logo:has(img[src*="arizona-diamondbacks"]) {
+.team-card-logo:has(img[src*="arizona-diamondbacks"]),
+.team-card-logo:has(img[src*="philadelphia-phillies"]),
+.team-card-logo:has(img[src*="san-diego-padres"]),
+.team-card-logo:has(img[src*="miami-marlins"]),
+.team-card-logo:has(img[src*="st-louis-cardinals"]),
+.team-card-logo:has(img[src*="washington-nationals"]) {
   background: #fff;
 }
 
@@ -2177,6 +2182,11 @@ h1 {
   transform: scale(1);
 }
 
+.team-card-logo img[src*="atlanta-braves"],
+.team-card-logo img[src*="arizona-diamondbacks"] {
+  transform: scale(0.78);
+}
+
 .team-card-logo img[src*="kansas-city-royals"] {
   transform: translateY(4px) scale(1.04);
 }
@@ -2186,7 +2196,7 @@ h1 {
 }
 
 .team-card-logo img[src*="los-angeles-angels"] {
-  transform: scale(0.62);
+  transform: scale(1);
 }
 
 .team-card-hero span,
