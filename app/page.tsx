@@ -5342,9 +5342,6 @@ export default function Home() {
                       {esportsLeague?.format ? <span className="match-meta-format">{t(esportsLeague.format)}</span> : null}
                       {esportsLeague?.venue ? <span className="match-meta-format">{t(esportsLeague.venue)}</span> : null}
                       <strong>{t(esportsLeague?.league || match.league)}</strong>
-                      {match.sport === "baseball" || match.sport === "tennis" || isCounterStrikeMatch(match) || wnbaMatchPairKey(match) ? (
-                        <button className="match-standings-button" onClick={() => openStandings(match)} type="button">{t("Таблица")}</button>
-                      ) : null}
                     </div>
 
                     <div className="match-odds-row">
@@ -5378,6 +5375,7 @@ export default function Home() {
                           <span>{selectedBookmaker === "best" ? t("П2 · лучший") : t("П2")}</span>
                         </button>
                       </div>
+                      <button className="match-standings-button" onClick={() => openStandings(match)} type="button">{t("Таблица")}</button>
                     </div>
 
                     <div className="match-teams">

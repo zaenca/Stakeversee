@@ -1819,6 +1819,7 @@ h1 {
 }
 
 .match-standings-button {
+  align-self: stretch;
   background: rgba(0, 229, 255, 0.08);
   border: 1px solid rgba(0, 229, 255, 0.28);
   border-radius: 5px;
@@ -1827,8 +1828,9 @@ h1 {
   font-size: 0.66rem;
   font-weight: 900;
   letter-spacing: 0.08em;
-  margin-left: auto;
+  margin-left: 0;
   min-height: 24px;
+  min-width: 68px;
   padding: 2px 8px;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1839,15 +1841,22 @@ h1 {
 }
 
 .odds-strip {
-  display: flex;
-  flex: 1;
+  display: grid;
+  flex: 1 1 auto;
   gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.odds-strip-two-way {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .match-odds-row {
   align-items: stretch;
-  display: flex;
+  display: grid;
   gap: 7px;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
   margin: 9px 0;
 }
 
@@ -1891,12 +1900,13 @@ h1 {
   border-radius: 6px;
   color: var(--text);
   cursor: pointer;
-  flex: 1;
-  padding: 6px;
+  min-width: 0;
+  padding: 5px 4px;
 }
 
 .odds-strip strong {
   display: inline-block;
+  font-size: 0.94rem;
 }
 
 .odds-strip em {
@@ -1905,8 +1915,8 @@ h1 {
   font-size: 0.58rem;
   font-style: normal;
   font-weight: 800;
-  margin-left: 6px;
-  max-width: 70px;
+  margin-left: 4px;
+  max-width: 46px;
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: middle;
@@ -1919,7 +1929,7 @@ h1 {
 
 .odds-strip span {
   color: var(--muted);
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   margin-top: 2px;
   text-transform: uppercase;
 }
@@ -6351,7 +6361,7 @@ h1 {
 }
 
 .workspace-shell .match-standings-button {
-  align-self: center;
+  align-self: stretch;
   margin-left: 0;
 }
 
