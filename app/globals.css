@@ -2546,6 +2546,80 @@ h1 {
   display: grid;
 }
 
+.cs-event-layout {
+  display: grid;
+  gap: 12px;
+}
+
+.cs-event-section {
+  background: rgba(8, 18, 29, 0.56);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.cs-event-section h3 {
+  color: #eaf6ff;
+  font-size: 0.78rem;
+  font-weight: 900;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.cs-bracket-grid,
+.cs-prize-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.cs-bracket-match,
+.cs-prize-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  min-height: 64px;
+  padding: 9px 10px;
+}
+
+.cs-bracket-match {
+  display: grid;
+  gap: 4px;
+}
+
+.cs-bracket-match.highlighted {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.5);
+  box-shadow: inset 3px 0 0 var(--cyan);
+}
+
+.cs-bracket-match span,
+.cs-prize-card span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.cs-bracket-match strong,
+.cs-prize-card strong {
+  color: #eaf6ff;
+  font-size: 0.86rem;
+}
+
+.cs-bracket-match em {
+  color: var(--cyan);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.cs-prize-card {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
 .standings-row {
   align-items: center;
   border-top: 1px solid rgba(255, 255, 255, 0.07);

@@ -391,6 +391,7 @@ export async function GET(request: Request) {
   const hltvEventUrl = searchParams.get("hltvEventUrl") || "";
   const hltvMatchUrl = searchParams.get("hltvMatchUrl") || "";
   const hltvEvent = searchParams.get("hltvEvent") || "";
+  const csEvent = searchParams.get("csEvent") === "1";
   const tour: TennisTour = searchParams.get("tour")?.toUpperCase() === "WTA" ? "WTA" : "ATP";
   const counterStrike = sport === "esports" && /\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/i.test(league);
 
@@ -452,7 +453,7 @@ export async function GET(request: Request) {
           { headers: NO_STORE_HEADERS }
         );
       }
-      if (hltvEventUrl || hltvMatchUrl || hltvEvent) {
+      if (csEvent || hltvEventUrl || hltvMatchUrl || hltvEvent) {
         return NextResponse.json(
           {
             sport: "esports",

@@ -3221,7 +3221,10 @@ export default function Home() {
 
   const counterStrikeStandingsOpen = Boolean(standingsMatch && isCounterStrikeMatch(standingsMatch));
   const tennisStandingsOpen = standingsMatch?.sport === "tennis";
-  const pagedStandingsOpen = counterStrikeStandingsOpen || tennisStandingsOpen;
+  const counterStrikeEventStandingsOpen = counterStrikeStandingsOpen && standingsRows.some(row => row.change === "bracket" || row.change === "prize");
+  const counterStrikeBracketRows = counterStrikeEventStandingsOpen ? standingsRows.filter(row => row.change === "bracket") : [];
+  const counterStrikePrizeRows = counterStrikeEventStandingsOpen ? standingsRows.filter(row => row.change === "prize") : [];
+  const pagedStandingsOpen = (counterStrikeStandingsOpen && !counterStrikeEventStandingsOpen) || tennisStandingsOpen;
   const standingsPageCount = pagedStandingsOpen ? Math.max(1, Math.ceil(standingsRows.length / 10)) : 1;
   const visibleStandingsGroups = useMemo(() => {
     if (!pagedStandingsOpen) return standingsGroups;
@@ -3395,6 +3398,7 @@ export default function Home() {
       });
       if (match.sport === "tennis") params.set("tour", defaultTennisTour);
       if (match.sport === "esports") {
+        if (isCounterStrikeMatch(match)) params.set("csEvent", "1");
         if (match.hltvEventUrl) params.set("hltvEventUrl", match.hltvEventUrl);
         if (match.hltvMatchUrl) params.set("hltvMatchUrl", match.hltvMatchUrl);
         if (match.hltvEvent) params.set("hltvEvent", match.hltvEvent);
@@ -6433,7 +6437,7 @@ export default function Home() {
                 onMouseDown={event => event.stopPropagation()}
                 role="dialog"
               >
-                <div className="rail-title">📊 {t("Турнирная таблица")} {standingsTitle}</div>
+                <div className="rail-title">📊 {counterStrikeEventStandingsOpen ? "Турнирная сетка" : t("Турнирная таблица")} {standingsTitle}</div>
                 {standingsSource ? <div className="standings-source">{t("Источник")}: {standingsSource}</div> : null}
                 <button className="stats-modal-close" aria-label={t("Закрыть таблицу")} onClick={() => setStandingsOpen(false)} type="button">×</button>
                 {standingsLoading ? (
@@ -6468,6 +6472,46 @@ export default function Home() {
                         })}
                       </div>
                     ) : null}
+                    {counterStrikeEventStandingsOpen ? (
+                      <div className="cs-event-layout">
+                        <section className="cs-event-section">
+                          <h3>Сетка чемпионата</h3>
+                          <div className="cs-bracket-grid">
+                            {counterStrikeBracketRows.map(row => {
+                              const [, title = row.team] = row.team.split(/:\s*/);
+                              const [left = row.team, right = "TBD"] = title.split(/\s+—\s+/);
+                              const bracketMatch = standingsMatch;
+                              const highlighted = Boolean(bracketMatch) && (
+                                esportsTeamNamesMatch(left, bracketMatch!.home)
+                                || esportsTeamNamesMatch(left, bracketMatch!.away)
+                                || esportsTeamNamesMatch(right, bracketMatch!.home)
+                                || esportsTeamNamesMatch(right, bracketMatch!.away)
+                              );
+                              return (
+                                <div className={`cs-bracket-match ${highlighted ? "highlighted" : ""}`} key={row.id}>
+                                  <span>{row.team.includes(":") ? row.team.split(":")[0] : "Match"}</span>
+                                  <strong>{left}</strong>
+                                  <em>vs</em>
+                                  <strong>{right}</strong>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </section>
+                        <section className="cs-event-section">
+                          <h3>Распределение призов</h3>
+                          <div className="cs-prize-grid">
+                            {counterStrikePrizeRows.map(row => (
+                              <div className="cs-prize-card" key={row.id}>
+                                <strong>{row.team}</strong>
+                                <span>{row.points ? `$${row.points.toLocaleString("en-US")}` : "место определено"}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      </div>
+                    ) : null}
+                    {!counterStrikeEventStandingsOpen ? (
                     <div className="standings-groups">
                     {visibleStandingsGroups.map(group => (
                       <section className="standings-group" key={group.title}>
@@ -6553,6 +6597,7 @@ export default function Home() {
                       </section>
                     ))}
                     </div>
+                    ) : null}
                     {pagedStandingsOpen && standingsPageCount > 1 ? (
                       <nav className="standings-pagination" aria-label={t("Страницы рейтинга")}>
                         <button
