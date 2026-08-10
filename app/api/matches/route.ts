@@ -5,6 +5,7 @@ import { KBO_TEAMS, isKboMatchContext, kboTeamId, resolveKboTeam } from "@/lib/k
 import { MLB_TEAMS, isMlbMatchContext, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 import { NPB_TEAMS, isNpbMatchContext, npbTeamId, resolveNpbTeam } from "@/lib/npbTeams";
 import { isWnbaMatchContext, resolveWnbaTeam, wnbaTeamId } from "@/lib/wnbaTeams";
+import { areHltvTeamNamesSimilar, loadHltvUpcomingMatches, type HltvUpcomingMatch } from "@/lib/hltv";
 import {
   hasTop100Participant,
   loadTennisRankings,
@@ -41,6 +42,17 @@ type RawMatch = {
   tennisTour?: TennisTour;
   homePlayers?: TennisParticipant[];
   awayPlayers?: TennisParticipant[];
+  hltvMatchId?: string;
+  hltvMatchUrl?: string;
+  esportsMatchFormat?: string;
+  esportsMatchVenue?: "LAN" | "Online";
+  hltvEvent?: string;
+  homeHltvWorldRank?: number;
+  awayHltvWorldRank?: number;
+  homeValveRank?: number;
+  awayValveRank?: number;
+  homeHltvProfileUrl?: string;
+  awayHltvProfileUrl?: string;
 };
 
 type ApiMatch = {
@@ -61,6 +73,17 @@ type ApiMatch = {
   tennisTour?: TennisTour;
   homePlayers?: TennisParticipant[];
   awayPlayers?: TennisParticipant[];
+  hltvMatchId?: string;
+  hltvMatchUrl?: string;
+  esportsMatchFormat?: string;
+  esportsMatchVenue?: "LAN" | "Online";
+  hltvEvent?: string;
+  homeHltvWorldRank?: number;
+  awayHltvWorldRank?: number;
+  homeValveRank?: number;
+  awayValveRank?: number;
+  homeHltvProfileUrl?: string;
+  awayHltvProfileUrl?: string;
 };
 
 type Analysis = {
@@ -113,7 +136,7 @@ const memoryCache = globalThis as typeof globalThis & {
   __stakeverseeMatchesCache?: Map<number, { ts: number; matches: ApiMatch[]; debug: Record<string, unknown> }>;
 };
 
-const API_VERSION = "bookmakers-v37-tennisi-kz-timezone";
+const API_VERSION = "bookmakers-v38-hltv-cs-context";
 const BOOKMAKER_REQUEST_TIMEOUT_MS = 6_500;
 const TENNISI_ENDPOINTS = [
   {
@@ -1183,6 +1206,50 @@ function sameParticipants(left: RawMatch, right: RawMatch): boolean {
     || (areSimilarParticipants(leftHome, rightAway, useAcronym) && areSimilarParticipants(leftAway, rightHome, useAcronym));
 }
 
+function isCounterStrikeRawMatch(match: Pick<RawMatch, "sport" | "league">): boolean {
+  return match.sport === "esports" && /\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/i.test(match.league);
+}
+
+function hltvMatchFits(match: RawMatch, hltv: HltvUpcomingMatch): boolean {
+  if (!hltv.startsAt || Math.abs(match.startMs - hltv.startsAt) > 90 * 60 * 1000) return false;
+  return (areHltvTeamNamesSimilar(match.home, hltv.home) && areHltvTeamNamesSimilar(match.away, hltv.away))
+    || (areHltvTeamNamesSimilar(match.home, hltv.away) && areHltvTeamNamesSimilar(match.away, hltv.home));
+}
+
+function hltvMatchReversed(match: RawMatch, hltv: HltvUpcomingMatch): boolean {
+  return areHltvTeamNamesSimilar(match.home, hltv.away) && areHltvTeamNamesSimilar(match.away, hltv.home);
+}
+
+function withHltvContext(match: RawMatch, hltvMatches: HltvUpcomingMatch[]): RawMatch {
+  if (!isCounterStrikeRawMatch(match)) return match;
+  const hltv = hltvMatches.find(candidate => hltvMatchFits(match, candidate));
+  if (!hltv) return match;
+  const reversed = hltvMatchReversed(match, hltv);
+  const format = hltv.format || esportsBoFormat(match.league) || undefined;
+  const venue = hltv.venue;
+  const event = hltv.event || "";
+  const league = ["COUNTER STRIKE 2", event, format, venue].filter(Boolean).join(" ");
+
+  return {
+    ...match,
+    country: venue || match.country,
+    league,
+    home: reversed ? hltv.away : hltv.home,
+    away: reversed ? hltv.home : hltv.away,
+    hltvMatchId: hltv.id,
+    hltvMatchUrl: hltv.detailUrl,
+    hltvEvent: event || undefined,
+    esportsMatchFormat: format,
+    esportsMatchVenue: venue,
+    homeHltvWorldRank: reversed ? hltv.awayWorldRank : hltv.homeWorldRank,
+    awayHltvWorldRank: reversed ? hltv.homeWorldRank : hltv.awayWorldRank,
+    homeValveRank: reversed ? hltv.awayValveRank : hltv.homeValveRank,
+    awayValveRank: reversed ? hltv.homeValveRank : hltv.awayValveRank,
+    homeHltvProfileUrl: reversed ? hltv.awayProfileUrl : hltv.homeProfileUrl,
+    awayHltvProfileUrl: reversed ? hltv.homeProfileUrl : hltv.awayProfileUrl
+  };
+}
+
 function dedupeKey(match: RawMatch): string {
   const bucket = Math.round(match.startMs / (15 * 60 * 1000));
   const teams = participantIdPair(match);
@@ -1333,6 +1400,17 @@ function mergeMatches(matches: RawMatch[]): RawMatch[] {
         league: mergedLeagueName(current, match),
         home: displayTeamName(current, /[а-яё]/i.test(current.home) ? current.home : match.home),
         away: displayTeamName(current, /[а-яё]/i.test(current.away) ? current.away : match.away),
+        hltvMatchId: current.hltvMatchId || match.hltvMatchId,
+        hltvMatchUrl: current.hltvMatchUrl || match.hltvMatchUrl,
+        hltvEvent: current.hltvEvent || match.hltvEvent,
+        esportsMatchFormat: current.esportsMatchFormat || match.esportsMatchFormat,
+        esportsMatchVenue: current.esportsMatchVenue || match.esportsMatchVenue,
+        homeHltvWorldRank: current.homeHltvWorldRank || match.homeHltvWorldRank,
+        awayHltvWorldRank: current.awayHltvWorldRank || match.awayHltvWorldRank,
+        homeValveRank: current.homeValveRank || match.homeValveRank,
+        awayValveRank: current.awayValveRank || match.awayValveRank,
+        homeHltvProfileUrl: current.homeHltvProfileUrl || match.homeHltvProfileUrl,
+        awayHltvProfileUrl: current.awayHltvProfileUrl || match.awayHltvProfileUrl,
         bookmakerOdds,
         odds
       });
@@ -1372,7 +1450,18 @@ function toApiMatch(match: RawMatch): ApiMatch {
     awayTeamId: match.awayTeamId,
     tennisTour: match.tennisTour,
     homePlayers: match.homePlayers,
-    awayPlayers: match.awayPlayers
+    awayPlayers: match.awayPlayers,
+    hltvMatchId: match.hltvMatchId,
+    hltvMatchUrl: match.hltvMatchUrl,
+    esportsMatchFormat: match.esportsMatchFormat,
+    esportsMatchVenue: match.esportsMatchVenue,
+    hltvEvent: match.hltvEvent,
+    homeHltvWorldRank: match.homeHltvWorldRank,
+    awayHltvWorldRank: match.awayHltvWorldRank,
+    homeValveRank: match.homeValveRank,
+    awayValveRank: match.awayValveRank,
+    homeHltvProfileUrl: match.homeHltvProfileUrl,
+    awayHltvProfileUrl: match.awayHltvProfileUrl
   };
 }
 
@@ -1440,19 +1529,24 @@ function withTennisRankings(match: RawMatch, rankings: TennisRankings): RawMatch
 async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[]; debug: Record<string, unknown> }> {
   const now = Date.now();
   const horizon = now + Math.max(1, hours) * 60 * 60 * 1000;
-  const [pari, fonbet, tennisi, rankingsResult] = await Promise.all([
+  const [pari, fonbet, tennisi, rankingsResult, hltvResult] = await Promise.all([
     fetchPariLike(PARI_LINE_URLS, "pari"),
     fetchPariLike(FONBET_LINE_URLS, "fonbet"),
     fetchTennisiMatches(),
     loadTennisRankings()
       .then(value => ({ value, error: "" }))
-      .catch(error => ({ value: null, error: error instanceof Error ? error.message : String(error) }))
+      .catch(error => ({ value: null, error: error instanceof Error ? error.message : String(error) })),
+    loadHltvUpcomingMatches()
+      .then(value => ({ value, error: "" }))
+      .catch(error => ({ value: [], error: error instanceof Error ? error.message : String(error) }))
   ]);
   const raw = [...pari, ...fonbet, ...tennisi, ...featuredFallbackMatches(now, horizon)]
     .filter((match) => match.startMs > now && match.startMs <= horizon);
+  const hltvMatches = hltvResult.value || [];
+  const hltvRaw = raw.map(match => withHltvContext(match, hltvMatches));
   const identifiedRaw = rankingsResult.value
-    ? raw.map(match => withTennisRankings(match, rankingsResult.value!))
-    : raw;
+    ? hltvRaw.map(match => withTennisRankings(match, rankingsResult.value!))
+    : hltvRaw;
   const mergedRaw = mergeMatches(identifiedRaw);
   const ranked = rankingsResult.value
     ? mergedRaw
@@ -1480,6 +1574,7 @@ async function loadBookmakerMatches(hours: number): Promise<{ matches: ApiMatch[
       tennisRankings: rankingsResult.value
         ? { atp: rankingsResult.value.atp.length, wta: rankingsResult.value.wta.length, source: rankingsResult.value.source }
         : { error: rankingsResult.error },
+      hltv: hltvResult.error ? { matches: hltvMatches.length, error: hltvResult.error } : { matches: hltvMatches.length },
       merged: merged.length
     }
   };

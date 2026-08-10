@@ -43,6 +43,8 @@ type StandingRow = {
   age?: number;
   tournaments?: number;
   tour?: TennisTour;
+  valveRank?: number;
+  worldRank?: number;
 };
 
 const BASEBALL_STANDINGS_SLUGS: Array<{ pattern: RegExp; label: string; slug: string }> = [
@@ -448,7 +450,9 @@ export async function GET(request: Request) {
         points: row.points,
         change: row.change,
         logo: row.logo,
-        profileUrl: row.profileUrl
+        profileUrl: row.profileUrl,
+        valveRank: row.valveRank,
+        worldRank: row.worldRank || row.rank
       }));
       return NextResponse.json(
         {
