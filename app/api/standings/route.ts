@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { loadHltvEventOverview, loadHltvRankings } from "@/lib/hltv";
+import { loadHltvEventOverview, loadHltvEventOverviewFromMatch, loadHltvRankings } from "@/lib/hltv";
 import { KBO_TEAMS, kboTeamId } from "@/lib/kboTeams";
 import { MLB_TEAMS, mlbTeamId, resolveMlbTeam } from "@/lib/mlbTeams";
 import { NPB_TEAMS, npbTeamId, resolveNpbTeam } from "@/lib/npbTeams";
@@ -389,6 +389,8 @@ export async function GET(request: Request) {
   const sport = searchParams.get("sport");
   const league = searchParams.get("league") || "";
   const hltvEventUrl = searchParams.get("hltvEventUrl") || "";
+  const hltvMatchUrl = searchParams.get("hltvMatchUrl") || "";
+  const hltvEvent = searchParams.get("hltvEvent") || "";
   const tour: TennisTour = searchParams.get("tour")?.toUpperCase() === "WTA" ? "WTA" : "ATP";
   const counterStrike = sport === "esports" && /\b(counter[\s.:-]*strike(?:[\s.:-]*(?:2|go))?|cs[\s.:-]*(?:2|go)|кс[\s.:-]*(?:2|го)?)\b/i.test(league);
 
@@ -436,7 +438,8 @@ export async function GET(request: Request) {
 
   if (counterStrike) {
     try {
-      const eventOverview = await loadHltvEventOverview(hltvEventUrl);
+      const eventOverview = await loadHltvEventOverview(hltvEventUrl)
+        || await loadHltvEventOverviewFromMatch(hltvMatchUrl, hltvEvent || league);
       if (eventOverview?.standings.length) {
         return NextResponse.json(
           {
@@ -445,6 +448,18 @@ export async function GET(request: Request) {
             source: eventOverview.source,
             updatedAt: eventOverview.updatedAt,
             standings: eventOverview.standings
+          },
+          { headers: NO_STORE_HEADERS }
+        );
+      }
+      if (hltvEventUrl || hltvMatchUrl || hltvEvent) {
+        return NextResponse.json(
+          {
+            sport: "esports",
+            league: hltvEvent || league,
+            source: "HLTV",
+            updatedAt: new Date().toISOString(),
+            standings: []
           },
           { headers: NO_STORE_HEADERS }
         );

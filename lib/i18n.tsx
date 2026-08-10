@@ -54,6 +54,7 @@ export const translations: Record<string, string> = {
   "Лига:": "League:",
   "Чемпионат:": "Championship:",
   "Чемпионат": "Championship",
+  "Дисциплина": "Discipline",
   "Все страны": "All countries",
   "Все дисциплины": "All disciplines",
   "Все лиги": "All leagues",

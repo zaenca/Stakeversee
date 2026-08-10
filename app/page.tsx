@@ -702,8 +702,8 @@ function esportsTeamCard(team: string, standing?: StandingRow | null): EsportsTe
     league: "COUNTER STRIKE 2",
     country: "Мир",
     logo: CS_TEAM_LOGOS[id] || standing?.logo || canonicalName.slice(0, 3).toUpperCase(),
-    rank: standing?.rank || 0,
-    form: standing?.change || "-",
+    rank: standing?.worldRank || standing?.valveRank || 0,
+    form: standing?.form && standing.form !== "0" ? standing.form : standing?.change && standing.change !== "0" ? standing.change : "-",
     aliases: Array.from(new Set([team, canonicalName])).filter(Boolean),
     wins: 0,
     losses: 0,
@@ -713,7 +713,7 @@ function esportsTeamCard(team: string, standing?: StandingRow | null): EsportsTe
     change: standing?.change,
     profileUrl: standing?.profileUrl,
     valveRank: standing?.valveRank,
-    worldRank: standing?.worldRank || standing?.rank,
+    worldRank: standing?.worldRank,
     kind: "esports"
   };
 }
@@ -3394,7 +3394,11 @@ export default function Home() {
         league: match.league
       });
       if (match.sport === "tennis") params.set("tour", defaultTennisTour);
-      if (match.sport === "esports" && match.hltvEventUrl) params.set("hltvEventUrl", match.hltvEventUrl);
+      if (match.sport === "esports") {
+        if (match.hltvEventUrl) params.set("hltvEventUrl", match.hltvEventUrl);
+        if (match.hltvMatchUrl) params.set("hltvMatchUrl", match.hltvMatchUrl);
+        if (match.hltvEvent) params.set("hltvEvent", match.hltvEvent);
+      }
       const response = await fetch(`/api/standings?${params.toString()}`, { cache: "no-store" });
       if (!response.ok) throw new Error("standings unavailable");
       const payload = await response.json();
@@ -3431,7 +3435,7 @@ export default function Home() {
     const initialCard = standing
       ? {
           ...card,
-          rank: useCardPriority ? (card.rank || standing.rank) : standing.rank,
+          rank: useCardPriority ? (card.rank || cardValveRank || cardWorldRank || 0) : standing.rank,
           form: standing.form && standing.form !== "0" ? standing.form : card.form || "-",
           wins: standing.wins,
           losses: standing.losses,
@@ -6366,7 +6370,7 @@ export default function Home() {
                     <strong className="team-form-lights">{formatStandingForm(selectedTeamCard.form)}</strong>
                   </div>
                   <div>
-                    <span>{t("Чемпионат")}</span>
+                    <span>{isEsportsTeamCard(selectedTeamCard) ? t("Дисциплина") : t("Чемпионат")}</span>
                     <strong>{selectedTeamCard.league}</strong>
                   </div>
                   {isTennisPlayerCard(selectedTeamCard) ? (
@@ -6392,7 +6396,7 @@ export default function Home() {
                       </div>
                       <div>
                         <span>World rating</span>
-                        <strong>{selectedTeamCard.worldRank || selectedTeamCard.rank ? `#${selectedTeamCard.worldRank || selectedTeamCard.rank}` : "-"}</strong>
+                        <strong>{selectedTeamCard.worldRank ? `#${selectedTeamCard.worldRank}` : "-"}</strong>
                       </div>
                       <div>
                         <span>Источник</span>

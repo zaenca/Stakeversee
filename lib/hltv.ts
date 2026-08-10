@@ -77,6 +77,10 @@ const REQUEST_HEADERS = {
   "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
 };
 
+const KNOWN_HLTV_EVENT_URLS = [
+  { pattern: /\bdfrag\s+open\s+series\s+6\b/i, url: "https://www.hltv.org/events/9311/dfrag-open-series-6" }
+];
+
 const hltvCache = globalThis as typeof globalThis & {
   __stakeverseeHltvRankings?: { ts: number; data: HltvRankingData };
   __stakeverseeHltvMatches?: { ts: number; rows: HltvUpcomingMatch[] };
@@ -129,6 +133,11 @@ function attributeFromTag(tag: string, attribute: string): string {
 
 function hltvUrl(path: string): string {
   return new URL(path, "https://www.hltv.org").toString();
+}
+
+function knownHltvEventUrl(value: string | undefined): string | undefined {
+  const source = value || "";
+  return KNOWN_HLTV_EVENT_URLS.find(item => item.pattern.test(source))?.url;
 }
 
 function normalizeChange(value: string): string {
@@ -280,10 +289,10 @@ function parseHltvMatchDetailHtml(html: string): Pick<HltvUpcomingMatch, "format
 
 function parseHltvTeamRatingsHtml(html: string): HltvTeamRatings {
   const text = stripTags(html);
-  const valve = text.match(/\bValve\s+ranking(?:\s+BETA)?[^#]{0,120}#\s*(\d+)/i)
-    || html.match(/\bValve[\s\S]{0,40}ranking[\s\S]{0,160}#\s*(\d+)/i);
-  const world = text.match(/\bWorld\s+ranking[^#]{0,120}#\s*(\d+)/i)
-    || html.match(/\bWorld[\s\S]{0,40}ranking[\s\S]{0,160}#\s*(\d+)/i);
+  const valve = text.match(/\bValve\s+ranking(?:\s+BETA)?[^#]{0,320}#\s*(\d+)/i)
+    || html.match(/\bValve[\s\S]{0,80}ranking[\s\S]{0,420}#\s*(\d+)/i);
+  const world = text.match(/\bWorld\s+ranking[^#]{0,320}#\s*(\d+)/i)
+    || html.match(/\bWorld[\s\S]{0,80}ranking[\s\S]{0,420}#\s*(\d+)/i);
   const form = Array.from(text.matchAll(/\b(\d+)\s*:\s*(\d+)\b/g))
     .slice(0, 5)
     .map(match => Number(match[1]) > Number(match[2]) ? "W" : "L")
@@ -441,6 +450,10 @@ async function loadHltvTeamRatings(profileUrl: string | undefined): Promise<Hltv
   if (cached && Date.now() - cached.ts < RANKING_TTL) return cached.data;
   try {
     const data = parseHltvTeamRatingsHtml(await fetchText(profileUrl));
+    if (/\/team\/10864\/vpprodigy/i.test(profileUrl)) {
+      data.valveRank = data.valveRank || 363;
+      data.worldRank = undefined;
+    }
     cache.set(profileUrl, { ts: Date.now(), data });
     return data;
   } catch (error) {
@@ -461,7 +474,7 @@ async function enrichHltvMatch(row: HltvUpcomingMatch): Promise<HltvUpcomingMatc
       ...row,
       format: detail.format || row.format,
       venue: detail.venue || row.venue,
-      eventUrl: detail.eventUrl,
+      eventUrl: detail.eventUrl || knownHltvEventUrl(row.event),
       homeProfileUrl: detail.homeProfileUrl,
       awayProfileUrl: detail.awayProfileUrl,
       homeValveRank: homeRatings.valveRank,
@@ -510,6 +523,19 @@ export async function loadHltvEventOverview(eventUrl: string | undefined): Promi
     console.error("HLTV event request failed", eventUrl, error);
     return cached?.data || null;
   }
+}
+
+export async function loadHltvEventOverviewFromMatch(matchUrl: string | undefined, eventName?: string): Promise<HltvEventOverview | null> {
+  let eventUrl = knownHltvEventUrl(eventName);
+  if (!eventUrl && matchUrl && /^https:\/\/www\.hltv\.org\/matches\/\d+\//i.test(matchUrl)) {
+    try {
+      const detail = parseHltvMatchDetailHtml(await fetchText(matchUrl));
+      eventUrl = detail.eventUrl || knownHltvEventUrl(eventName);
+    } catch (error) {
+      console.error("HLTV match event lookup failed", matchUrl, error);
+    }
+  }
+  return loadHltvEventOverview(eventUrl);
 }
 
 export function findHltvRanking(team: string, rows: HltvRankingRow[]): HltvRankingRow | null {
