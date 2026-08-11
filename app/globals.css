@@ -2566,11 +2566,40 @@ h1 {
   text-transform: uppercase;
 }
 
-.cs-bracket-grid,
 .cs-prize-grid {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.cs-bracket-board {
+  display: grid;
+  gap: 12px;
+}
+
+.cs-bracket-lane {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.cs-bracket-lane h4 {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.cs-bracket-rounds {
+  align-items: stretch;
+  display: grid;
+  gap: 10px;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(150px, 1fr);
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 
 .cs-bracket-match,
@@ -2584,7 +2613,22 @@ h1 {
 
 .cs-bracket-match {
   display: grid;
-  gap: 4px;
+  gap: 6px;
+  position: relative;
+}
+
+.cs-bracket-match::after {
+  background: rgba(0, 229, 255, 0.18);
+  content: "";
+  height: 1px;
+  left: 100%;
+  position: absolute;
+  top: 50%;
+  width: 10px;
+}
+
+.cs-bracket-match:last-child::after {
+  display: none;
 }
 
 .cs-bracket-match.highlighted {
@@ -2606,18 +2650,65 @@ h1 {
   font-size: 0.86rem;
 }
 
-.cs-bracket-match em {
+.cs-bracket-team {
+  align-items: center;
+  background: rgba(2, 10, 18, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #eaf6ff;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 8px;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 5px 7px;
+  text-align: left;
+}
+
+.cs-bracket-team:hover:not(:disabled) {
+  border-color: rgba(0, 229, 255, 0.45);
   color: var(--cyan);
-  font-size: 0.66rem;
-  font-style: normal;
+}
+
+.cs-bracket-team:disabled {
+  cursor: default;
+  opacity: 0.52;
+}
+
+.cs-bracket-team span {
+  color: #eaf6ff;
+  font-size: 0.8rem;
   font-weight: 900;
-  text-transform: uppercase;
 }
 
 .cs-prize-card {
   align-items: center;
   display: flex;
+  gap: 8px;
   justify-content: space-between;
+}
+
+.cs-prize-teams {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.cs-prize-teams button {
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: 999px;
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 3px 7px;
+}
+
+.cs-prize-teams button:hover {
+  background: rgba(0, 229, 255, 0.15);
 }
 
 .standings-row {

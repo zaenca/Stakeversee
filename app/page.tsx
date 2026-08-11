@@ -3224,6 +3224,26 @@ export default function Home() {
   const counterStrikeEventStandingsOpen = counterStrikeStandingsOpen && standingsRows.some(row => row.change === "bracket" || row.change === "prize");
   const counterStrikeBracketRows = counterStrikeEventStandingsOpen ? standingsRows.filter(row => row.change === "bracket") : [];
   const counterStrikePrizeRows = counterStrikeEventStandingsOpen ? standingsRows.filter(row => row.change === "prize") : [];
+  const counterStrikeBracketGroups = useMemo(() => {
+    const groups = [
+      { id: "upper", title: "Верхняя сетка", rows: [] as StandingRow[] },
+      { id: "lower", title: "Нижняя сетка", rows: [] as StandingRow[] },
+      { id: "group", title: "Групповой этап", rows: [] as StandingRow[] },
+      { id: "other", title: "Матчи чемпионата", rows: [] as StandingRow[] }
+    ];
+    counterStrikeBracketRows.forEach(row => {
+      const key = `${row.division} ${row.team}`.toLowerCase();
+      const group = key.includes("lower") || key.includes("ниж")
+        ? groups[1]
+        : key.includes("group") || key.includes("груп")
+          ? groups[2]
+          : key.includes("upper") || key.includes("верх") || key.includes("final") || key.includes("opening")
+            ? groups[0]
+            : groups[3];
+      group.rows.push(row);
+    });
+    return groups.filter(group => group.rows.length);
+  }, [counterStrikeBracketRows]);
   const pagedStandingsOpen = (counterStrikeStandingsOpen && !counterStrikeEventStandingsOpen) || tennisStandingsOpen;
   const standingsPageCount = pagedStandingsOpen ? Math.max(1, Math.ceil(standingsRows.length / 10)) : 1;
   const visibleStandingsGroups = useMemo(() => {
@@ -6480,37 +6500,89 @@ export default function Home() {
                       <div className="cs-event-layout">
                         <section className="cs-event-section">
                           <h3>Сетка чемпионата</h3>
-                          <div className="cs-bracket-grid">
-                            {counterStrikeBracketRows.map(row => {
-                              const [, title = row.team] = row.team.split(/:\s*/);
-                              const [left = row.team, right = "TBD"] = title.split(/\s+—\s+/);
-                              const bracketMatch = standingsMatch;
-                              const highlighted = Boolean(bracketMatch) && (
-                                esportsTeamNamesMatch(left, bracketMatch!.home)
-                                || esportsTeamNamesMatch(left, bracketMatch!.away)
-                                || esportsTeamNamesMatch(right, bracketMatch!.home)
-                                || esportsTeamNamesMatch(right, bracketMatch!.away)
-                              );
-                              return (
-                                <div className={`cs-bracket-match ${highlighted ? "highlighted" : ""}`} key={row.id}>
-                                  <span>{row.team.includes(":") ? row.team.split(":")[0] : "Match"}</span>
-                                  <strong>{left}</strong>
-                                  <em>vs</em>
-                                  <strong>{right}</strong>
+                          <div className="cs-bracket-board">
+                            {counterStrikeBracketGroups.map(group => (
+                              <div className={`cs-bracket-lane cs-bracket-lane-${group.id}`} key={group.id}>
+                                <h4>{group.title}</h4>
+                                <div className="cs-bracket-rounds">
+                                  {group.rows.map(row => {
+                                    const [roundLabelRaw, titleRaw = row.team] = row.team.split(/:\s*/);
+                                    const title = titleRaw.trim();
+                                    const [leftRaw = title, rightRaw = "TBD"] = title.split(/\s+[-–—]\s+/);
+                                    const parseTeamSeed = (value: string) => {
+                                      const trimmed = value.trim();
+                                      const score = trimmed.match(/\s+(\d+)$/)?.[1] || "";
+                                      const name = score ? trimmed.replace(/\s+\d+$/, "").trim() : trimmed;
+                                      return { name, score };
+                                    };
+                                    const left = parseTeamSeed(leftRaw);
+                                    const right = parseTeamSeed(rightRaw);
+                                    const bracketMatch = standingsMatch;
+                                    const highlighted = Boolean(bracketMatch) && (
+                                      esportsTeamNamesMatch(left.name, bracketMatch!.home)
+                                      || esportsTeamNamesMatch(left.name, bracketMatch!.away)
+                                      || esportsTeamNamesMatch(right.name, bracketMatch!.home)
+                                      || esportsTeamNamesMatch(right.name, bracketMatch!.away)
+                                    );
+                                    const renderBracketTeam = (team: { name: string; score: string }) => {
+                                      const standing = esportsStandingForTeam(team.name, standingsRows);
+                                      const card = esportsTeamCard(team.name, standing);
+                                      const disabled = !team.name || /^tbd|\?$/i.test(team.name);
+                                      return (
+                                        <button
+                                          className="cs-bracket-team"
+                                          disabled={disabled}
+                                          key={team.name}
+                                          onClick={() => void openTeamProfile(card, standing || undefined)}
+                                          type="button"
+                                        >
+                                          <strong>{team.name || "TBD"}</strong>
+                                          {team.score ? <span>{team.score}</span> : null}
+                                        </button>
+                                      );
+                                    };
+                                    return (
+                                      <div className={`cs-bracket-match ${highlighted ? "highlighted" : ""}`} key={row.id}>
+                                        <span>{roundLabelRaw || "Match"}</span>
+                                        {renderBracketTeam(left)}
+                                        {renderBracketTeam(right)}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
-                              );
-                            })}
+                              </div>
+                            ))}
                           </div>
                         </section>
                         <section className="cs-event-section">
                           <h3>Распределение призов</h3>
                           <div className="cs-prize-grid">
-                            {counterStrikePrizeRows.map(row => (
-                              <div className="cs-prize-card" key={row.id}>
-                                <strong>{row.team}</strong>
-                                <span>{row.points ? `$${row.points.toLocaleString("en-US")}` : "место определено"}</span>
-                              </div>
-                            ))}
+                            {counterStrikePrizeRows.map(row => {
+                              const [placeLabel, teamsLabel = ""] = row.team.split(/:\s*/);
+                              const prizeTeams = teamsLabel
+                                .split(/,\s*/)
+                                .map(name => name.trim())
+                                .filter(Boolean);
+                              return (
+                                <div className="cs-prize-card" key={row.id}>
+                                  <strong>{placeLabel || row.team}</strong>
+                                  {prizeTeams.length ? (
+                                    <div className="cs-prize-teams">
+                                      {prizeTeams.map(team => {
+                                        const standing = esportsStandingForTeam(team, standingsRows);
+                                        const card = esportsTeamCard(team, standing);
+                                        return (
+                                          <button key={team} onClick={() => void openTeamProfile(card, standing || undefined)} type="button">
+                                            {team}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : null}
+                                  <span>{row.points ? `$${row.points.toLocaleString("en-US")}` : "место определено"}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </section>
                       </div>

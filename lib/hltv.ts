@@ -86,8 +86,16 @@ const KNOWN_DFRAG_OPEN_SERIES_6: HltvEventOverview = {
   updatedAt: new Date(0).toISOString(),
   league: "DFRAG Open Series 6",
   standings: [
-    { id: "cs-dfrag-9311-upper-1", rank: 1, league: "DFRAG Open Series 6", division: "Сетка чемпионата", team: "Opening round: Rooster — Abyssal", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "-", points: 0, change: "bracket" },
-    { id: "cs-dfrag-9311-upper-2", rank: 2, league: "DFRAG Open Series 6", division: "Сетка чемпионата", team: "Opening round: Ground Zero — Mindfreak", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "-", points: 0, change: "bracket" },
+    { id: "cs.rooster", rank: 145, league: "DFRAG Open Series 6", division: "Команды", team: "Rooster", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "WWWLW", points: 0, change: "participant", profileUrl: "https://www.hltv.org/team/9881/rooster", valveRank: 183, worldRank: 145 },
+    { id: "cs.abyssal", rank: 225, league: "DFRAG Open Series 6", division: "Команды", team: "Abyssal", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "WWLWW", points: 715, change: "participant", profileUrl: "https://www.hltv.org/team/13686/abyssal", worldRank: 225 },
+    { id: "cs.mindfreak", rank: 106, league: "DFRAG Open Series 6", division: "Команды", team: "Mindfreak", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "LWLWW", points: 0, change: "participant", profileUrl: "https://www.hltv.org/team/11668/mindfreak", valveRank: 209, worldRank: 106 },
+    { id: "cs.ground-zero", rank: 0, league: "DFRAG Open Series 6", division: "Команды", team: "Ground Zero", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "WLWWW", points: 0, change: "participant" },
+    { id: "cs-dfrag-9311-upper-1", rank: 1, league: "DFRAG Open Series 6", division: "Upper Bracket", team: "Opening round: Rooster 0 — Abyssal 2", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "-", points: 0, change: "bracket" },
+    { id: "cs-dfrag-9311-upper-2", rank: 2, league: "DFRAG Open Series 6", division: "Upper Bracket", team: "Opening round: Ground Zero 2 — Mindfreak 0", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "-", points: 0, change: "bracket" },
+    { id: "cs-dfrag-9311-upper-3", rank: 3, league: "DFRAG Open Series 6", division: "Upper Bracket", team: "Upper final: Abyssal — Ground Zero", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "-", points: 0, change: "bracket" },
+    { id: "cs-dfrag-9311-upper-4", rank: 4, league: "DFRAG Open Series 6", division: "Upper Bracket", team: "Grand final: TBD — TBD", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "-", points: 0, change: "bracket" },
+    { id: "cs-dfrag-9311-lower-1", rank: 5, league: "DFRAG Open Series 6", division: "Lower Bracket", team: "Lower final: Rooster — Mindfreak", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "-", points: 0, change: "bracket" },
+    { id: "cs-dfrag-9311-lower-2", rank: 6, league: "DFRAG Open Series 6", division: "Lower Bracket", team: "Consolidation final: TBD — TBD", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "-", points: 0, change: "bracket" },
     { id: "cs-dfrag-9311-prize-1", rank: 1, league: "DFRAG Open Series 6", division: "Распределение призов", team: "1st", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "-", points: 2805, change: "prize" },
     { id: "cs-dfrag-9311-prize-2", rank: 2, league: "DFRAG Open Series 6", division: "Распределение призов", team: "2nd", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "-", points: 1402, change: "prize" },
     { id: "cs-dfrag-9311-prize-3", rank: 3, league: "DFRAG Open Series 6", division: "Распределение призов", team: "3rd", wins: 0, losses: 0, pct: "-", gamesBack: "-", form: "-", points: 701, change: "prize" },
@@ -483,7 +491,6 @@ function withHltvEventFallback(
   if (!overview) return fallback;
 
   const eventRows = overview.standings
-    .filter(row => row.change === "bracket" || row.change === "prize" || isPrizeStandingRow(row))
     .map(row => isPrizeStandingRow(row) ? { ...row, change: "prize" } : row);
   const hasBracket = eventRows.some(row => row.change === "bracket");
   const hasPrize = eventRows.some(row => row.change === "prize");
@@ -588,6 +595,21 @@ async function loadHltvTeamRatings(profileUrl: string | undefined): Promise<Hltv
   }
 }
 
+async function enrichHltvEventOverviewRows(data: HltvEventOverview): Promise<HltvEventOverview> {
+  const rows = await Promise.all(data.standings.map(async row => {
+    if (!row.profileUrl) return row;
+    const ratings = await loadHltvTeamRatings(row.profileUrl);
+    return {
+      ...row,
+      rank: ratings.worldRank || row.worldRank || row.rank,
+      form: ratings.form || row.form,
+      valveRank: ratings.valveRank || row.valveRank,
+      worldRank: ratings.worldRank || row.worldRank
+    };
+  }));
+  return { ...data, standings: rows };
+}
+
 async function enrichHltvMatch(row: HltvUpcomingMatch): Promise<HltvUpcomingMatch> {
   if (!row.detailUrl) return row;
   try {
@@ -637,19 +659,24 @@ export async function loadHltvUpcomingMatches(): Promise<HltvUpcomingMatch[]> {
 export async function loadHltvEventOverview(eventUrl: string | undefined): Promise<HltvEventOverview | null> {
   if (!eventUrl || !/^https:\/\/www\.hltv\.org\/events\/\d+\//i.test(eventUrl)) return null;
   const known = eventUrl === "https://www.hltv.org/events/9311/dfrag-open-series-6" ? KNOWN_DFRAG_OPEN_SERIES_6 : null;
-  if (known) return { ...known, updatedAt: new Date().toISOString() };
+  if (known) return enrichHltvEventOverviewRows({ ...known, updatedAt: new Date().toISOString() });
   const cache = hltvCache.__stakeverseeHltvEvents ?? new Map();
   hltvCache.__stakeverseeHltvEvents = cache;
   const cached = cache.get(eventUrl);
   if (cached && Date.now() - cached.ts < MATCHES_TTL) return cached.data;
   try {
-    const data = parseHltvEventStandingsHtml(await fetchText(eventUrl), eventUrl);
+    const data = await enrichHltvEventOverviewRows(parseHltvEventStandingsHtml(await fetchText(eventUrl), eventUrl));
     if (!data.standings.length) throw new Error("HLTV event teams were not found");
     cache.set(eventUrl, { ts: Date.now(), data });
     return data;
   } catch (error) {
     console.error("HLTV event request failed", eventUrl, error);
-    return cached?.data || known;
+    if (cached?.data) return cached.data;
+    if (known) {
+      const knownData: HltvEventOverview = { ...KNOWN_DFRAG_OPEN_SERIES_6, updatedAt: new Date().toISOString() };
+      return enrichHltvEventOverviewRows(knownData);
+    }
+    return null;
   }
 }
 
