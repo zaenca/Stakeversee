@@ -429,6 +429,23 @@ function genericTeamCard(match: MatchRow, side: "home" | "away"): GenericTeamPro
   };
 }
 
+function matchTeamLogoNode(card: Pick<TeamCard, "logo"> | null | undefined, fallbackName: string): ReactNode {
+  const initials = fallbackName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part[0] || "")
+    .join("")
+    .slice(0, 3)
+    .toUpperCase() || "TM";
+  const logo = String(card?.logo || initials);
+
+  return (
+    <span className="match-team-logo" aria-hidden="true">
+      {logo.startsWith("http") || logo.startsWith("/") ? <img alt="" src={logo} /> : logo.slice(0, 3)}
+    </span>
+  );
+}
+
 function standingsRowMatchesTeam(row: StandingRow, match: MatchRow, side: "home" | "away"): boolean {
   const targetName = side === "home" ? match.home : match.away;
   const targetId = side === "home" ? match.homeTeamId : match.awayTeamId;
@@ -5403,6 +5420,8 @@ export default function Home() {
                   const awayHltvWorldRank = match.awayHltvWorldRank || awayEsportsStanding?.worldRank || awayEsportsStanding?.rank || 0;
                   const homeLeagueCard = clientLeagueTeamCard(match.home, match.homeTeamId);
                   const awayLeagueCard = clientLeagueTeamCard(match.away, match.awayTeamId);
+                  const homeDisplayCard = counterStrikeMatch ? esportsTeamCard(match.home, homeEsportsStanding) : homeLeagueCard || genericTeamCard(match, "home");
+                  const awayDisplayCard = counterStrikeMatch ? esportsTeamCard(match.away, awayEsportsStanding) : awayLeagueCard || genericTeamCard(match, "away");
                   const homeTeamClickable = Boolean(homeLeagueCard || counterStrikeMatch || match.home);
                   const awayTeamClickable = Boolean(awayLeagueCard || counterStrikeMatch || match.away);
                   const homeFavoriteKey = favoriteTeamKeyFromParts(match.sport, match.league, match.home, match.homeTeamId);
@@ -5465,8 +5484,11 @@ export default function Home() {
                           <div className="tennis-participants">
                             {homeTennisPlayers.map(player => (
                               <button className="match-team-button" key={player.id} onClick={() => openTennisPlayer(player)} type="button">
-                                <strong>{player.name}</strong>
-                                {player.rank ? <em className="match-team-ranking">{player.tour} #{player.rank}</em> : null}
+                                {matchTeamLogoNode(tennisPlayerCard(player), player.name)}
+                                <span className="match-team-name-block">
+                                  <strong>{player.name}</strong>
+                                  {player.rank ? <em className="match-team-ranking">{player.tour} #{player.rank}</em> : null}
+                                </span>
                               </button>
                             ))}
                           </div>
@@ -5474,8 +5496,11 @@ export default function Home() {
                           <div className="match-team-title">
                             {homeTeamClickable ? (
                               <button className="match-team-button" onClick={() => void openTeamCard(match, "home")} title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined} type="button">
-                                <strong>{match.home}</strong>
-                                {homeHltvWorldRank ? <em className="match-team-ranking">HLTV #{homeHltvWorldRank}</em> : null}
+                                {matchTeamLogoNode(homeDisplayCard, match.home)}
+                                <span className="match-team-name-block">
+                                  <strong>{match.home}</strong>
+                                  {homeHltvWorldRank ? <em className="match-team-ranking">HLTV #{homeHltvWorldRank}</em> : null}
+                                </span>
                               </button>
                             ) : (
                               <strong title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined}>{match.home}</strong>
@@ -5502,8 +5527,11 @@ export default function Home() {
                           <div className="tennis-participants">
                             {awayTennisPlayers.map(player => (
                               <button className="match-team-button" key={player.id} onClick={() => openTennisPlayer(player)} type="button">
-                                <strong>{player.name}</strong>
-                                {player.rank ? <em className="match-team-ranking">{player.tour} #{player.rank}</em> : null}
+                                {matchTeamLogoNode(tennisPlayerCard(player), player.name)}
+                                <span className="match-team-name-block">
+                                  <strong>{player.name}</strong>
+                                  {player.rank ? <em className="match-team-ranking">{player.tour} #{player.rank}</em> : null}
+                                </span>
                               </button>
                             ))}
                           </div>
@@ -5511,8 +5539,11 @@ export default function Home() {
                           <div className="match-team-title">
                             {awayTeamClickable ? (
                               <button className="match-team-button" onClick={() => void openTeamCard(match, "away")} title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined} type="button">
-                                <strong>{match.away}</strong>
-                                {awayHltvWorldRank ? <em className="match-team-ranking">HLTV #{awayHltvWorldRank}</em> : null}
+                                {matchTeamLogoNode(awayDisplayCard, match.away)}
+                                <span className="match-team-name-block">
+                                  <strong>{match.away}</strong>
+                                  {awayHltvWorldRank ? <em className="match-team-ranking">HLTV #{awayHltvWorldRank}</em> : null}
+                                </span>
                               </button>
                             ) : (
                               <strong title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined}>{match.away}</strong>

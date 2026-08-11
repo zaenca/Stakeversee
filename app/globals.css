@@ -1971,6 +1971,54 @@ h1 {
   transition: color 0.16s ease;
 }
 
+.match-team-logo {
+  align-items: center;
+  background: rgba(0, 229, 255, 0.11);
+  border: 1px solid rgba(167, 183, 204, 0.28);
+  border-radius: 999px;
+  color: var(--cyan);
+  display: inline-flex;
+  flex: 0 0 24px;
+  font-size: 0.58rem;
+  font-weight: 900;
+  height: 24px;
+  justify-content: center;
+  line-height: 1;
+  overflow: hidden;
+  text-transform: uppercase;
+  width: 24px;
+}
+
+.workspace-shell.theme-dark .match-team-logo {
+  border-color: rgba(255, 255, 255, 0.72);
+}
+
+.workspace-shell.theme-light .match-team-logo {
+  border-color: rgba(6, 14, 26, 0.58);
+}
+
+.match-team-logo img {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.match-team-name-block,
+.match-team-static {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: center;
+  min-width: 0;
+}
+
+.match-team-static {
+  color: #eaf6ff;
+  font-weight: 900;
+}
+
 .match-team-button strong {
   display: inline;
 }
