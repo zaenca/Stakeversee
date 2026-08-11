@@ -2355,10 +2355,10 @@ h1 {
   color: #eaf6ff;
   cursor: pointer;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  min-height: 42px;
-  padding: 8px 10px;
+  min-height: 34px;
+  padding: 6px 9px;
   text-align: left;
 }
 
@@ -2548,54 +2548,57 @@ h1 {
 
 .cs-event-layout {
   display: grid;
-  gap: 12px;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 3px;
 }
 
 .cs-event-section {
   background: rgba(8, 18, 29, 0.56);
   border: 1px solid rgba(0, 229, 255, 0.18);
   border-radius: 8px;
-  padding: 10px;
+  padding: 8px;
 }
 
 .cs-event-section h3 {
   color: #eaf6ff;
   font-size: 0.78rem;
   font-weight: 900;
-  margin: 0 0 10px;
+  margin: 0 0 7px;
   text-transform: uppercase;
 }
 
 .cs-prize-grid {
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
 }
 
 .cs-bracket-board {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .cs-bracket-lane {
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  padding: 10px;
+  padding: 8px;
 }
 
 .cs-bracket-lane h4 {
   color: var(--muted);
   font-size: 0.74rem;
   font-weight: 900;
-  margin: 0 0 10px;
+  margin: 0 0 7px;
   text-transform: uppercase;
 }
 
 .cs-bracket-rounds {
   align-items: stretch;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-auto-flow: column;
   grid-auto-columns: minmax(150px, 1fr);
   overflow-x: auto;
@@ -2607,13 +2610,13 @@ h1 {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 7px;
-  min-height: 64px;
-  padding: 9px 10px;
+  min-height: 52px;
+  padding: 7px 8px;
 }
 
 .cs-bracket-match {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   position: relative;
 }
 
@@ -2661,8 +2664,8 @@ h1 {
   font: inherit;
   gap: 8px;
   justify-content: space-between;
-  min-height: 28px;
-  padding: 5px 7px;
+  min-height: 24px;
+  padding: 4px 6px;
   text-align: left;
 }
 

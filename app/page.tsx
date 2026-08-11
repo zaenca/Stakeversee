@@ -6476,7 +6476,7 @@ export default function Home() {
                             <button key={requestedName} onClick={() => void openTeamProfile(card, standing || undefined)} type="button">
                               <span>{standing ? `#${standing.rank}` : "—"}</span>
                               <strong>{standing?.team || requestedName}</strong>
-                              <small>{standing?.points ? `${standing.points} ${t("очков")}` : t("Нет в рейтинге")}</small>
+                              {standing?.points ? <small>{`${standing.points} ${t("очков")}`}</small> : null}
                             </button>
                           );
                         })}
@@ -6579,7 +6579,7 @@ export default function Home() {
                                       })}
                                     </div>
                                   ) : null}
-                                  <span>{row.points ? `$${row.points.toLocaleString("en-US")}` : "место определено"}</span>
+                                  {row.points ? <span>{`$${row.points.toLocaleString("en-US")}`}</span> : null}
                                 </div>
                               );
                             })}
