@@ -3460,10 +3460,12 @@ export default function Home() {
     const cardValveRank = isEsportsTeamCard(card) ? card.valveRank : undefined;
     const cardWorldRank = isEsportsTeamCard(card) ? card.worldRank : undefined;
     const useCardPriority = isEsportsTeamCard(card);
+    const standingRank = standing ? Number(standing.rank || standing.worldRank || standing.valveRank || 0) : 0;
+    const cardRank = Number(card.rank || cardValveRank || cardWorldRank || 0);
     const initialCard = standing
       ? {
           ...card,
-          rank: useCardPriority ? (card.rank || cardValveRank || cardWorldRank || 0) : standing.rank,
+          rank: useCardPriority ? (standingRank || cardRank) : (standing.rank || cardRank),
           form: standing.form && standing.form !== "0" ? standing.form : card.form || "-",
           wins: standing.wins,
           losses: standing.losses,
@@ -3473,8 +3475,8 @@ export default function Home() {
           change: standing.change,
           logo: standing.logo || card.logo,
           profileUrl: standing.profileUrl || cardProfileUrl,
-          valveRank: cardValveRank || standing.valveRank,
-          worldRank: cardWorldRank || standing.worldRank || (useCardPriority ? undefined : standing.rank)
+          valveRank: standing.valveRank || cardValveRank,
+          worldRank: standing.worldRank || cardWorldRank || standing.rank
         }
       : card;
     setSelectedTeamCard(initialCard);
@@ -3508,10 +3510,39 @@ export default function Home() {
     }
   }
 
-  function openTeamCard(match: MatchRow, side: "home" | "away") {
+  async function loadCounterStrikeMatchStandings(match: MatchRow): Promise<StandingRow[]> {
+    const params = new URLSearchParams({
+      sport: "esports",
+      league: match.league
+    });
+    params.set("csEvent", "1");
+    params.set("home", match.home);
+    params.set("away", match.away);
+    if (match.hltvEventUrl) params.set("hltvEventUrl", match.hltvEventUrl);
+    if (match.hltvMatchUrl) params.set("hltvMatchUrl", match.hltvMatchUrl);
+    if (match.hltvEvent) params.set("hltvEvent", match.hltvEvent);
+
+    const response = await fetch(`/api/standings?${params.toString()}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("cs standings unavailable");
+    const payload = await response.json();
+    const rows = Array.isArray(payload?.standings) ? payload.standings : [];
+    return normalizeStandingRows(rows);
+  }
+
+  async function openTeamCard(match: MatchRow, side: "home" | "away") {
     const name = side === "home" ? match.home : match.away;
     if (isCounterStrikeMatch(match)) {
-      const standing = esportsStandingForTeam(name, counterStrikeRankings);
+      let standings = counterStrikeRankings;
+      try {
+        const matchStandings = await loadCounterStrikeMatchStandings(match);
+        if (matchStandings.length) {
+          standings = matchStandings;
+          setCounterStrikeRankings(matchStandings);
+        }
+      } catch {
+        // Keep using the currently loaded CS rankings if the event page is unavailable.
+      }
+      const standing = esportsStandingForTeam(name, standings);
       const card = esportsTeamCard(name, standing);
       const sideProfileUrl = side === "home" ? match.homeHltvProfileUrl : match.awayHltvProfileUrl;
       const sideWorldRank = side === "home" ? match.homeHltvWorldRank : match.awayHltvWorldRank;
@@ -3519,11 +3550,11 @@ export default function Home() {
       const sideForm = side === "home" ? match.homeHltvForm : match.awayHltvForm;
       void openTeamProfile({
         ...card,
-        profileUrl: sideProfileUrl || card.profileUrl,
-        rank: sideWorldRank || sideValveRank || (sideProfileUrl ? 0 : card.rank),
-        form: sideForm || card.form,
-        worldRank: sideWorldRank || (sideProfileUrl ? undefined : card.worldRank),
-        valveRank: sideValveRank || card.valveRank
+        profileUrl: card.profileUrl || sideProfileUrl,
+        rank: card.rank || sideWorldRank || sideValveRank || (sideProfileUrl ? 0 : card.rank),
+        form: card.form && card.form !== "-" ? card.form : sideForm || card.form,
+        worldRank: card.worldRank || sideWorldRank,
+        valveRank: card.valveRank || sideValveRank
       }, standing || undefined);
       return;
     }
@@ -5442,7 +5473,7 @@ export default function Home() {
                         ) : (
                           <div className="match-team-title">
                             {homeTeamClickable ? (
-                              <button className="match-team-button" onClick={() => openTeamCard(match, "home")} title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined} type="button">
+                              <button className="match-team-button" onClick={() => void openTeamCard(match, "home")} title={match.homeTeamId ? `${t("ID команды")}: ${match.homeTeamId}` : undefined} type="button">
                                 <strong>{match.home}</strong>
                                 {homeHltvWorldRank ? <em className="match-team-ranking">HLTV #{homeHltvWorldRank}</em> : null}
                               </button>
@@ -5479,7 +5510,7 @@ export default function Home() {
                         ) : (
                           <div className="match-team-title">
                             {awayTeamClickable ? (
-                              <button className="match-team-button" onClick={() => openTeamCard(match, "away")} title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined} type="button">
+                              <button className="match-team-button" onClick={() => void openTeamCard(match, "away")} title={match.awayTeamId ? `${t("ID команды")}: ${match.awayTeamId}` : undefined} type="button">
                                 <strong>{match.away}</strong>
                                 {awayHltvWorldRank ? <em className="match-team-ranking">HLTV #{awayHltvWorldRank}</em> : null}
                               </button>
