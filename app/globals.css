@@ -1752,6 +1752,11 @@ h1 {
   white-space: nowrap;
 }
 
+.match-meta-venue {
+  color: #d8f8ff;
+  white-space: nowrap;
+}
+
 .flag-icon {
   border-radius: 2px;
   display: inline-block;

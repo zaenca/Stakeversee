@@ -85,6 +85,7 @@ type MatchRow = {
   sport: string;
   country: string;
   league: string;
+  venue?: string;
   time: string;
   home: string;
   away: string;
@@ -473,6 +474,9 @@ function standingsRowTeamId(row: StandingRow): string {
 }
 
 function normalizeClientMatch(match: MatchRow): MatchRow {
+  const normalizedVolleyball = normalizeVolleyballMatch(match);
+  if (normalizedVolleyball !== match) return normalizedVolleyball;
+
   if (match.sport === "basketball" && isWnbaMatchContext(match.country, match.league, match.home, match.away)) {
     const home = resolveWnbaTeam(match.home, match.homeTeamId);
     const away = resolveWnbaTeam(match.away, match.awayTeamId);
@@ -638,6 +642,48 @@ function footballMatchPairKey(match: MatchRow): string | null {
   const home = compactMatchName(match.home);
   const away = compactMatchName(match.away);
   return home && away ? [home, away].sort().join("~") : null;
+}
+
+function volleyballMatchPairKey(match: MatchRow): string | null {
+  if (match.sport !== "volleyball") return null;
+  const home = compactMatchName(match.home);
+  const away = compactMatchName(match.away);
+  return home && away ? [home, away].sort().join("~") : null;
+}
+
+function isVolleyballPair(match: MatchRow, teams: [string, string]): boolean {
+  const pair = volleyballMatchPairKey(match);
+  const expected = teams.map(compactMatchName).sort().join("~");
+  return Boolean(pair && expected && pair === expected);
+}
+
+function isWomensVolleyballMatch(match: MatchRow): boolean {
+  const context = normalizeSearchValue(`${match.home} ${match.away} ${match.league}`);
+  return /\b(w|women|womens)\b/.test(context) || /жен/.test(context);
+}
+
+function normalizeVolleyballMatch(match: MatchRow): MatchRow {
+  if (match.sport !== "volleyball") return match;
+
+  if (isWomensVolleyballMatch(match) && isVolleyballPair(match, ["Китай", "Япония"])) {
+    return {
+      ...match,
+      country: "China",
+      venue: "Гонконг",
+      league: "Чемпионат Восточной Азии. Женщины."
+    };
+  }
+
+  if (isWomensVolleyballMatch(match) && isVolleyballPair(match, ["Франция", "Италия"])) {
+    return {
+      ...match,
+      country: "Poland",
+      venue: undefined,
+      league: "Международный турнир. Женщины."
+    };
+  }
+
+  return match;
 }
 
 function isCounterStrikeMatch(match: MatchRow): boolean {
@@ -973,6 +1019,17 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
             : compactMatchName(match.time) === compactMatchName(candidate.time);
         })?.[0]
       : undefined;
+    const volleyballPairKey = volleyballMatchPairKey(match);
+    const existingVolleyballKey = volleyballPairKey
+      ? Array.from(byKey.entries()).find(([, candidate]) => {
+          if (volleyballMatchPairKey(candidate) !== volleyballPairKey) return false;
+          const matchStart = match.startsAt ? new Date(match.startsAt).getTime() : 0;
+          const candidateStart = candidate.startsAt ? new Date(candidate.startsAt).getTime() : 0;
+          return matchStart && candidateStart
+            ? Math.abs(matchStart - candidateStart) <= 45 * 60 * 1000
+            : compactMatchName(match.time) === compactMatchName(candidate.time);
+        })?.[0]
+      : undefined;
     const esportsPairKey = esportsMatchPairKey(match);
     const existingEsportsKey = esportsPairKey
       ? Array.from(byKey.entries()).find(([, candidate]) => {
@@ -984,7 +1041,7 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
             : compactMatchName(match.time) === compactMatchName(candidate.time);
         })?.[0]
       : undefined;
-    const resolvedKey = existingBaseballKey || existingWnbaKey || existingFootballKey || existingEsportsKey || key;
+    const resolvedKey = existingBaseballKey || existingWnbaKey || existingFootballKey || existingVolleyballKey || existingEsportsKey || key;
     const current = byKey.get(resolvedKey);
 
     if (!current) {
@@ -1006,6 +1063,8 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
           ? "NPB"
           : wnbaPairKey
             ? "WNBA"
+            : existingVolleyballKey
+              ? current.league
             : existingEsportsKey
               ? preferredEsportsLeague(current.league, match.league)
               : current.league;
@@ -1015,8 +1074,10 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
         ? "USA"
         : canonicalLeague === "NPB"
           ? "Japan"
-          : canonicalLeague === "WNBA"
-            ? "USA"
+            : canonicalLeague === "WNBA"
+              ? "USA"
+              : existingVolleyballKey
+                ? current.country
             : existingFootballKey && isWorldCountry(current.country)
               ? match.country
               : current.country;
@@ -1026,6 +1087,7 @@ function mergeClientMatches(matches: MatchRow[]): MatchRow[] {
       id: `${current.id}+${match.id}`,
       country: canonicalCountry,
       league: canonicalLeague,
+      venue: current.venue || match.venue,
       home: canonicalHome?.name || (/[а-яё]/i.test(current.home) ? current.home : match.home),
       away: canonicalAway?.name || (/[а-яё]/i.test(current.away) ? current.away : match.away),
       homeTeamId: canonicalHome ? clientLeagueTeamId(canonicalHome) : current.homeTeamId,
@@ -3334,6 +3396,7 @@ export default function Home() {
             sport: String(match.sport || "football"),
             country: String(match.country || "INT"),
             league: String(match.league || "Линия букмекеров"),
+            venue: match.venue ? String(match.venue) : undefined,
             time:
               typeof match.time === "string"
                 ? match.time
@@ -5437,6 +5500,7 @@ export default function Home() {
                     <div className={`match-meta ${esportsLeague ? "match-meta-esports" : ""}`}>
                       <time>{formatMatchDateTime(match, lang)}</time>
                       {match.sport !== "tennis" && match.sport !== "esports" ? <span className="match-meta-country"><FlagIcon country={match.country} /> {getCountryLabel(match.country, lang)}</span> : null}
+                      {match.venue ? <span className="match-meta-venue">{t(match.venue)}</span> : null}
                       <span className="match-meta-sport" title={getSportLabel(match.sport, lang)}>{getSportIcon(match.sport)} {getSportLabel(match.sport, lang)}</span>
                       {esportsLeague ? <span className="match-meta-discipline">{t(esportsLeague.discipline)}</span> : null}
                       {esportsLeague?.format ? <span className="match-meta-format">{t(esportsLeague.format)}</span> : null}
